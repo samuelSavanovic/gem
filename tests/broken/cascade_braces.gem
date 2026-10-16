@@ -1,0 +1,6 @@
+# Missing value in the middle of a table literal. The parser must recover
+# at the `,` boundary so the trailing entries still surface their own errors.
+let t = {a: 1, b: , c: 3}
+let u = {x: , y: 2}
+print(t)
+print(u)

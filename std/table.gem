@@ -1,0 +1,292 @@
+## table: map, filter, search, slice, group and sort arrays. Only `sort` changes its argument.
+## Values compare with `==`: `1` and `1.0` differ, and a table equals only itself.
+
+# lets `unique` key tables by a string; ids stay put since a reset only moves what its loop allocated
+extern fn gem_table_id(t: Table) -> Int
+
+# an empty table counts as neither
+fn is_array(t)
+  for k, v in t
+    return type(k) == "int"
+  end
+  false
+end
+
+## Calls `f(item)` for each element, in order, and returns nil.
+fn each(arr, f)
+  for item in arr
+    f(item)
+  end
+end
+
+## Returns a new array of `f(item)` for each element.
+fn map(arr, f)
+  let result = []
+  for item in arr
+    push(result, f(item))
+  end
+  result
+end
+
+## Returns a new array of the elements for which `f(item)` is truthy.
+fn filter(arr, f)
+  let result = []
+  for item in arr
+    if f(item)
+      push(result, item)
+    end
+  end
+  result
+end
+
+## Folds from the left: `f(acc, item)` for each element, starting at `init`.
+fn reduce(arr, init, f)
+  let acc = init
+  for item in arr
+    acc = f(acc, item)
+  end
+  acc
+end
+
+## Returns the first element for which `f(item)` is truthy, or nil.
+fn find(arr, f)
+  for item in arr
+    if f(item)
+      return item
+    end
+  end
+  nil
+end
+
+## True if `f(item)` is truthy for some element (false for an empty array).
+fn any(arr, f)
+  for item in arr
+    if f(item)
+      return true
+    end
+  end
+  false
+end
+
+## True if `f(item)` is truthy for every element (true for an empty array).
+fn all(arr, f)
+  for item in arr
+    if not f(item)
+      return false
+    end
+  end
+  true
+end
+
+## Returns how many elements `f(item)` is truthy for.
+fn count(arr, f)
+  let n = 0
+  for item in arr
+    if f(item)
+      n += 1
+    end
+  end
+  n
+end
+
+## Returns a new array in reverse order.
+fn reverse(arr)
+  let result = []
+  let i = len(arr) - 1
+  while i >= 0
+    push(result, arr[i])
+    i -= 1
+  end
+  result
+end
+
+## True when an element `==` `value`. Scans the array each call.
+fn contains(arr, value)
+  for item in arr
+    if item == value
+      return true
+    end
+  end
+  false
+end
+
+## Returns the index of the first element `==` `value`, or -1.
+fn index_of(arr, value)
+  for i, item in arr
+    if item == value
+      return i
+    end
+  end
+  -1
+end
+
+## Up to `length` elements from index `start` (the rest without `length`); a negative `start` counts from the end.
+##   table.slice([1, 2, 3, 4], -2)      # [3, 4]
+fn slice(arr, start, length = nil)
+  let n = len(arr)
+  if start < 0
+    start = n + start
+  end
+  if start < 0
+    start = 0
+  end
+  let stop = if length != nil and start + length < n then start + length else n end
+  let result = []
+  for i = start, stop
+    push(result, arr[i])
+  end
+  result
+end
+
+## Returns a new array of the elements of `a` followed by those of `b`.
+fn concat(a, b)
+  let result = []
+  for item in a
+    push(result, item)
+  end
+  for item in b
+    push(result, item)
+  end
+  result
+end
+
+## Shallow copy of an array or record; nested tables are shared.
+fn copy(tbl)
+  let result = {}
+  for k, v in tbl
+    # push keeps an array's copy linear (a new int key is otherwise a scan)
+    if type(k) == "int" and k == len(result)
+      push(result, v)
+    else
+      result[k] = v
+    end
+  end
+  result
+end
+
+# array: its elements; empty table: nothing; anything else: itself
+fn push_flat(result, x)
+  if type(x) != "table"
+    push(result, x)
+  elif is_array(x)
+    for sub in x
+      push(result, sub)
+    end
+  elif len(x) > 0
+    push(result, x)
+  end
+end
+
+## Maps with `f` and splices array results in (an empty table adds nothing).
+##   table.flat_map([1, 2], fn(x) [x, x] end)    # [1, 1, 2, 2]
+fn flat_map(arr, f)
+  let result = []
+  for item in arr
+    push_flat(result, f(item))
+  end
+  result
+end
+
+## Splices nested arrays in, one level deep. Empty tables are dropped.
+##   table.flatten([[1, 2], 3, [[4]], []])    # [1, 2, 3, [4]]
+fn flatten(arr)
+  let result = []
+  for item in arr
+    push_flat(result, item)
+  end
+  result
+end
+
+## Pairs `[a[i], b[i]]`, as long as the shorter array.
+fn zip(a, b)
+  let n = len(a)
+  if len(b) < n
+    n = len(b)
+  end
+  let result = []
+  for i = 0, n
+    push(result, [a[i], b[i]])
+  end
+  result
+end
+
+# only string keys are hashed, so map each value to a string key matching under `==` (nil for fns and NaN)
+fn unique_key(item)
+  let t = type(item)
+  if t == "string"
+    return "s{item}"
+  elif t == "int"
+    return "i{item}"
+  elif t == "float"
+    if item != item
+      return nil
+    end
+    if item == 0.0
+      return "f0"
+    end
+    return "f{item}"
+  elif t == "table"
+    return "t{gem_table_id(item)}"
+  elif t == "bool" or t == "nil"
+    return "{t}{item}"
+  end
+  nil
+end
+
+## A new array without repeats, keeping the first of each. Every NaN is kept (it never equals itself).
+##   table.unique([1, 1.0, "1", 1, 2])    # [1, 1.0, "1", 2]
+fn unique(arr)
+  let seen = {}
+  let others = []
+  let result = []
+  for item in arr
+    let key = unique_key(item)
+    if key == nil
+      if item == item and not contains(others, item)
+        push(others, item)
+        push(result, item)
+      elif item != item
+        push(result, item)
+      end
+    elif not has_key(seen, key)
+      seen[key] = true
+      push(result, item)
+    end
+  end
+  result
+end
+
+## Maps each key `f(item)` to the array of elements that gave it. Raises on a negative int key.
+fn group_by(arr, f)
+  let groups = {}
+  for item in arr
+    let key = f(item)
+    if type(key) == "int" and key < 0
+      error("table.group_by: key {key} is a negative int, which can't be a table key; return a string")
+    end
+    if not has_key(groups, key)
+      groups[key] = []
+    end
+    push(groups[key], item)
+  end
+  groups
+end
+
+## Sorts `arr` in place, stably, and returns it; a negative `cmp(a, b)` puts `a` first.
+## Default order: numbers ascend, strings by bytes, mixed types go nil, bools, numbers, strings, fns, tables.
+let sort = fn(arr, cmp = nil)
+  # a `let`, not a `fn`, so this body still reaches the `sort` builtin
+  if type(arr) != "table"
+    error("table.sort: arr must be an array, got {type(arr)}")
+  end
+  # the same check array patterns compile to
+  if not __is_array_n(arr, len(arr))
+    error("table.sort: arr must be an array, got a table with keys other than 0 .. n-1")
+  end
+  if cmp == nil
+    return sort(arr)
+  end
+  sort(arr, cmp)
+end
+
+export each, map, filter, reduce, find, any, all, reverse, contains, slice, index_of, concat, copy, flat_map, zip, unique, count, flatten, group_by, sort

@@ -1,0 +1,889 @@
+# source -> array of {type, value, line, col}. Keywords and punctuation have their own text as type; the
+# rest are NUMBER, STRING, NAME, NEWLINE, EOF and INTERP_START/TEXT/END.
+
+load "./errors" (make_error_sink)
+load "./builtins" (BUILTIN_FNS)
+
+fn is_digit(ch)
+  ch >= "0" and ch <= "9"
+end
+
+fn is_alpha(ch)
+  (ch >= "a" and ch <= "z") or (ch >= "A" and ch <= "Z") or ch == "_"
+end
+
+fn is_alnum(ch)
+  is_alpha(ch) or is_digit(ch)
+end
+
+# mode "dq" or "sq": which quote, and whether \0, \{ and } apply. nil for an unknown escape.
+fn apply_escape(esc, mode)
+  if esc == "n"
+    return "\n"
+  elif esc == "r"
+    return chr(13)
+  elif esc == "t"
+    return "\t"
+  elif esc == "\\"
+    return "\\"
+  elif esc == "0" and mode == "dq"
+    return chr(0)
+  elif esc == "\"" and mode == "dq"
+    return "\""
+  elif esc == "\{" and mode == "dq"
+    return "\{"
+  elif esc == "}" and mode == "dq"
+    return "}"
+  elif esc == "'" and mode == "sq"
+    return "'"
+  end
+  nil
+end
+
+# A `"""` string is dedented by its closing line's indentation. These helpers find that line before the real
+# scan, skipping interpolations (which can hold `"""` strings). Unterminated: -1, or nil from tq_scan_body.
+
+fn tq_is_triple(source, p, q)
+  p + 2 < len(source) and source[p] == q and source[p + 1] == q and source[p + 2] == q
+end
+
+# skip as much of `indent` as this line starts with, byte for byte
+fn tq_dedent(source, p, indent)
+  let n = len(source)
+  let k = 0
+  while k < len(indent) and p < n and source[p] == indent[k]
+    k += 1
+    p += 1
+  end
+  p
+end
+
+# p is just past the opening quotes; a missing newline is the lexer's to report, so act as if it were there
+fn tq_body_start(source, p)
+  let n = len(source)
+  while p < n and (source[p] == " " or source[p] == "\t")
+    p += 1
+  end
+  if p < n and source[p] == "\n"
+    p += 1
+  end
+  p
+end
+
+# -> {pos: past the closing quotes, indent: whitespace before them}, or nil
+fn tq_scan_body(source, p, q, interp)
+  let n = len(source)
+  let at_line_start = true
+  while p < n
+    if at_line_start
+      at_line_start = false
+      let ls = p
+      while p < n and (source[p] == " " or source[p] == "\t")
+        p += 1
+      end
+      if tq_is_triple(source, p, q)
+        return {pos: p + 3, indent: substr(source, ls, p - ls)}
+      end
+      continue
+    end
+    let c = source[p]
+    if c == "\n"
+      at_line_start = true
+      p += 1
+    elif c == "\\"
+      p += 2
+    elif c == "\{" and interp
+      p = tq_skip_interp(source, p + 1)
+      if p < 0
+        return nil
+      end
+    else
+      p += 1
+    end
+  end
+  nil
+end
+
+# p is just past the `{`; returns just past the matching `}`
+fn tq_skip_interp(source, p)
+  let n = len(source)
+  let depth = 0
+  while p < n
+    let c = source[p]
+    if c == "}"
+      if depth == 0
+        return p + 1
+      end
+      depth -= 1
+      p += 1
+    elif c == "\{"
+      depth += 1
+      p += 1
+    elif c == "#"
+      while p < n and source[p] != "\n"
+        p += 1
+      end
+    elif c == "\"" or c == "'"
+      if tq_is_triple(source, p, c)
+        let r = tq_scan_body(source, tq_body_start(source, p + 3), c, c == "\"")
+        if r == nil
+          return -1
+        end
+        p = r.pos
+      else
+        p = tq_skip_quoted(source, p + 1, c)
+        if p < 0
+          return -1
+        end
+      end
+    else
+      p += 1
+    end
+  end
+  -1
+end
+
+fn tq_skip_quoted(source, p, q)
+  let n = len(source)
+  while p < n
+    let c = source[p]
+    if c == q
+      return p + 1
+    elif c == "\\"
+      p += 2
+    elif c == "\{" and q == "\""
+      p = tq_skip_interp(source, p + 1)
+      if p < 0
+        return -1
+      end
+    else
+      p += 1
+    end
+  end
+  -1
+end
+
+fn build_keyword_set()
+  let t = {}
+  t.fn = true
+  t.end = true
+  t.let = true
+  t.if = true
+  t.elif = true
+  t.else = true
+  t.while = true
+  t.return = true
+  t.break = true
+  t.continue = true
+  t.do = true
+  t.match = true
+  t.when = true
+  t.and = true
+  t.or = true
+  t.not = true
+  t.true = true
+  t.false = true
+  t.nil = true
+  t.load = true
+  t.export = true
+  t.extern = true
+  t.blocking = true
+  t.for = true
+  t.in = true
+  t.after = true
+  t.then = true
+  t
+end
+
+# `__` names are the compiler's, so source can't bind them. Still allowed: table keys and extern params
+# (`__x:`), fields (`.__x`), and calls of an internal builtin (std calls `__is_array_n`).
+fn check_reserved_names(tokens, source, file, sink)
+  for i = 0, len(tokens)
+    let t = tokens[i]
+    if t.type != "NAME" or len(t.value) < 2 or substr(t.value, 0, 2) != "__"
+      continue
+    end
+    let prev = if i > 0 then tokens[i - 1].type else "" end
+    let next = if i + 1 < len(tokens) then tokens[i + 1].type else "" end
+    if prev == "." or next == ":"
+      continue
+    end
+    if has_key(BUILTIN_FNS, t.value) and next == "(" and prev != "fn"
+      continue
+    end
+    let stem = t.value
+    while len(stem) > 0 and stem[0] == "_"
+      stem = substr(stem, 1, len(stem) - 1)
+    end
+    sink.report(source, file, t.line, t.col, len(t.value), "`{t.value}`: names starting with `__` are reserved for the compiler", "rename it, e.g. `_{stem}`")
+  end
+end
+
+# CRLF -> LF everywhere, string literals included. A lone CR stays.
+fn normalize_newlines(source)
+  str_replace(source, "\r\n", "\n")
+end
+
+fn tokenize(source, file, sink)
+  if sink == nil
+    sink = make_error_sink()
+  end
+  source = normalize_newlines(source)
+  let kw = build_keyword_set()
+  let tokens = []
+  let pos = 0
+  let line = 1
+  let line_start = 0
+  let length = len(source)
+  let interp_depth = 0
+  let interp_brace = {}
+  let CR = chr(13)
+  let NUL = chr(0)
+  # per open interpolation, a stack like interp_brace: is its string triple-quoted, and its dedent prefix
+  let interp_triple = {}
+  let interp_indent = {}
+  let interp_open = {}
+  # where interpolation d's string opened
+  let interp_quote = {}
+  let triple_dq_indent = ""
+  let tstart = 0
+
+  while pos < length
+    let ch = source[pos]
+    tstart = pos
+
+    if ch == " " or ch == "\t"
+      pos += 1
+      continue
+    end
+
+    if ch == "#"
+      while pos < length and source[pos] != "\n"
+        pos += 1
+      end
+      continue
+    end
+
+    # a run of newlines/semicolons is one NEWLINE
+    if ch == "\n" or ch == ";"
+      let should_add = len(tokens) == 0 or tokens[-1].type != "NEWLINE"
+      if should_add
+        push(tokens, {type: "NEWLINE", value: "\n", line: line, col: tstart - line_start + 1})
+      end
+      if ch == "\n"
+        line += 1
+        line_start = pos + 1
+      end
+      pos += 1
+      while pos < length
+        let c2 = source[pos]
+        if c2 == "\n"
+          line += 1
+          line_start = pos + 1
+          pos += 1
+        elif c2 == ";" or c2 == " " or c2 == "\t"
+          pos += 1
+        elif c2 == "#"
+          while pos < length and source[pos] != "\n"
+            pos += 1
+          end
+        else
+          break
+        end
+      end
+      continue
+    end
+
+    if is_digit(ch)
+      let val = ""
+      while pos < length and is_digit(source[pos])
+        val = val + source[pos]
+        pos += 1
+      end
+      let has_dot = pos < length and source[pos] == "."
+      if has_dot and pos + 1 < length and source[pos + 1] == "."
+        # no `..` operator: report once and skip both dots so the number stays an int
+        sink.report(source, file, line, pos - line_start + 1, 2, "'..' is not an operator", "Gem uses '+' for string concatenation; a range loop is `for i = start, stop` (stop excluded)")
+        push(tokens, {type: "NUMBER", value: val, line: line, col: tstart - line_start + 1})
+        pos += 2
+        continue
+      end
+      if has_dot
+        val = val + "."
+        pos += 1
+        while pos < length and is_digit(source[pos])
+          val = val + source[pos]
+          pos += 1
+        end
+      end
+      push(tokens, {type: "NUMBER", value: val, line: line, col: tstart - line_start + 1})
+      continue
+    end
+
+    if ch == "\""
+      let q_pos = {line: line, col: tstart - line_start + 1}
+      pos += 1
+
+      if pos + 1 < length and source[pos] == "\"" and source[pos + 1] == "\""
+        pos += 2
+        while pos < length and (source[pos] == " " or source[pos] == "\t")
+          pos += 1
+        end
+        if pos >= length
+          sink.report(source, file, line, pos - line_start + 1, 1, "triple-quoted string must be followed by a newline", nil)
+          push(tokens, {type: "EOF", value: "", line: line, col: pos - line_start + 1})
+          return tokens
+        elif source[pos] != "\n"
+          sink.report(source, file, line, pos - line_start + 1, 1, "triple-quoted string must be followed by a newline", nil)
+          # carry on as if the newline were there
+        else
+          line += 1
+          line_start = pos + 1
+          pos += 1
+        end
+
+        let tq_close = tq_scan_body(source, pos, "\"", true)
+        if tq_close == nil
+          # broken interpolation: take the first closing line so the error lands where the interpolation goes wrong
+          tq_close = tq_scan_body(source, pos, "\"", false)
+        end
+        if tq_close == nil
+          sink.report(source, file, q_pos.line, q_pos.col, 3, "unterminated triple-quoted string", "this string is never closed")
+          push(tokens, {type: "EOF", value: "", line: line, col: pos - line_start + 1})
+          return tokens
+        end
+        triple_dq_indent = tq_close.indent
+
+        let val = buf_new()
+        let hit_interp = false
+        let tq_als = true
+
+        while pos < length
+          if tq_als
+            tq_als = false
+            pos = tq_dedent(source, pos, triple_dq_indent)
+            if pos + 2 < length and source[pos] == "\"" and source[pos + 1] == "\"" and source[pos + 2] == "\""
+              pos += 3
+              # the newline before the closing line isn't content
+              if len(val) > 0 and substr(val, len(val) - 1, 1) == "\n"
+                val = substr(val, 0, len(val) - 1)
+              end
+              break
+            end
+          end
+
+          let tqc = source[pos]
+          if tqc == "\n"
+            buf_push(val, "\n")
+            line += 1
+            line_start = pos + 1
+            pos += 1
+            tq_als = true
+            continue
+          end
+          if tqc == "\\"
+            pos += 1
+            if pos >= length
+              sink.report(source, file, line, pos - line_start + 1, 1, "unterminated string escape", nil)
+              push(tokens, {type: "EOF", value: "", line: line, col: pos - line_start + 1})
+              return tokens
+            end
+            let tqe = source[pos]
+            let esc_result = apply_escape(tqe, "dq")
+            if esc_result != nil
+              buf_push(val, esc_result)
+            else
+              buf_push(val, "\\" + tqe)
+            end
+            pos += 1
+            continue
+          end
+          if tqc == "\{"
+            push(tokens, {type: "INTERP_START", value: "", line: line, col: tstart - line_start + 1})
+            push(tokens, {type: "INTERP_TEXT", value: to_string(val), line: line, col: tstart - line_start + 1})
+            val = buf_new()
+            pos += 1
+            interp_brace[interp_depth] = 0
+            interp_open[interp_depth] = {line: line, col: pos - line_start}
+            interp_quote[interp_depth] = q_pos
+            interp_triple[interp_depth] = true
+            interp_indent[interp_depth] = triple_dq_indent
+            interp_depth += 1
+            hit_interp = true
+            break
+          end
+          buf_push(val, tqc)
+          pos += 1
+        end
+
+        if not hit_interp
+          push(tokens, {type: "STRING", value: to_string(val), line: line, col: tstart - line_start + 1})
+        end
+        continue
+      end
+
+      # a raw newline inside counts as a line; tokens keep the opening quote's position
+      let s_line = line
+      let s_col = tstart - line_start + 1
+      let val = buf_new()
+      let hit_interp = false
+      while pos < length and source[pos] != "\""
+        if source[pos] == "\\"
+          pos += 1
+          if pos >= length
+            sink.report(source, file, line, pos - line_start + 1, 1, "unterminated string escape", nil)
+            push(tokens, {type: "EOF", value: "", line: line, col: pos - line_start + 1})
+            return tokens
+          end
+          let esc = source[pos]
+          if esc == "\n"
+            line += 1
+            line_start = pos + 1
+          end
+          let esc_result = apply_escape(esc, "dq")
+          if esc_result != nil
+            buf_push(val, esc_result)
+          else
+            buf_push(val, "\\" + esc)
+          end
+          pos += 1
+          continue
+        end
+        if source[pos] == "\{"
+          push(tokens, {type: "INTERP_START", value: "", line: s_line, col: s_col})
+          push(tokens, {type: "INTERP_TEXT", value: to_string(val), line: s_line, col: s_col})
+          val = buf_new()
+          pos += 1
+          interp_brace[interp_depth] = 0
+          interp_open[interp_depth] = {line: line, col: pos - line_start}
+          interp_quote[interp_depth] = q_pos
+          interp_triple[interp_depth] = false
+          interp_depth += 1
+          hit_interp = true
+          break
+        end
+        if source[pos] == "\n"
+          line += 1
+          line_start = pos + 1
+        end
+        buf_push(val, source[pos])
+        pos += 1
+      end
+      if not hit_interp
+        if pos >= length
+          sink.report(source, file, s_line, s_col, 1, "unterminated string", "this string is never closed")
+          push(tokens, {type: "EOF", value: "", line: line, col: pos - line_start + 1})
+          return tokens
+        end
+        pos += 1
+        push(tokens, {type: "STRING", value: to_string(val), line: s_line, col: s_col})
+      end
+      continue
+    end
+
+    if ch == "'"
+      let sq_pos = {line: line, col: tstart - line_start + 1}
+      pos += 1
+
+      if pos + 1 < length and source[pos] == "'" and source[pos + 1] == "'"
+        pos += 2
+        while pos < length and (source[pos] == " " or source[pos] == "\t")
+          pos += 1
+        end
+        if pos >= length
+          sink.report(source, file, line, pos - line_start + 1, 1, "triple-quoted string must be followed by a newline", nil)
+          push(tokens, {type: "EOF", value: "", line: line, col: pos - line_start + 1})
+          return tokens
+        elif source[pos] != "\n"
+          sink.report(source, file, line, pos - line_start + 1, 1, "triple-quoted string must be followed by a newline", nil)
+        else
+          line += 1
+          line_start = pos + 1
+          pos += 1
+        end
+
+        # closing line's indentation first
+        let sq_scan = pos
+        let sq_bi = ""
+        let sq_found = false
+        while sq_scan < length and not sq_found
+          let sq_ls = sq_scan
+          while sq_scan < length and (source[sq_scan] == " " or source[sq_scan] == "\t")
+            sq_scan += 1
+          end
+          if sq_scan + 2 < length and source[sq_scan] == "'" and source[sq_scan + 1] == "'" and source[sq_scan + 2] == "'"
+            sq_bi = substr(source, sq_ls, sq_scan - sq_ls)
+            sq_found = true
+          else
+            while sq_scan < length and source[sq_scan] != "\n"
+              sq_scan += 1
+            end
+            if sq_scan < length
+              sq_scan += 1
+            end
+          end
+        end
+        if not sq_found
+          sink.report(source, file, sq_pos.line, sq_pos.col, 3, "unterminated triple-quoted string", "this string is never closed")
+          push(tokens, {type: "EOF", value: "", line: line, col: pos - line_start + 1})
+          return tokens
+        end
+
+        let val = buf_new()
+        let sq_als = true
+
+        while pos < length
+          if sq_als
+            sq_als = false
+            pos = tq_dedent(source, pos, sq_bi)
+            if pos + 2 < length and source[pos] == "'" and source[pos + 1] == "'" and source[pos + 2] == "'"
+              pos += 3
+              if len(val) > 0 and substr(val, len(val) - 1, 1) == "\n"
+                val = substr(val, 0, len(val) - 1)
+              end
+              break
+            end
+          end
+
+          let sqc = source[pos]
+          if sqc == "\n"
+            buf_push(val, "\n")
+            line += 1
+            line_start = pos + 1
+            pos += 1
+            sq_als = true
+            continue
+          end
+          if sqc == "\\"
+            pos += 1
+            if pos >= length
+              sink.report(source, file, line, pos - line_start + 1, 1, "unterminated string escape", nil)
+              push(tokens, {type: "EOF", value: "", line: line, col: pos - line_start + 1})
+              return tokens
+            end
+            let sqe = source[pos]
+            let esc_result = apply_escape(sqe, "sq")
+            if esc_result != nil
+              buf_push(val, esc_result)
+            else
+              buf_push(val, "\\" + sqe)
+            end
+            pos += 1
+            continue
+          end
+          buf_push(val, sqc)
+          pos += 1
+        end
+
+        push(tokens, {type: "STRING", value: to_string(val), line: line, col: tstart - line_start + 1})
+        continue
+      end
+
+      let s_line = line
+      let s_col = tstart - line_start + 1
+      let val = buf_new()
+      while pos < length and source[pos] != "'"
+        if source[pos] == "\\"
+          pos += 1
+          if pos >= length
+            sink.report(source, file, line, pos - line_start + 1, 1, "unterminated string escape", nil)
+            push(tokens, {type: "EOF", value: "", line: line, col: pos - line_start + 1})
+            return tokens
+          end
+          let esc = source[pos]
+          if esc == "\n"
+            line += 1
+            line_start = pos + 1
+          end
+          let esc_result = apply_escape(esc, "sq")
+          if esc_result != nil
+            buf_push(val, esc_result)
+          else
+            buf_push(val, "\\" + esc)
+          end
+          pos += 1
+          continue
+        end
+        if source[pos] == "\n"
+          line += 1
+          line_start = pos + 1
+        end
+        buf_push(val, source[pos])
+        pos += 1
+      end
+      if pos >= length
+        sink.report(source, file, s_line, s_col, 1, "unterminated string", "this string is never closed")
+        push(tokens, {type: "EOF", value: "", line: line, col: pos - line_start + 1})
+        return tokens
+      end
+      pos += 1
+      push(tokens, {type: "STRING", value: to_string(val), line: s_line, col: s_col})
+      continue
+    end
+
+    if is_alpha(ch)
+      let val = ""
+      while pos < length and is_alnum(source[pos])
+        val = val + source[pos]
+        pos += 1
+      end
+      if val in kw
+        push(tokens, {type: val, value: val, line: line, col: tstart - line_start + 1})
+      else
+        push(tokens, {type: "NAME", value: val, line: line, col: tstart - line_start + 1})
+      end
+      continue
+    end
+
+    let next = if pos + 1 < length then source[pos + 1] else "" end
+
+    if ch == "=" and next == "="
+      push(tokens, {type: "==", value: "==", line: line, col: tstart - line_start + 1})
+      pos += 2
+      continue
+    end
+    if ch == "!" and next == "="
+      push(tokens, {type: "!=", value: "!=", line: line, col: tstart - line_start + 1})
+      pos += 2
+      continue
+    end
+    if ch == "<" and next == "="
+      push(tokens, {type: "<=", value: "<=", line: line, col: tstart - line_start + 1})
+      pos += 2
+      continue
+    end
+    if ch == ">" and next == "="
+      push(tokens, {type: ">=", value: ">=", line: line, col: tstart - line_start + 1})
+      pos += 2
+      continue
+    end
+    if ch == "+" and next == "="
+      push(tokens, {type: "+=", value: "+=", line: line, col: tstart - line_start + 1})
+      pos += 2
+      continue
+    end
+    if ch == "-" and next == "="
+      push(tokens, {type: "-=", value: "-=", line: line, col: tstart - line_start + 1})
+      pos += 2
+      continue
+    end
+    if ch == "*" and next == "="
+      push(tokens, {type: "*=", value: "*=", line: line, col: tstart - line_start + 1})
+      pos += 2
+      continue
+    end
+    if ch == "/" and next == "="
+      push(tokens, {type: "/=", value: "/=", line: line, col: tstart - line_start + 1})
+      pos += 2
+      continue
+    end
+    if ch == "-" and next == ">"
+      push(tokens, {type: "->", value: "->", line: line, col: tstart - line_start + 1})
+      pos += 2
+      continue
+    end
+
+    if ch == "+" or ch == "-" or ch == "*" or ch == "/" or ch == "%"
+      push(tokens, {type: ch, value: ch, line: line, col: tstart - line_start + 1})
+      pos += 1
+      continue
+    end
+    if ch == "<" or ch == ">" or ch == "="
+      push(tokens, {type: ch, value: ch, line: line, col: tstart - line_start + 1})
+      pos += 1
+      continue
+    end
+    # count braces inside an interpolation to find its closing `}`
+    if interp_depth > 0 and ch == "\{"
+      let idx = interp_depth - 1
+      interp_brace[idx] = interp_brace[idx] + 1
+      push(tokens, {type: "\{", value: "\{", line: line, col: tstart - line_start + 1})
+      pos += 1
+      continue
+    end
+    if interp_depth > 0 and ch == "}"
+      let idx = interp_depth - 1
+      if interp_brace[idx] > 0
+        interp_brace[idx] = interp_brace[idx] - 1
+        push(tokens, {type: "}", value: "}", line: line, col: tstart - line_start + 1})
+        pos += 1
+        continue
+      end
+      interp_depth -= 1
+      pos += 1
+
+      if interp_triple[interp_depth]
+        triple_dq_indent = interp_indent[interp_depth]
+        let val = buf_new()
+        let hit_interp = false
+        let closed = false
+        let tqr_als = false
+
+        while pos < length
+          if tqr_als
+            tqr_als = false
+            pos = tq_dedent(source, pos, triple_dq_indent)
+            if pos + 2 < length and source[pos] == "\"" and source[pos + 1] == "\"" and source[pos + 2] == "\""
+              pos += 3
+              if len(val) > 0 and substr(val, len(val) - 1, 1) == "\n"
+                val = substr(val, 0, len(val) - 1)
+              end
+              closed = true
+              break
+            end
+            if pos >= length
+              break
+            end
+          end
+
+          let tqrc = source[pos]
+          if tqrc == "\n"
+            buf_push(val, "\n")
+            line += 1
+            line_start = pos + 1
+            pos += 1
+            tqr_als = true
+            continue
+          end
+          if tqrc == "\\"
+            pos += 1
+            if pos >= length
+              sink.report(source, file, line, pos - line_start + 1, 1, "unterminated string escape", nil)
+              push(tokens, {type: "EOF", value: "", line: line, col: pos - line_start + 1})
+              return tokens
+            end
+            let tqre = source[pos]
+            let esc_result = apply_escape(tqre, "dq")
+            if esc_result != nil
+              buf_push(val, esc_result)
+            else
+              buf_push(val, "\\" + tqre)
+            end
+            pos += 1
+            continue
+          end
+          if tqrc == "\{"
+            push(tokens, {type: "INTERP_TEXT", value: to_string(val), line: line, col: tstart - line_start + 1})
+            val = buf_new()
+            pos += 1
+            interp_brace[interp_depth] = 0
+            interp_open[interp_depth] = {line: line, col: pos - line_start}
+            interp_triple[interp_depth] = true
+            interp_indent[interp_depth] = triple_dq_indent
+            interp_depth += 1
+            hit_interp = true
+            break
+          end
+          buf_push(val, tqrc)
+          pos += 1
+        end
+
+        if not hit_interp
+          if not closed
+            if interp_depth > 0
+              let op = interp_open[0]
+              sink.report(source, file, op.line, op.col, 1, "unterminated triple-quoted string interpolation", "the string is never closed after the interpolation this '\{' opens; write '\\\{' for a literal brace")
+            else
+              let q = interp_quote[0]
+              sink.report(source, file, q.line, q.col, 3, "unterminated triple-quoted string", "this string is never closed")
+            end
+            push(tokens, {type: "EOF", value: "", line: line, col: pos - line_start + 1})
+            return tokens
+          end
+          push(tokens, {type: "INTERP_TEXT", value: to_string(val), line: line, col: tstart - line_start + 1})
+          push(tokens, {type: "INTERP_END", value: "", line: line, col: tstart - line_start + 1})
+        end
+        continue
+      end
+
+      let val = buf_new()
+      let hit_interp = false
+      while pos < length and source[pos] != "\""
+        if source[pos] == "\\"
+          pos += 1
+          if pos >= length
+            sink.report(source, file, line, pos - line_start + 1, 1, "unterminated string escape", nil)
+            push(tokens, {type: "EOF", value: "", line: line, col: pos - line_start + 1})
+            return tokens
+          end
+          let esc = source[pos]
+          if esc == "\n"
+            line += 1
+            line_start = pos + 1
+          end
+          let esc_result = apply_escape(esc, "dq")
+          if esc_result != nil
+            buf_push(val, esc_result)
+          else
+            buf_push(val, "\\" + esc)
+          end
+          pos += 1
+          continue
+        end
+        if source[pos] == "\{"
+          push(tokens, {type: "INTERP_TEXT", value: to_string(val), line: line, col: tstart - line_start + 1})
+          val = buf_new()
+          pos += 1
+          interp_brace[interp_depth] = 0
+          interp_open[interp_depth] = {line: line, col: pos - line_start}
+          interp_triple[interp_depth] = false
+          interp_depth += 1
+          hit_interp = true
+          break
+        end
+        if source[pos] == "\n"
+          line += 1
+          line_start = pos + 1
+        end
+        buf_push(val, source[pos])
+        pos += 1
+      end
+      if not hit_interp
+        if pos >= length
+          # unclosed with an interpolation open: its `{` was likely meant literally and ate the file, so point there
+          if interp_depth > 0
+            let op = interp_open[0]
+            sink.report(source, file, op.line, op.col, 1, "unterminated string interpolation", "the string is never closed after the interpolation this '\{' opens; write '\\\{' for a literal brace")
+          else
+            let q = interp_quote[0]
+            sink.report(source, file, q.line, q.col, 1, "unterminated string", "this string is never closed")
+          end
+          push(tokens, {type: "EOF", value: "", line: line, col: pos - line_start + 1})
+          return tokens
+        end
+        push(tokens, {type: "INTERP_TEXT", value: to_string(val), line: line, col: tstart - line_start + 1})
+        push(tokens, {type: "INTERP_END", value: "", line: line, col: tstart - line_start + 1})
+        pos += 1
+      end
+      continue
+    end
+
+    if ch == "(" or ch == ")" or ch == "[" or ch == "]" or ch == "\{" or ch == "}"
+      push(tokens, {type: ch, value: ch, line: line, col: tstart - line_start + 1})
+      pos += 1
+      continue
+    end
+    if ch == "." and pos + 1 < length and source[pos + 1] == "." and pos + 2 < length and source[pos + 2] == "."
+      push(tokens, {type: "...", value: "...", line: line, col: tstart - line_start + 1})
+      pos += 3
+      continue
+    end
+    if ch == "." or ch == "," or ch == ":" or ch == "|" or ch == "^"
+      push(tokens, {type: ch, value: ch, line: line, col: tstart - line_start + 1})
+      pos += 1
+      continue
+    end
+
+    sink.report(source, file, line, pos - line_start + 1, 1, "unexpected character: '{ch}'", nil)
+    pos += 1
+  end
+
+  if interp_depth > 0
+    let op = interp_open[interp_depth - 1]
+    sink.report(source, file, op.line, op.col, 1, "unterminated string interpolation", "this '\{' is never closed by '}'")
+  end
+  push(tokens, {type: "EOF", value: "", line: line, col: tstart - line_start + 1})
+  tokens
+end
+
+export tokenize, build_keyword_set, normalize_newlines, check_reserved_names

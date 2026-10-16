@@ -1,0 +1,29 @@
+# An `if`, `match` or `receive` as a param default or a `when` arm's value:
+# one error each, with the block skipped whole (five errors). In a fn
+# literal inside a default it is fine. A `break` / `continue` in a block in
+# a `while` condition: one error each (two more); in a loop inside the
+# condition's block it is fine.
+fn f(x = if true then 1 else 2 end)
+  x
+end
+let g = fn(y = match y when 1 then 2 end) y end
+let h = fn({a} = if true then {a: 1} end) a end
+let m = 1
+match m
+when if true then 1 else 2 end then print("one")
+when match m when 1 then 1 end
+  print("two")
+end
+let ok = fn(cb = fn(z) if z then 1 else 2 end end) cb(true) end
+print(f(), g(), h(), ok())
+for k = 0, 3
+  while (if k == 1 then break else k < 2 end)
+    k += 1
+  end
+  while (match k when 2 then continue else false end)
+  end
+  while (if k == 0 then (fn() while true break end true end)() end)
+  end
+  while (if k == 0 then while true break end; false end)
+  end
+end

@@ -1,0 +1,13 @@
+fn c()
+  error("boom")
+end
+
+fn b()
+  c()
+end
+
+fn a()
+  b()
+end
+
+a()

@@ -1,0 +1,18 @@
+# A closure sees only variables declared before it is created: both uses
+# below are `undeclared identifier` errors (2 errors).
+fn reads_later()
+  let get = fn() later end
+  let later = 5
+  get()
+end
+
+fn self_recursive()
+  let fact = fn(n)
+    if n == 0 then return 1 end
+    n * fact(n - 1)
+  end
+  fact(5)
+end
+
+print(reads_later())
+print(self_recursive())

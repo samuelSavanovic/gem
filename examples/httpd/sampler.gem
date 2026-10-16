@@ -1,0 +1,61 @@
+## Periodic `metrics` events: memory, fds, processes, arena resets; the recorder adds open connections.
+
+load "std/log"
+load "std/string"
+load "./recorder"
+
+# Linux only, nil elsewhere
+fn rss_kb()
+  if not file_exists("/proc/self/status")
+    return nil
+  end
+  for line in string.split(read_file("/proc/self/status"), "\n")
+    if string.starts_with(line, "VmRSS:")
+      return to_int(string.trim(str_replace(substr(line, 6), "kB", "")))
+    end
+  end
+  nil
+end
+
+fn open_fds()
+  len(list_dir("/dev/fd")) - 1
+end
+
+# reset counts and spawn_refused are deltas against `prev`, the last sample's runtime_stats()
+fn sample(cfg, prev, stats)
+  {
+    kind: "metrics", uptime_ms: epoch_ms() - cfg.since, rss_kb: rss_kb(), fds: open_fds(),
+    procs: stats.procs, memory: stats.memory, resources_open: stats.resources_open,
+    resources_ownerless: stats.resources_ownerless,
+    reset_ms: stats.reset_ms - prev.reset_ms,
+    resets_over_10ms: stats.resets_over_10ms - prev.resets_over_10ms,
+    resets_over_100ms: stats.resets_over_100ms - prev.resets_over_100ms,
+    spawn_refused: stats.spawn_refused - prev.spawn_refused, gem_commit: cfg.commit
+  }
+end
+
+fn loop(cfg)
+  let prev = runtime_stats()
+  send(self(), {tag: "_httpd_sample"})
+  while true
+    receive
+    when {tag: "_httpd_sample"}
+      send_after(self(), {tag: "_httpd_sample"}, cfg.every_ms)
+      let stats = runtime_stats()
+      recorder.emit(cfg.events, sample(cfg, prev, stats))
+      prev = stats
+    when other
+      log.warn("sampler: unexpected message {substr(to_string(other), 0, 200)}")
+    end
+  end
+end
+
+## Sends a `metrics` event to `events` at start and every `every_ms`; `uptime_ms` counts from `since`.
+fn start({events, every_ms = 60000, commit = nil, since = epoch_ms()})
+  let cfg = {events: events, every_ms: every_ms, commit: commit, since: since}
+  spawn do
+    loop(cfg)
+  end
+end
+
+export start

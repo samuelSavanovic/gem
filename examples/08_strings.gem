@@ -1,0 +1,40 @@
+let s = "hello world"
+print(len(s))
+print(s[0])
+print(s[6])
+
+print("foo" + "bar")
+
+print("value: " + to_string(42))
+print("pi: " + to_string(3.14))
+print("flag: " + to_string(true))
+print("nothing: " + to_string(nil))
+
+print("abc" == "abc")
+print("abc" == "def")
+print("abc" != "def")
+print("abc" < "def")
+
+fn chars(s)
+  let i = 0
+  while i < len(s)
+    print(s[i])
+    i += 1
+  end
+end
+chars("gem")
+
+fn repeat(s, n)
+  let result = ""
+  let i = 0
+  while i < n
+    result = result + s
+    i += 1
+  end
+  result
+end
+print(repeat("ab", 4))
+
+print("tab:\there")
+print("newline follows")
+print("quote: \"hi\"")

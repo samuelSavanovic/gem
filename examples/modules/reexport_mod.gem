@@ -1,0 +1,16 @@
+# exports names bound every module-scope way: fn, let, destructuring let, selective import, namespace
+load "std/string"
+load "std/string" (upper)
+
+fn double(n)
+  n * 2
+end
+
+fn hidden()
+  "private"
+end
+
+let limit = 10
+let {lo, hi} = {lo: 1, hi: 9}
+
+export double, limit, lo, hi, upper, string

@@ -1,0 +1,20 @@
+# a trace only has the raising process's frames, never ones other processes pushed meanwhile
+fn sleeper_inner()
+  sleep(10000)
+end
+fn sleeper_outer()
+  sleeper_inner()
+end
+
+fn fail_after_yield()
+  sleep(20)
+  error("main failed")
+end
+fn main_entry()
+  fail_after_yield()
+end
+
+spawn(fn()
+  sleeper_outer()
+end)
+main_entry()

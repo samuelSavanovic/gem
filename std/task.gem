@@ -1,0 +1,172 @@
+## task: run a fn in its own process and wait for its result.
+## Only the process that called `async` can await a task, and only once.
+
+## Spawns a process that runs `f()` and returns a task to `await`.
+fn async(f)
+  if type(f) != "fn"
+    error("task.async: expected a function, got {type(f)}")
+  end
+  let owner = self()
+  let ref = make_ref()
+  let pid = spawn(fn()
+    send(owner, {tag: "_task_result", ref: ref, result: pcall f()})
+  end)
+  monitor(pid)
+  {pid: pid, ref: ref, owner: owner, done: false}
+end
+
+# with `wait` false, only drops a DOWN that's already there
+fn flush_down(pid, wait)
+  if wait
+    receive
+    when {tag: "DOWN", pid: ^pid}
+      nil
+    end
+  else
+    receive
+    when {tag: "DOWN", pid: ^pid}
+      nil
+    after 0
+      nil
+    end
+  end
+end
+
+# an exited task only gets its DOWN dropped (a pid never names a later process); one trapping exits survives
+fn stop(pid, reason)
+  kill(pid, reason)
+  flush_down(pid, false)
+end
+
+fn exited_without_result(reason, caller)
+  if reason == "normal"
+    return {ok: false, error: "{caller}: task exited with reason \"normal\" before its result was received; a catch-all receive may have taken the result", down: true}
+  end
+  {ok: false, error: "{caller}: task exited: {reason}", down: true}
+end
+
+# nil when `timeout_ms` passes first
+fn receive_result(ref, pid, timeout_ms, caller)
+  if timeout_ms == nil
+    receive
+    when {tag: "_task_result", ref: ^ref, result: res}
+      res
+    when {tag: "DOWN", pid: ^pid, reason: reason}
+      exited_without_result(reason, caller)
+    end
+  else
+    receive
+    when {tag: "_task_result", ref: ^ref, result: res}
+      res
+    when {tag: "DOWN", pid: ^pid, reason: reason}
+      exited_without_result(reason, caller)
+    after timeout_ms
+      nil
+    end
+  end
+end
+
+fn check_timeout(timeout_ms, caller)
+  if timeout_ms != nil and type(timeout_ms) != "int"
+    error("{caller}: timeout must be an int (milliseconds) or nil, got {type(timeout_ms)}")
+  end
+end
+
+fn check_owner(t, caller)
+  if type(t) != "table" or not has_key(t, "ref")
+    error("{caller}: expected a task from task.async, got {type(t)}")
+  end
+  if t.owner != self()
+    error("{caller}: only the process that started a task can await it")
+  end
+  if t.done
+    error("{caller}: task was already awaited")
+  end
+end
+
+# {ok, value} or {ok: false, error}; a timed-out task is killed.
+fn collect(t, timeout_ms, caller)
+  t.done = true
+  let ref = t.ref
+  let pid = t.pid
+  let res = receive_result(ref, pid, 0, caller)
+  if res == nil
+    if process_info(pid) == nil
+      # dead and neither its DOWN nor its result is queued
+      return {ok: false, error: "{caller}: task exited and its result is no longer in the mailbox; a catch-all receive may have taken it"}
+    end
+    res = receive_result(ref, pid, timeout_ms, caller)
+  end
+  if res == nil
+    stop(pid, "timeout")
+    return {ok: false, error: "{caller}: timeout"}
+  end
+  if not has_key(res, "down")
+    # it exits right after sending, so its DOWN follows
+    flush_down(pid, true)
+  end
+  res
+end
+
+fn discard(t)
+  if t.done
+    return nil
+  end
+  t.done = true
+  let ref = t.ref
+  stop(t.pid, "cancelled")
+  receive
+  when {tag: "_task_result", ref: ^ref}
+    nil
+  after 0
+    nil
+  end
+end
+
+## Waits for `t` and returns its fn's value, or raises the fn's error.
+## After `timeout_ms` (nil: no limit) it kills the task and raises `task.await: timeout`.
+fn await(t, timeout_ms = nil)
+  check_owner(t, "task.await")
+  check_timeout(timeout_ms, "task.await")
+  let res = collect(t, timeout_ms, "task.await")
+  if not res.ok
+    error(res.error)
+  end
+  res.value
+end
+
+## Awaits each task in order and returns their values. `timeout_ms` covers the whole call.
+## On the first failure the rest are killed and the error is raised.
+fn await_all(tasks, timeout_ms = nil)
+  if type(tasks) != "table"
+    error("task.await_all: expected an array of tasks, got {type(tasks)}")
+  end
+  check_timeout(timeout_ms, "task.await_all")
+  let seen = {}
+  for t in tasks
+    check_owner(t, "task.await_all")
+    if has_key(seen, t.ref)
+      error("task.await_all: the same task appears more than once")
+    end
+    seen[t.ref] = true
+  end
+  let deadline = if timeout_ms != nil then time_ms() + timeout_ms end
+  let results = []
+  for i = 0, len(tasks)
+    let remaining = if deadline != nil
+      let left = deadline - time_ms()
+      if left < 0 then 0 else left end
+    end
+    let res = collect(tasks[i], remaining, "task.await_all")
+    if not res.ok
+      for j = i + 1, len(tasks)
+        discard(tasks[j])
+      end
+      error(res.error)
+    end
+    push(results, res.value)
+  end
+  results
+end
+
+export async, await, await_all

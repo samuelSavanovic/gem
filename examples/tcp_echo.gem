@@ -1,0 +1,70 @@
+# TCP echo server, one process per connection, and a client that checks it
+
+let TIMEOUT_MS = 2000
+
+# claims the socket the acceptor handed over, so it closes however this session ends
+fn echo_loop(fd)
+  claim(fd)
+  while true
+    let data = tcp_read(fd, 4096, TIMEOUT_MS)
+    if data == nil or data == ""
+      break
+    end
+    if tcp_write(fd, data, TIMEOUT_MS) < len(data)
+      break
+    end
+  end
+  tcp_close(fd)
+end
+
+# accept fails when out of file descriptors; retry until it works again
+fn serve(listener)
+  while true
+    let a = pcall tcp_accept(listener)
+    if not a.ok
+      sleep(50)
+      continue
+    end
+    let fd = a.value
+    let r = pcall spawn do
+      echo_loop(fd)
+    end
+    if not r.ok
+      tcp_close(fd)        # process table full: refuse this one
+    end
+  end
+end
+
+fn round_trip(port, msg)
+  let fd = tcp_connect("127.0.0.1", port)
+  let r = pcall do
+    if tcp_write(fd, msg, TIMEOUT_MS) < len(msg)
+      error("tcp_echo: write failed")
+    end
+    tcp_read(fd, 4096, TIMEOUT_MS)
+  end
+  tcp_close(fd)
+  if not r.ok
+    error(r.error)
+  end
+  r.value
+end
+
+fn main()
+  let listener = tcp_listen("127.0.0.1", 0)
+  let port = tcp_local_port(listener)
+  let server = spawn do
+    serve(listener)
+  end
+
+  for msg in ["hello from gem", "second connection"]
+    let reply = round_trip(port, msg)
+    if reply != msg
+      error("tcp_echo: sent {msg}, got {reply}")
+    end
+    print("echo: {reply}")
+  end
+
+  kill(server, "shutdown")
+  tcp_close(listener)
+end

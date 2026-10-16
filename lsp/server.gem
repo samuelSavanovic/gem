@@ -1,0 +1,34 @@
+# Synchronous on purpose: rpc.read_message blocks the OS thread on stdin, so per-request workers
+# wouldn't overlap with the next read anyway. No cancellation of in-flight requests.
+
+load "./rpc"
+load "./handlers"
+load "./workspace"
+
+fn run()
+  workspace.start()
+  let d = handlers.make_dispatcher()
+  while true
+    let r = rpc.read_message()
+    if r == nil
+      exit(0)
+    end
+    if not r.ok
+      if r.code != nil
+        rpc.write_message(rpc.make_error_response(r.id, r.code, r.message))
+      end
+      continue
+    end
+    # a bad message or a handler bug fails that request, not the session
+    let msg = r.msg
+    let run = pcall d.dispatch(msg)
+    if not run.ok
+      eprint("gem lsp: {msg.method}: {run.error}")
+      if msg.id != nil
+        rpc.write_message(rpc.make_error_response(msg.id, rpc.ERR_INTERNAL, run.error))
+      end
+    end
+  end
+end
+
+export run

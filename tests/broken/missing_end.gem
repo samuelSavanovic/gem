@@ -1,0 +1,11 @@
+# Missing `end` for the inner `if`: the next top-level `fn` lands inside
+# `foo`, and the error points at the `if` that has no `end`.
+# expect: this `if` has no `end`: `fn bar` at line 9 starts a new top-level function inside it
+# expect: missing_end.gem:6:3
+fn foo()
+  if true
+    print("a")
+
+fn bar()
+  print("b")
+end

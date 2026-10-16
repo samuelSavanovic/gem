@@ -1,0 +1,21 @@
+# Module with mutable exported state, for 124_module_namespace_identity.
+let items = []
+let label = "start"
+
+fn add(x)
+  push(items, x)
+end
+
+fn count()
+  len(items)
+end
+
+fn relabel(s)
+  label = s
+end
+
+fn reset()
+  items = []
+end
+
+export items, label, add, count, relabel, reset

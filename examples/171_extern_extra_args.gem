@@ -1,0 +1,47 @@
+# an extern fn checks its argument count both ways, and too many raises the same catchable error as
+# too few. A `Bytes` param (two C args) counts once. A wrong count in a direct call is a compile
+# error, so these go through values.
+
+extern include "string.h"
+extern include "unistd.h"
+extern fn strlen(s: String) -> Int
+extern fn getpid() -> Int
+extern fn write(fd: Int, buf: Bytes) -> Int
+extern blocking fn usleep(usec: Int) -> Int
+extern blocking fn getppid() -> Int
+
+fn show(label, r)
+  if r.ok
+    print(label, "ok", r.value)
+  else
+    print(label, "error", r.error)
+  end
+end
+
+let strlen_v = strlen
+let getpid_v = getpid
+let write_v = write
+let usleep_v = usleep
+let getppid_v = getppid
+
+show("strlen exact:", pcall strlen("abc"))
+show("strlen extra:", pcall strlen_v("a", "b"))
+show("strlen none:", pcall strlen_v())
+
+show("getpid exact:", pcall(fn() getpid() > 0 end))
+show("getpid extra:", pcall getpid_v(1))
+
+# Bytes is two C args but one Gem argument
+show("write extra:", pcall write_v(1, "x", 1))
+show("write few:", pcall write_v(1))
+
+show("usleep exact:", pcall usleep(0))
+show("usleep extra:", pcall usleep_v(0, 0))
+show("getppid exact:", pcall(fn() getppid() > 0 end))
+show("getppid extra:", pcall getppid_v(nil))
+
+let f = strlen
+show("value extra:", pcall(fn() f("a", "b", "c") end))
+let call1 = fn(g, x) g(x) end
+show("call1 extra:", pcall(fn() call1(getpid, 7) end))
+show("call1 exact:", pcall(fn() call1(strlen, "hello") end))

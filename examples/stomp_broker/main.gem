@@ -1,0 +1,11 @@
+# a STOMP 1.2 broker on port 61613
+
+load "./broker"
+
+let PORT = 61613
+
+fn main()
+  let listener = tcp_listen("0.0.0.0", PORT)
+  broker.start(listener)
+  print("STOMP broker listening on port {PORT}")
+end

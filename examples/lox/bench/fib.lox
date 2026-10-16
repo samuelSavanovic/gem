@@ -1,0 +1,14 @@
+// Naive recursive Fibonacci: the cost of a function call.
+//   lox fib.lox [n]     (default 30)
+
+var n = arg(0) or 30;
+
+fun fib(n) {
+  if (n < 2) return n;
+  return fib(n - 2) + fib(n - 1);
+}
+
+for (var i = 0; i < 10; i = i + 1) {
+  print "fib(" + str(i) + ") = " + str(fib(i));
+}
+print "fib(" + str(n) + ") = " + str(fib(n));

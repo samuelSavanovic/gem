@@ -1,0 +1,519 @@
+## supervisor: starts a fixed list of child processes and restarts them when they die.
+## A target is the `{pid}` from `start`, a pid or a name.
+
+# Traps exits, and monitors and links each child. DOWN drives restarts; the runtime queues it before EXIT,
+# so the child's EXIT is dropped and any other EXIT is an exit signal aimed at the supervisor.
+# On exit it stops the children in reverse spec order, "shutdown" then "kill" once the budget runs out;
+# a "kill" of the supervisor ends it at once, children untouched.
+
+load "std/string"
+
+let STRATEGIES = {one_for_one: true, one_for_all: true}
+let RESTARTS = {permanent: true, transient: true, temporary: true}
+# per child, when neither its spec nor its handle gives a budget
+let DEFAULT_SHUTDOWN_MS = 5000
+let INTENSITY = "supervisor: max restart intensity reached"
+
+fn target_pid(t, caller)
+  let kind = type(t)
+  if kind == "int"
+    return t
+  elif kind == "string"
+    let pid = whereis(t)
+    if pid == nil
+      error("{caller}: no process registered as \"{t}\"")
+    end
+    return pid
+  elif kind == "table" and type(t.pid) == "int"
+    return t.pid
+  end
+  error("{caller}: expected a pid, a \{pid\} handle or a registered name, got {kind}")
+end
+
+fn shutdown_of(spec, handle)
+  if has_key(spec, "shutdown")
+    return spec.shutdown
+  end
+  # in the handle (the child's own API) only an int or nil counts as a budget; a `shutdown` method is ignored
+  if type(handle) == "table" and has_key(handle, "shutdown")
+    let s = handle.shutdown
+    if s == nil or type(s) == "int"
+      return s
+    end
+  end
+  DEFAULT_SHUTDOWN_MS
+end
+
+fn start_child(spec)
+  let handle = spec.start()
+  let pid = target_pid(handle, "supervisor: start of child \"{spec.id}\"")
+  let shutdown = shutdown_of(spec, handle)
+  monitor(pid)
+  # a child that's already gone gives DOWN "noproc", then EXIT "noproc"
+  link(pid)
+  {id: spec.id, pid: pid, shutdown: shutdown}
+end
+
+# nil after the timeout
+fn await_down(pid, timeout_ms)
+  if timeout_ms == nil
+    receive
+    when {tag: "DOWN", pid: ^pid, reason: reason}
+      return reason
+    end
+  end
+  receive
+  when {tag: "DOWN", pid: ^pid, reason: reason}
+    reason
+  after timeout_ms
+    nil
+  end
+end
+
+# "shutdown", then "kill" if no DOWN within `shutdown` ms (nil: forever). Takes the DOWN and drops the EXIT.
+# Returns the DOWN's reason, or nil if the child was gone and nothing was queued.
+fn stop_child(pid, shutdown)
+  if not kill(pid, "shutdown")
+    let gone = await_down(pid, 0)
+    if gone != nil
+      drop_exit(pid, gone)
+    end
+    return gone
+  end
+  let reason = await_down(pid, shutdown)
+  if reason == nil
+    kill(pid, "kill")
+    # the child was alive when the wait ended, so its DOWN does come
+    reason = await_down(pid, nil)
+  end
+  drop_exit(pid, reason)
+  reason
+end
+
+# matching the reason too leaves alone an exit signal the child sent before dying (`kill(sup, r)`)
+fn drop_exit(pid, reason)
+  receive
+  when {tag: "EXIT", pid: ^pid, reason: ^reason}
+    nil
+  after 0
+    nil
+  end
+end
+
+fn find_child(children, pid)
+  for i = 0, len(children)
+    if children[i].pid == pid
+      return i
+    end
+  end
+  -1
+end
+
+fn restart_of(spec)
+  let {restart = "permanent"} = spec
+  restart
+end
+
+# "noproc": the child was gone before we monitored it, so its reason is unknown. A transient child
+# takes that as a normal exit rather than replaying a start whose job may well be done.
+fn should_restart(spec, reason)
+  let restart = restart_of(spec)
+  if restart == "permanent"
+    return true
+  end
+  restart == "transient" and reason != "normal" and reason != "shutdown" and reason != "noproc"
+end
+
+fn note_restart(state, now)
+  let recent = []
+  for t in state.restart_times
+    if now - t <= state.max_seconds
+      push(recent, t)
+    end
+  end
+  push(recent, now)
+  state.restart_times = recent
+  if len(recent) > state.max_restarts
+    error(INTENSITY)
+  end
+end
+
+fn not_running(spec)
+  {id: spec.id, pid: -1, shutdown: nil}
+end
+
+# not running and owed a restart
+fn pending(spec)
+  {id: spec.id, pid: -1, shutdown: nil, pending: true}
+end
+
+fn is_pending(child)
+  child.pending == true
+end
+
+# one_for_all: stops the others in reverse order, marking the dead child and every non-temporary one up or pending
+fn stop_all_for_restart(state, dead_idx)
+  let children = state.children
+  let specs = state.specs
+  let revive = []
+  for i = 0, len(children)
+    let was_up = children[i].pid != -1 or is_pending(children[i])
+    push(revive, i == dead_idx or (was_up and restart_of(specs[i]) != "temporary"))
+  end
+  let i = len(children) - 1
+  while i >= 0
+    if i != dead_idx and children[i].pid != -1
+      stop_child(children[i].pid, children[i].shutdown)
+    end
+    i -= 1
+  end
+  for j = 0, len(specs)
+    children[j] = if revive[j] then pending(specs[j]) else not_running(specs[j]) end
+  end
+end
+
+fn report_failed_restart(spec, res)
+  eprint("supervisor: restart of child \"{spec.id}\" failed: {res.error}")
+  for f in res.stack
+    eprint("  at {f.name} ({f.file}:{f.line})")
+  end
+end
+
+# Starts pending children in spec order up to the first `start` that raises; it and the rest stay pending.
+# A single queued `_sup_retry` tries later; it counts as a restart, so endless failures hit the intensity limit.
+fn start_pending(state)
+  for i = 0, len(state.children)
+    if is_pending(state.children[i])
+      let started = pcall start_child(state.specs[i])
+      if not started.ok
+        report_failed_restart(state.specs[i], started)
+        if not state.retry_queued
+          state.retry_queued = true
+          send(self(), {tag: "_sup_retry"})
+        end
+        return nil
+      end
+      state.children[i] = started.value
+    end
+  end
+  nil
+end
+
+fn has_pending(children)
+  for c in children
+    if is_pending(c)
+      return true
+    end
+  end
+  false
+end
+
+fn handle_down(state, dead_pid, reason)
+  let idx = find_child(state.children, dead_pid)
+  if idx == -1
+    return state
+  end
+  drop_exit(dead_pid, reason)
+  let spec = state.specs[idx]
+  if not should_restart(spec, reason)
+    state.children[idx] = not_running(spec)
+    return state
+  end
+  note_restart(state, time_ms())
+  if state.strategy == "one_for_one"
+    state.children[idx] = pending(spec)
+  else
+    stop_all_for_restart(state, idx)
+  end
+  start_pending(state)
+  state
+end
+
+fn children_info(state)
+  let result = []
+  for i = 0, len(state.children)
+    let spec = state.specs[i]
+    push(result, {id: spec.id, pid: state.children[i].pid, restart: restart_of(spec)})
+  end
+  result
+end
+
+# returns the exit reason
+fn sup_loop(state)
+  receive
+  when {tag: "DOWN", pid: dead_pid, reason: reason}
+    sup_loop(handle_down(state, dead_pid, reason))
+  when {tag: "_sup_retry"}
+    state.retry_queued = false
+    if has_pending(state.children)
+      note_restart(state, time_ms())
+      start_pending(state)
+    end
+    sup_loop(state)
+  when {tag: "_sup_which_children", from: from, ref: ref}
+    send(from, {tag: "_sup_children", ref: ref, children: children_info(state)})
+    sup_loop(state)
+  when {tag: "EXIT", reason: reason}
+    if reason != "normal"
+      # an exit signal: someone's kill, or a linked parent that died
+      return reason
+    end
+    sup_loop(state)
+  when other
+    sup_loop(state)
+  end
+end
+
+# children always get "shutdown", whatever the supervisor's reason, so a trapping child handles only that
+fn shutdown_children(children)
+  let i = len(children) - 1
+  while i >= 0
+    if children[i].pid != -1
+      stop_child(children[i].pid, children[i].shutdown)
+    end
+    i -= 1
+  end
+end
+
+# The intensity error's stack says nothing useful, so it's skipped.
+fn report_stack(res)
+  if res.error != INTENSITY
+    eprint("supervisor: exiting on an error raised at:")
+    for f in res.stack
+      eprint("  at {f.name} ({f.file}:{f.line})")
+    end
+  end
+end
+
+fn sup_main(state, caller, ref)
+  process_flag("trap_exit", true)
+  for spec in state.specs
+    let started = pcall start_child(spec)
+    if not started.ok
+      report_stack(started)
+      shutdown_children(state.children)
+      send(caller, {tag: "_sup_start_failed", ref: ref, id: spec.id, error: started.error})
+      process_flag("trap_exit", false)
+      kill(self(), started.error)
+    end
+    push(state.children, started.value)
+  end
+  send(caller, {tag: "_sup_started", ref: ref})
+  let res = pcall sup_loop(state)
+  let reason = if res.ok then res.value else res.error end
+  shutdown_children(state.children)
+  if not res.ok
+    report_stack(res)
+    error(res.error)
+  end
+  process_flag("trap_exit", false)
+  kill(self(), reason)
+end
+
+fn check_keys(who, what, t, allowed, where = "")
+  for k, _ in t
+    let known = false
+    for a in allowed
+      if a == k
+        known = true
+      end
+    end
+    if not known
+      let near = if type(k) == "string" then string.closest(k, allowed) end
+      let hint = if near != nil then " (did you mean \"{near}\"?)" else "" end
+      error("{who}: unknown {what} \"{k}\"{where}{hint}")
+    end
+  end
+end
+
+fn value_hint(v, table)
+  let near = if type(v) == "string" then string.closest(v, keys(table)) end
+  if near != nil then " (did you mean \"{near}\"?)" else "" end
+end
+
+fn check_children(children)
+  if type(children) != "table"
+    error("supervisor.start: children must be an array of child specs, got {type(children)}")
+  end
+  let seen = {}
+  for spec in children
+    if type(spec) != "table"
+      error("supervisor.start: a child spec must be a table, got {type(spec)}")
+    end
+    if spec.id == nil
+      error("supervisor.start: a child spec has no id")
+    end
+    check_keys("supervisor.start", "key", spec, ["id", "start", "restart", "shutdown"], " in child \"{spec.id}\"")
+    if has_key(seen, spec.id)
+      error("supervisor.start: duplicate child id \"{spec.id}\"")
+    end
+    seen[spec.id] = true
+    if type(spec.start) != "fn"
+      error("supervisor.start: start of child \"{spec.id}\" must be a fn, got {type(spec.start)}")
+    end
+    let restart = restart_of(spec)
+    if not has_key(RESTARTS, restart)
+      error("supervisor.start: unknown restart \"{restart}\" for child \"{spec.id}\"{value_hint(restart, RESTARTS)}")
+    end
+    if has_key(spec, "shutdown") and spec.shutdown != nil and type(spec.shutdown) != "int"
+      error("supervisor.start: shutdown of child \"{spec.id}\" must be an int (milliseconds) or nil, got {type(spec.shutdown)}")
+    end
+  end
+end
+
+## Spawns a supervisor, starts `spec.children` in order and returns `{pid, shutdown: nil}`.
+## A child is `{id, start, restart, shutdown}`. Options: `strategy` ("one_for_one" or "one_for_all"), `name`,
+## `max_restarts` (3) within `max_seconds` (5000, in ms despite the name).
+fn start(spec)
+  if type(spec) != "table"
+    error("supervisor.start: expected a spec table \{strategy, children, ...\}, got {type(spec)}")
+  end
+  check_keys("supervisor.start", "option", spec, ["strategy", "max_restarts", "max_seconds", "children", "name"])
+  let {strategy = "one_for_one", max_restarts = 3, max_seconds = 5000, children = [], name = nil} = spec
+  if not has_key(STRATEGIES, strategy)
+    error("supervisor.start: unknown strategy \"{strategy}\"{value_hint(strategy, STRATEGIES)}")
+  end
+  if type(max_restarts) != "int"
+    error("supervisor.start: max_restarts must be an int, got {type(max_restarts)}")
+  end
+  if type(max_seconds) != "int"
+    error("supervisor.start: max_seconds must be an int (milliseconds), got {type(max_seconds)}")
+  end
+  if name != nil
+    if type(name) != "string"
+      error("supervisor.start: name must be a string, got {type(name)}")
+    end
+    if whereis(name) != nil
+      error("supervisor.start: the name \"{name}\" is already registered")
+    end
+  end
+  check_children(children)
+  let specs = children
+  let caller = self()
+  let ref = make_ref()
+  let pid = spawn do
+    sup_main({
+      strategy: strategy,
+      children: [],
+      specs: specs,
+      max_restarts: max_restarts,
+      max_seconds: max_seconds,
+      restart_times: [],
+      retry_queued: false
+    }, caller, ref)
+  end
+  # it hasn't run yet, so a child's start can already find it by name
+  if name != nil
+    register(name, pid)
+  end
+  monitor(pid)
+  receive
+  when {tag: "_sup_started", ref: ^ref}
+    drop_monitor(pid, true)
+  when {tag: "_sup_start_failed", ref: ^ref, id: id, error: e}
+    # wait for its exit so the name is free by the time this raises
+    receive
+    when {tag: "DOWN", pid: ^pid}
+      nil
+    end
+    error("supervisor.start: child \"{id}\" failed to start: {e}")
+  when {tag: "DOWN", pid: ^pid, reason: reason}
+    error("supervisor.start: supervisor exited: {reason}")
+  end
+  # nil budget: a parent supervisor waits for this one's whole shutdown
+  {pid: pid, shutdown: nil}
+end
+
+fn check_timeout(timeout_ms, caller)
+  if timeout_ms != nil and type(timeout_ms) != "int"
+    error("{caller}: timeout must be an int (milliseconds) or nil, got {type(timeout_ms)}")
+  end
+end
+
+# removes the monitor only if this request `added` it, and drops its DOWN if the target died meanwhile
+fn drop_monitor(pid, added)
+  if added and not demonitor(pid)
+    receive
+    when {tag: "DOWN", pid: ^pid}
+      nil
+    after 0
+      nil
+    end
+  end
+end
+
+# A monitor the caller had before the request still gets its DOWN.
+fn return_down(pid, added, reason)
+  if not added
+    send(self(), {tag: "DOWN", pid: pid, reason: reason})
+  end
+  nil
+end
+
+fn await_children(pid, ref)
+  receive
+  when {tag: "_sup_children", ref: ^ref, children: children}
+    {children: children}
+  when {tag: "DOWN", pid: ^pid, reason: reason}
+    {down: reason}
+  end
+end
+
+fn await_children_for(pid, ref, timeout_ms)
+  receive
+  when {tag: "_sup_children", ref: ^ref, children: children}
+    {children: children}
+  when {tag: "DOWN", pid: ^pid, reason: reason}
+    {down: reason}
+  after timeout_ms
+    nil
+  end
+end
+
+## The children as `{id, pid, restart}` in spec order, pid -1 when not running. Raises on timeout or a dead supervisor.
+fn which_children(target, timeout_ms = 5000)
+  let pid = target_pid(target, "supervisor.which_children")
+  check_timeout(timeout_ms, "supervisor.which_children")
+  let ref = make_ref()
+  let added = monitor(pid)
+  send(pid, {tag: "_sup_which_children", from: self(), ref: ref})
+  let res = if timeout_ms == nil
+    await_children(pid, ref)
+  else
+    await_children_for(pid, ref, timeout_ms)
+  end
+  if res == nil
+    drop_monitor(pid, added)
+    error("supervisor.which_children: timeout")
+  end
+  if has_key(res, "down")
+    return_down(pid, added, res.down)
+    error("supervisor.which_children: supervisor exited: {res.down}")
+  end
+  drop_monitor(pid, added)
+  res.children
+end
+
+## Stops the supervisor and its children (in reverse order), returning once it exits. `timeout_ms` nil: no limit.
+fn stop(target, timeout_ms = nil)
+  let pid = target_pid(target, "supervisor.stop")
+  check_timeout(timeout_ms, "supervisor.stop")
+  let added = monitor(pid)
+  kill(pid, "shutdown")
+  if timeout_ms == nil
+    receive
+    when {tag: "DOWN", pid: ^pid, reason: reason}
+      return_down(pid, added, reason)
+    end
+  else
+    receive
+    when {tag: "DOWN", pid: ^pid, reason: reason}
+      return_down(pid, added, reason)
+    after timeout_ms
+      drop_monitor(pid, added)
+      error("supervisor.stop: the supervisor did not stop within {timeout_ms} ms")
+    end
+  end
+end
+
+export start, which_children, stop

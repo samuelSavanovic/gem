@@ -1,0 +1,55 @@
+# `x in t`: on a non-empty array (keys exactly 0 .. n-1, any order) it looks for a value equal to x;
+# on any other table it's has_key(t, x)
+
+print(3 in [1, 2, 3])
+print(99 in [1, 2, 3])
+print(0 in [1, 2, 3])               # 0 is an index, not a value
+print("a" in ["a", "b", "c"])
+print(nil in [nil, 1, 2])
+print(1.5 in [1.0, 1.5, 2.0])
+print(2 in [1.0, 2.0])              # 2 == 2.0 is false
+print(42 in [42], 42 in [43])
+
+# an array filled in any order is still an array
+let rev = {}
+rev[2] = "c"
+rev[1] = "b"
+rev[0] = "a"
+print("b" in rev, 1 in rev)
+
+# tables compare by identity
+let inner = {a: 1}
+let nested = [inner, [1, 2]]
+print(inner in nested)
+print({a: 1} in nested)
+
+let tbl = {name: "gem", version: 1}
+print("name" in tbl, "missing" in tbl, "gem" in tbl)
+
+let seen = {}
+seen[42] = true
+seen[7] = true
+print(42 in seen, 8 in seen, true in seen)
+
+# an int-keyed set whose keys are exactly 0 .. n-1 is an array: values
+let dense = {}
+dense[1] = true
+dense[0] = true
+print(0 in dense, true in dense)
+print(has_key(dense, 0))
+
+let mixed = [10, 20]
+mixed.tag = "t"
+print("tag" in mixed, 1 in mixed, 20 in mixed)
+
+print(1 in [], "a" in {}, nil in [])
+
+let odd = {}
+odd[1.5] = "f"
+odd[false] = "b"
+print(1.5 in odd, false in odd, nil in odd)
+
+# the right operand must be a table
+fn is_in(x, t) x in t end
+let r = pcall is_in("a", "abc")
+print(r.ok, r.error)

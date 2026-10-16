@@ -1,0 +1,30 @@
+let name = "world"
+print("hello {name}")
+
+let a = 1
+let b = 2
+print("{a} + {b} = {a + b}")
+
+print("count: {42}")
+print("flag: {true}")
+print("nothing: {nil}")
+
+let s = "hello"
+print("length: {len(s)}")
+
+let x = "gem"
+print("{x}")
+
+print("{a}{b}")
+
+print("literal \{brace\}")
+
+print("val: {({a: 10}).a}")
+
+print("pi: {3.14}")
+
+let v = "mid"
+print("{v}!")
+print("!{v}")
+
+print("result: {2 * (3 + 4)}")

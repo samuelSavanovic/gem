@@ -1,0 +1,41 @@
+# links and main: a linked process's normal exit is harmless, trap_exit turns signals into EXIT,
+# link() to a dead pid sends reason "noproc", and main killed through a link reports and exits 1
+spawn_link do
+  1
+end
+sleep(10)
+print("normal link ok")
+process_flag("trap_exit", true)
+let p = spawn_link do
+  error("trapped crash")
+end
+receive
+when {tag: "EXIT", pid: ^p, reason: r}
+  print("main trapped: {r}")
+end
+link(p)
+receive
+when {tag: "EXIT", pid: ^p, reason: r}
+  print("main trapped link: {r}")
+end
+process_flag("trap_exit", false)
+# a non-trapping child linking to a dead pid dies with noproc, no crash report
+let c = spawn do
+  let r = pcall link(p)
+  print("not reached {r}")
+end
+monitor(c)
+receive
+when {tag: "DOWN", pid: ^c, reason: r}
+  print("child DOWN: {r}")
+end
+# transitive: grandchild crash, then child, then main
+spawn_link do
+  spawn_link do
+    sleep(5)
+    error("deep crash")
+  end
+  receive()
+end
+sleep(100)
+print("not reached")

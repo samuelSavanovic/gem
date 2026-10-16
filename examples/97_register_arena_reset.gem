@@ -1,0 +1,35 @@
+# the registry keeps its own copy of each name: names built at run time survive the registering
+# process's arena resets, and go away when it dies
+
+fn registrar(remaining)
+  if remaining == 0
+    return
+  end
+  let name = "regtest_" + to_string(remaining)
+  register(name, self())
+  # allocate past the 1 MB reset threshold every iteration
+  let buf = buf_new()
+  let j = 0
+  while j < 8192
+    buf_push(buf, "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
+    j = j + 1
+  end
+  registrar(remaining - 1)
+end
+
+let registrar_pid = spawn(fn() registrar(2) end)
+
+# wait until the registrar dies, so its auto-unregister has run
+let parent = self()
+spawn(fn()
+  let ref = monitor(registrar_pid)
+  receive
+  when {tag: "DOWN"}
+    send(parent, "down")
+  end
+end)
+let _ = receive()
+
+print(whereis("regtest_4"))
+print(whereis("regtest_1"))
+print("ok")

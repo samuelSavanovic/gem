@@ -1,0 +1,6 @@
+# See mn.gem (157_module_names).
+fn f()
+  "mn_pre.f"
+end
+
+export f

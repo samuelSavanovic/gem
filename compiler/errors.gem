@@ -1,0 +1,147 @@
+# compile_error prints one error and exits; everything else reports into a sink so a run shows them all
+
+fn get_source_line(source, line_num)
+  let current = 1
+  let i = 0
+  let slen = len(source)
+  while i < slen
+    if current == line_num
+      let start = i
+      while i < slen and source[i] != "\n"
+        i += 1
+      end
+      return substr(source, start, i - start)
+    end
+    if source[i] == "\n"
+      current += 1
+    end
+    i += 1
+  end
+  ""
+end
+
+fn repeat_char(ch, n)
+  let result = ""
+  for i = 0, n
+    result = result + ch
+  end
+  result
+end
+
+# source may be nil: then just the message, no source line
+fn print_one_error(source, file, line, col, span_len, msg, hint)
+  if file == nil
+    file = "<input>"
+  end
+  if source == nil or line == nil
+    let loc = if file != nil and line != nil
+      "\n  --> " + file + ":" + to_string(line)
+    elif file != nil
+      "\n  --> " + file
+    else
+      ""
+    end
+    eprint("\n[Compile Error]: " + msg + loc + "\n")
+    return
+  end
+  if col == nil or col < 1
+    col = 1
+  end
+
+  let line_str = to_string(line)
+  let gutter_width = len(line_str)
+  let padding = repeat_char(" ", gutter_width)
+  let src_line = get_source_line(source, line)
+
+  let actual_span = span_len
+  if actual_span == nil or actual_span < 1
+    actual_span = 1
+  end
+
+  let out = "\n[Compile Error]: " + msg + "\n"
+  out = out + "  --> " + file + ":" + line_str + ":" + to_string(col) + "\n"
+  out = out + " " + padding + " |\n"
+  out = out + " " + line_str + " | " + src_line + "\n"
+  out = out + " " + padding + " | " + repeat_char(" ", col - 1) + repeat_char("^", actual_span) + "\n"
+  out = out + " " + padding + " |\n"
+
+  if hint != nil
+    out = out + "Hint: " + hint + "\n"
+  end
+
+  eprint(out)
+end
+
+fn compile_error(source, file, line, col, span_len, msg, hint)
+  print_one_error(source, file, line, col, span_len, msg, hint)
+  exit(1)
+end
+
+# records carry their own source so errors in loaded modules show the right line; past 20 it's cascade noise
+
+let ERROR_CAP = 20
+
+fn make_error_sink()
+  let errors = []
+  let count = 0
+  let suppressed = false
+  let dedup = {}
+
+  let report = fn(source, file, line, col, span_len, msg, hint)
+    if count >= ERROR_CAP
+      suppressed = true
+      return
+    end
+    let kfile = file
+    if kfile == nil then kfile = "<input>" end
+    let kline = if line != nil then to_string(line) else "0" end
+    let kcol = if col != nil then to_string(col) else "0" end
+    let key = kfile + ":" + kline + ":" + kcol + ":" + msg
+    if has_key(dedup, key)
+      return
+    end
+    dedup[key] = true
+    push(errors, {source: source, file: file, line: line, col: col,
+                  span: span_len, msg: msg, hint: hint})
+    count += 1
+  end
+
+  # warnings don't count toward has_any/count and aren't capped
+  let warnings = []
+  let warn_dedup = {}
+  let warn = fn(source, file, line, col, span_len, msg, hint)
+    let key = "{file}:{line}:{col}:{msg}"
+    if has_key(warn_dedup, key)
+      return
+    end
+    warn_dedup[key] = true
+    push(warnings, {source: source, file: file, line: line, col: col,
+                    span: span_len, msg: msg, hint: hint})
+  end
+
+  let has_any = fn() count > 0 end
+  let drain = fn() errors end
+  let count_fn = fn() count end
+  let was_suppressed = fn() suppressed end
+  let warnings_fn = fn() warnings end
+
+  {report: report, has_any: has_any, drain: drain, count: count_fn,
+   suppressed: was_suppressed, warn: warn, warnings: warnings_fn}
+end
+
+# show_path (make_show_path) picks the path to print; records keep the full one for the LSP
+fn print_all_errors(sink, show_path = nil)
+  for e in sink.drain()
+    let file = e.file
+    if show_path != nil
+      file = show_path(file)
+    end
+    print_one_error(e.source, file, e.line, e.col, e.span, e.msg, e.hint)
+  end
+  if sink.suppressed()
+    eprint("\n[Compile Error]: too many errors; further diagnostics suppressed\n")
+  end
+end
+
+export compile_error, print_one_error, make_error_sink, print_all_errors,
+       get_source_line

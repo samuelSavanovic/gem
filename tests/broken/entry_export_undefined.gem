@@ -1,0 +1,5 @@
+# The file being compiled checks its `export` list too.
+# expect: exports `nope`, which it doesn't define
+fn f() 1 end
+export f, nope
+print(f())

@@ -1,0 +1,5 @@
+# Junk after the expression, and a missing operand, inside interpolations.
+let a = 1
+print("{a a} x")
+print("{1 +}")
+print("ok {"a" in {a: 1}}")

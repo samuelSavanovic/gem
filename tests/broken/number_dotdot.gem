@@ -1,0 +1,5 @@
+# `0..n` is not a range: reported at the `..`, not lexed as a float.
+# expect: '..' is not an operator
+for i in 0..len("ab")
+  print(i)
+end

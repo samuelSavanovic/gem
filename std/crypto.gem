@@ -1,0 +1,49 @@
+## crypto: SHA-256, HMAC-SHA256 and constant-time comparison.
+## Raw forms return 32 bytes, `_hex` forms 64 lowercase hex digits.
+
+load "std/hex"
+
+extern fn gem_sha256(s: Bytes) -> Table
+extern fn gem_hmac_sha256(key: Bytes, msg: Bytes) -> Table
+extern fn gem_bytes_equal_ct(a: Bytes, b: Bytes) -> Bool
+
+fn check(fname, what, s)
+  if type(s) != "string"
+    error("crypto.{fname}: {what} must be a string, got {type(s)}")
+  end
+end
+
+## SHA-256 digest of `s`, 32 bytes.
+fn sha256(s)
+  check("sha256", "s", s)
+  gem_sha256(s)
+end
+
+## SHA-256 digest of `s` as hex.
+fn sha256_hex(s)
+  check("sha256_hex", "s", s)
+  hex.encode(gem_sha256(s))
+end
+
+## HMAC-SHA256 of `msg` under `key`, 32 bytes.
+fn hmac_sha256(key, msg)
+  check("hmac_sha256", "key", key)
+  check("hmac_sha256", "msg", msg)
+  gem_hmac_sha256(key, msg)
+end
+
+## HMAC-SHA256 of `msg` under `key` as hex.
+fn hmac_sha256_hex(key, msg)
+  check("hmac_sha256_hex", "key", key)
+  check("hmac_sha256_hex", "msg", msg)
+  hex.encode(gem_hmac_sha256(key, msg))
+end
+
+## True when `a` and `b` hold the same bytes, timed by length only: use it, not `==`, for a MAC or token.
+fn equal(a, b)
+  check("equal", "a", a)
+  check("equal", "b", b)
+  gem_bytes_equal_ct(a, b)
+end
+
+export sha256, sha256_hex, hmac_sha256, hmac_sha256_hex, equal

@@ -1,0 +1,28 @@
+# a `Bytes` extern param expands to (const uint8_t *, int64_t), so embedded NULs reach C.
+# POSIX write() has the same shape. Payloads: a literal with \0, a buffer, a read_file round-trip.
+#
+# write() is unbuffered while print output is flushed at exit, and run_all.sh drops NUL bytes,
+# so the blobs show up as `hibyeABCDXYZ` in the expected output.
+
+extern fn write(fd: Int, buf: Bytes) -> Int
+
+let s1 = "hi\0bye"
+let n1 = write(1, s1)
+
+let b = buf_new()
+push(b, "AB")
+push(b, "\0")
+push(b, "CD")
+let s2 = to_string(b)
+let n2 = write(1, s2)
+
+let bytes_path = "/tmp/gem_90_bytes_{epoch_ms()}_{random(1000000)}"
+write_file(bytes_path, "X\0Y\0Z")
+let s3 = read_file(bytes_path)
+let n3 = write(1, s3)
+remove_file(bytes_path)
+
+print("")
+print("s1 len={len(s1)} wrote={n1}")
+print("s2 len={len(s2)} wrote={n2}")
+print("s3 len={len(s3)} wrote={n3}")

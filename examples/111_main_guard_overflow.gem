@@ -1,0 +1,10 @@
+# native recursion past main's stack hits the guard page, which gives a "stack overflow" error and
+# exit 1 rather than a SIGSEGV. The runtime's own copying is iterative, so deep data can't get there
+# (120_deep_data); a recursive C helper does.
+
+extern include "support/native_recursion.h"
+extern fn gem_example_native_recurse(n: Int) -> Int
+
+print("shallow", gem_example_native_recurse(10))
+gem_example_native_recurse(100000000)
+print("unreachable")

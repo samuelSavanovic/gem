@@ -1,0 +1,31 @@
+# many concurrent timers: the heap has no fixed cap and fires in deadline order
+
+spawn(fn()
+  let me = self()
+  let n = 1000
+
+  # reverse insertion order, 2 ms apart so the ms clock's jitter can't reorder them
+  for i = 0, n
+    send_after(me, n - i, 1 + (n - i) * 2)
+  end
+
+  # and a cancelled batch, for remove-by-ref
+  let refs = []
+  for i = 0, 200
+    push(refs, send_after(me, "cancel-me", 5000))
+  end
+  let cancelled = 0
+  for i = 0, 200
+    if cancel_timer(refs[i]) then cancelled = cancelled + 1 end
+  end
+
+  let prev = 0
+  let in_order = true
+  for i = 0, n
+    let m = receive()
+    if m <= prev then in_order = false end
+    prev = m
+  end
+
+  print("count={prev} in_order={in_order} cancelled={cancelled}")
+end)

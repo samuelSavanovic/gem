@@ -1,0 +1,344 @@
+/* string builtins, buffers, build_string, interpolation, and gem_bytes_span (for std/http and std/request) */
+
+#include "gem.h"
+
+/* std/http calls this a lot with a few constant byte sets, so recent sets keep their lookup tables (a
+ * memcmp beats rebuilding one). The cache isn't locked: declare it as a plain extern fn, never blocking. */
+#define GEM_SPAN_CACHE 16
+#define GEM_SPAN_CACHE_MAX 256
+static struct {
+    int64_t n;           /* a zeroed slot is the (valid) entry for "" */
+    uint8_t set[GEM_SPAN_CACHE_MAX];
+    uint8_t ok[256];
+} gem_span_cache[GEM_SPAN_CACHE];
+static int gem_span_cache_next = 0;
+
+static const uint8_t *gem_span_table(const uint8_t *accept, int64_t accept_n, uint8_t *scratch) {
+    if (accept_n <= GEM_SPAN_CACHE_MAX) {
+        for (int k = 0; k < GEM_SPAN_CACHE; k++) {
+            if (gem_span_cache[k].n == accept_n && memcmp(gem_span_cache[k].set, accept, (size_t)accept_n) == 0)
+                return gem_span_cache[k].ok;
+        }
+        int k = gem_span_cache_next;
+        gem_span_cache_next = (k + 1) % GEM_SPAN_CACHE;
+        scratch = gem_span_cache[k].ok;
+        memcpy(gem_span_cache[k].set, accept, (size_t)accept_n);
+        gem_span_cache[k].n = accept_n;
+    }
+    memset(scratch, 0, 256);
+    for (int64_t i = 0; i < accept_n; i++) scratch[accept[i]] = 1;
+    return scratch;
+}
+
+int64_t gem_bytes_span(const uint8_t *s, int64_t n, const uint8_t *accept, int64_t accept_n) {
+    uint8_t scratch[256];
+    const uint8_t *ok = gem_span_table(accept, accept_n, scratch);
+    int64_t i = 0;
+    while (i < n && ok[s[i]]) i++;
+    return i;
+}
+
+/* nn >= 1 */
+static int64_t bytes_find(const char *s, int64_t n, const char *needle, int64_t nn, int64_t from) {
+    if (from > n - nn) return -1;
+    if (nn == 1) {
+        const char *p = memchr(s + from, needle[0], (size_t)(n - from));
+        return p ? (int64_t)(p - s) : -1;
+    }
+    const char *p = s + from;
+    const char *last = s + (n - nn);
+    while (p <= last) {
+        p = memchr(p, needle[0], (size_t)(last - p) + 1);
+        if (!p) return -1;
+        if (memcmp(p + 1, needle + 1, (size_t)nn - 1) == 0) return (int64_t)(p - s);
+        p++;
+    }
+    return -1;
+}
+
+static int text_bytes(GemVal v, const char **s, int64_t *n) {
+    if (v.type == VAL_STRING) { *s = v.sval; *n = v.slen; return 1; }
+    if (v.type == VAL_BUFFER) { *s = v.buffer->data; *n = v.buffer->len; return 1; }
+    return 0;
+}
+
+GemVal gem_find_fn(void *_env, GemVal *args, int argc) {
+    (void)_env;
+    const char *s, *needle;
+    int64_t n, nn;
+    if (argc < 2 || !text_bytes(args[0], &s, &n) || !text_bytes(args[1], &needle, &nn) ||
+        (argc >= 3 && args[2].type != VAL_INT)) {
+        char buf[200];
+        snprintf(buf, sizeof(buf), "find: expected (string|buffer s, string|buffer needle[, int start]), got (%s, %s%s%s)",
+                 argc < 1 ? "nothing" : gem_type_str(args[0]), argc < 2 ? "nothing" : gem_type_str(args[1]),
+                 argc >= 3 ? ", " : "", argc >= 3 ? gem_type_str(args[2]) : "");
+        gem_error(buf);
+    }
+    int64_t from = argc >= 3 ? args[2].ival : 0;
+    if (from < 0) from = 0;
+    if (nn == 0) return gem_int(from <= n ? from : -1);
+    return gem_int(bytes_find(s, n, needle, nn, from));
+}
+
+GemVal gem_str_replace_fn(void *_env, GemVal *args, int argc) {
+    (void)_env;
+    if (argc < 3) { gem_error("str_replace: expected 3 arguments"); }
+    if (args[0].type != VAL_STRING || args[1].type != VAL_STRING || args[2].type != VAL_STRING) {
+        char buf[128]; snprintf(buf, sizeof(buf), "str_replace: all arguments must be strings, got %s, %s, %s", gem_type_str(args[0]), gem_type_str(args[1]), gem_type_str(args[2])); gem_error(buf);
+    }
+    const char *s = args[0].sval;
+    const char *old = args[1].sval;
+    const char *new_s = args[2].sval;
+    size_t s_len = (size_t)args[0].slen;
+    size_t old_len = (size_t)args[1].slen;
+    size_t new_len = (size_t)args[2].slen;
+
+    if (old_len == 0) return args[0];
+
+    int count = 0;
+    size_t i = 0;
+    while (i + old_len <= s_len) {
+        if (memcmp(s + i, old, old_len) == 0) { count++; i += old_len; }
+        else { i++; }
+    }
+    if (count == 0) return args[0];
+
+    /* new_len - old_len may wrap; the sum still comes out right mod 2^64 */
+    size_t result_len = s_len + (size_t)count * (new_len - old_len);
+    gem_strlen_check(result_len, "str_replace");
+    char *result = (char *)gem_alloc(result_len + 1);
+    char *dst = result;
+    i = 0;
+    while (i < s_len) {
+        if (i + old_len <= s_len && memcmp(s + i, old, old_len) == 0) {
+            memcpy(dst, new_s, new_len);
+            dst += new_len;
+            i += old_len;
+        } else {
+            *dst++ = s[i++];
+        }
+    }
+    *dst = '\0';
+    GemVal r; r.type = VAL_STRING; r.magic = GEM_MAGIC; r.sval = result; r.slen = (int)(dst - result);
+    return r;
+}
+
+GemVal gem_substr_fn(void *_env, GemVal *args, int argc) {
+    (void)_env;
+    if (argc < 2) { gem_error("substr: expected 2-3 arguments"); }
+    const char *s;
+    int64_t slen;
+    if (args[0].type == VAL_STRING) {
+        s = args[0].sval;
+        slen = (int64_t)args[0].slen;
+    } else if (args[0].type == VAL_BUFFER) {
+        s = args[0].buffer->data;
+        slen = (int64_t)args[0].buffer->len;
+    } else {
+        char buf[128]; snprintf(buf, sizeof(buf), "substr: expected (string|buffer, int[, int]), got (%s, %s)", gem_type_str(args[0]), gem_type_str(args[1])); gem_error(buf);
+        return GEM_NIL;
+    }
+    if (args[1].type != VAL_INT) {
+        char buf[128]; snprintf(buf, sizeof(buf), "substr: expected (string|buffer, int[, int]), got (%s, %s)", gem_type_str(args[0]), gem_type_str(args[1])); gem_error(buf);
+    }
+    int64_t start = args[1].ival;
+
+    if (start < 0) start = 0;
+    if (start >= slen) return gem_string("");
+
+    int64_t count;
+    if (argc >= 3 && args[2].type == VAL_INT) {
+        count = args[2].ival;
+        if (count < 0) count = 0;
+    } else {
+        count = slen - start;
+    }
+    if (count > slen - start) count = slen - start;
+
+    char *buf = (char *)gem_alloc((size_t)count + 1);
+    memcpy(buf, s + start, (size_t)count);
+    buf[count] = '\0';
+    GemVal r; r.type = VAL_STRING; r.magic = GEM_MAGIC; r.sval = buf; r.slen = (int)count;
+    return r;
+}
+
+GemVal gem_chr_fn(void *_env, GemVal *args, int argc) {
+    (void)_env;
+    if (argc < 1 || args[0].type != VAL_INT) { char buf[128]; snprintf(buf, sizeof(buf), "chr: expected int argument, got %s", argc < 1 ? "nothing" : gem_type_str(args[0])); gem_error(buf); }
+    if (args[0].ival < 0 || args[0].ival > 255) { char ebuf[128]; snprintf(ebuf, sizeof(ebuf), "chr: expected 0..255, got %lld", (long long)args[0].ival); gem_error(ebuf); }
+    char buf[2];
+    buf[0] = (char)args[0].ival;
+    buf[1] = '\0';
+    return gem_string_with_len(buf, 1);
+}
+
+GemVal gem_ord_fn(void *_env, GemVal *args, int argc) {
+    (void)_env;
+    if (argc < 1) { gem_error("ord: expected string|buffer argument, got nothing"); }
+    const char *data;
+    int64_t slen;
+    if (args[0].type == VAL_STRING) {
+        data = args[0].sval;
+        slen = (int64_t)args[0].slen;
+    } else if (args[0].type == VAL_BUFFER) {
+        data = args[0].buffer->data;
+        slen = (int64_t)args[0].buffer->len;
+    } else {
+        char buf[128]; snprintf(buf, sizeof(buf), "ord: expected string|buffer argument, got %s", gem_type_str(args[0])); gem_error(buf);
+        return GEM_NIL;
+    }
+    if (argc >= 2) {
+        if (args[1].type != VAL_INT) { gem_error("ord: index must be an integer"); }
+        int64_t idx = args[1].ival;
+        if (idx < 0 || idx >= slen) { gem_error("ord: index out of bounds"); }
+        return gem_int((int64_t)(unsigned char)data[idx]);
+    }
+    if (slen == 0) { gem_error("ord: empty string"); }
+    return gem_int((int64_t)(unsigned char)data[0]);
+}
+
+GemVal gem_interp(int n, GemVal *parts) {
+    GemBuffer b;
+    b.cap = 128;
+    b.len = 0;
+    b.data = (char *)gem_alloc((size_t)b.cap);
+    char tmp[64];
+    for (int i = 0; i < n; i++) {
+        const char *s;
+        int slen;
+        switch (parts[i].type) {
+            case VAL_STRING: s = parts[i].sval; slen = parts[i].slen; break;
+            case VAL_INT: slen = snprintf(tmp, sizeof(tmp), "%lld", (long long)parts[i].ival); s = tmp; break;
+            case VAL_FLOAT: slen = gem_format_float(parts[i].fval, tmp); s = tmp; break;
+            case VAL_BOOL: s = parts[i].bval ? "true" : "false"; slen = parts[i].bval ? 4 : 5; break;
+            case VAL_NIL: s = "nil"; slen = 3; break;
+            case VAL_TABLE: {
+                GemVal fmt = gem_format_value_string(parts[i]);
+                s = fmt.sval;
+                slen = fmt.slen;
+                break;
+            }
+            case VAL_FN: s = "<fn>"; slen = 4; break;
+            case VAL_BUFFER: slen = snprintf(tmp, sizeof(tmp), "<buffer:%d>", parts[i].buffer->len); s = tmp; break;
+            case VAL_REF: slen = snprintf(tmp, sizeof(tmp), "#Ref<%lld>", (long long)parts[i].rval); s = tmp; break;
+            case VAL_RESOURCE:
+                slen = snprintf(tmp, sizeof(tmp), "#%s<%lld>", gem_res_print_name(parts[i].res_kind),
+                                (long long)parts[i].res_id);
+                s = tmp;
+                break;
+            default: s = ""; slen = 0; break;
+        }
+        gem_buffer_reserve(&b, (size_t)slen, "string interpolation");
+        memcpy(b.data + b.len, s, (size_t)slen);
+        b.len += slen;
+    }
+    char *s = (char *)gem_alloc((size_t)b.len + 1);
+    memcpy(s, b.data, (size_t)b.len);
+    s[b.len] = '\0';
+    GemVal r;
+    r.type = VAL_STRING;
+    r.magic = GEM_MAGIC;
+    r.sval = s;
+    r.slen = b.len;
+    return r;
+}
+
+GemVal gem_buf_new_fn(void *_env, GemVal *args, int argc) {
+    (void)_env; (void)args; (void)argc;
+    GemBuffer *b = gem_buffer_alloc(64);
+    GemVal r;
+    r.type = VAL_BUFFER;
+    r.magic = GEM_MAGIC;
+    r.buffer = b;
+    return r;
+}
+
+/* src may point into b->data: growing copies the old block, doesn't free it */
+static void buf_append_bytes(GemBuffer *b, const char *src, int n) {
+    if (n <= 0) return;
+    gem_buffer_reserve(b, (size_t)n, "buf_push");
+    memcpy(b->data + b->len, src, n);
+    b->len += n;
+}
+
+GemVal gem_buf_push_fn(void *_env, GemVal *args, int argc) {
+    (void)_env;
+    if (argc < 2) gem_error("buf_push: expected 2 arguments (buffer, value)");
+    if (args[0].type != VAL_BUFFER) { char buf[128]; snprintf(buf, sizeof(buf), "buf_push: expected buffer as first argument, got %s", gem_type_str(args[0])); gem_error(buf); }
+    GemBuffer *b = args[0].buffer;
+    GemVal v = args[1];
+    switch (v.type) {
+        case VAL_STRING:
+            buf_append_bytes(b, v.sval, v.slen);
+            break;
+        case VAL_BUFFER:
+            /* pushing a buffer into itself appends a snapshot (see buf_append_bytes) */
+            buf_append_bytes(b, v.buffer->data, v.buffer->len);
+            break;
+        case VAL_FLOAT: {
+            GemVal s = gem_to_string_fn(NULL, &v, 1);
+            buf_append_bytes(b, s.sval, s.slen);
+            break;
+        }
+        default:
+            /* same repr as to_string, written straight into the buffer */
+            gem_format_value_to_buf(v, b, 0);
+            break;
+    }
+    return args[0];
+}
+
+/* `add`'s env uses the normal closure env layout, [n = 2][buffer box][owner pid box], so copies and resets
+ * handle it like any closure. A copy of `add` in another process would fill a buffer nobody reads, so it raises. */
+static int64_t build_string_owner(void) {
+    return gem_current_pid >= 0 ? gem_pid_of_slot(gem_current_pid) : -1;
+}
+
+static GemVal build_string_add_fn(void *_env, GemVal *args, int argc) {
+    GemVal **fields = (GemVal **)((char *)_env + sizeof(intptr_t));
+    if (fields[1]->ival != build_string_owner())
+        gem_error("build_string: `add` can only be called by the process that created it");
+    GemVal buf_val = *fields[0];
+    for (int i = 0; i < argc; i++) {
+        if (args[i].type == VAL_STRING)
+            gem_buffer_reserve(buf_val.buffer, (size_t)args[i].slen, "build_string");
+        GemVal push_args[2] = {buf_val, args[i]};
+        gem_buf_push_fn(NULL, push_args, 2);
+    }
+    return GEM_NIL;
+}
+
+GemVal gem_build_string_fn(void *_env, GemVal *args, int argc) {
+    (void)_env;
+    if (argc < 1 || args[0].type != VAL_FN) {
+        gem_error("build_string: expected a function argument");
+    }
+    GemBuffer *b = gem_buffer_alloc(256);
+    GemVal *buf_box = (GemVal *)gem_alloc(sizeof(GemVal));
+    buf_box->type = VAL_BUFFER;
+    buf_box->magic = GEM_MAGIC;
+    buf_box->buffer = b;
+    GemVal *owner_box = (GemVal *)gem_alloc(sizeof(GemVal));
+    *owner_box = gem_int(build_string_owner());
+    void *env = gem_alloc(sizeof(intptr_t) + 2 * sizeof(GemVal *));
+    *(intptr_t *)env = 2;
+    GemVal **fields = (GemVal **)((char *)env + sizeof(intptr_t));
+    fields[0] = buf_box;
+    fields[1] = owner_box;
+    GemVal add_fn;
+    add_fn.type = VAL_FN;
+    add_fn.magic = GEM_MAGIC;
+    add_fn.fn = build_string_add_fn;
+    add_fn.env = env;
+    GemVal block_args[1] = {add_fn};
+    args[0].fn(args[0].env, block_args, 1);
+    char *s = (char *)gem_alloc(b->len + 1);
+    memcpy(s, b->data, b->len);
+    s[b->len] = '\0';
+    GemVal r;
+    r.type = VAL_STRING;
+    r.magic = GEM_MAGIC;
+    r.sval = s;
+    r.slen = b->len;
+    return r;
+}

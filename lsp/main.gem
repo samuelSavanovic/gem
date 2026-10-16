@@ -1,0 +1,9 @@
+# entry for `gem lsp` (compiler/main.gem calls run_lsp when argv[1] == "lsp")
+
+load "./server"
+
+fn run_lsp()
+  server.run()
+end
+
+export run_lsp

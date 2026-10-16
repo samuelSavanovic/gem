@@ -1,0 +1,4 @@
+# A same-line arm body needs `then`: `when x nil` is an error, not a
+# pattern `x` whose body is nil.
+match 5
+when x nil end

@@ -1,0 +1,57 @@
+let r = pcall error("boom")
+print(r.ok)
+print(r.error)
+
+let r2 = pcall 42
+print(r2.ok)
+print(r2.value)
+
+let r3 = pcall 1 + "hello"
+print(r3.ok)
+print(r3.error)
+
+let r4 = pcall(fn()
+  let inner = pcall error("inner boom")
+  inner.error
+end)
+print(r4.ok)
+print(r4.value)
+
+print("still running")
+
+let r5 = pcall(fn()
+  let x = 42
+  error("value is {x}")
+end)
+print(r5.ok)
+
+let r6 = pcall error("trace me")
+print(len(r6.stack) > 0)
+
+let r7 = pcall error("expr boom")
+print(r7.ok)
+print(r7.error)
+
+let r8 = pcall 1 + 2
+print(r8.ok)
+print(r8.value)
+
+fn might_fail(x)
+  if x == 0
+    error("zero")
+  end
+  x * 10
+end
+
+let r9 = pcall might_fail(0)
+print(r9.ok)
+print(r9.error)
+
+let r10 = pcall might_fail(5)
+print(r10.ok)
+print(r10.value)
+
+match pcall might_fail(0)
+when {ok: false, error: e}
+  print("matched: " + e)
+end

@@ -1,0 +1,2 @@
+# project root: bare `load "a/b"` paths resolve from here
+name = "gem"

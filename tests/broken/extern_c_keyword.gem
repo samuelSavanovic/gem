@@ -1,0 +1,4 @@
+# An extern fn is the C function of its name, so a C keyword can't be one.
+# expect: `int` is reserved in C and can't name an extern fn
+extern fn int(x: Int) -> Int
+print(1)

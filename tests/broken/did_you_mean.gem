@@ -1,0 +1,17 @@
+# Undeclared names get the closest local, module-level binding, fn or
+# builtin as a "did you mean" hint; a name with nothing close gets none.
+# expect: did you mean `count`?
+# expect: did you mean `total_items`?
+# expect: did you mean `print`?
+# expect: did you mean `items`? To declare a new variable, use `let itms = ...`
+let total_items = 3
+
+fn show(items)
+  let count = len(items)
+  prnt(cuont)
+  print(total_itmes)
+  itms = []
+  print(zzqqxx)
+end
+
+show([1, 2])

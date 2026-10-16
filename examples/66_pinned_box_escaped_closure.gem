@@ -1,0 +1,28 @@
+# a closure mutating `counter` goes to another process while `counter` is still read here.
+# The other process works on its own copy, so only this process's additions show.
+
+let main_pid = self()
+
+let w = spawn(fn()
+  let counter = 0
+  let inc = fn() counter = counter + 1 end
+  spawn(fn() inc(); inc(); inc() end)
+
+  while true
+    let msg = receive()
+    if msg == "stop"
+      send(main_pid, {tag: "result", counter: counter})
+      return
+    end
+    counter = counter + msg
+    let junk = {x: "pad-" + to_string(counter), y: [1,2,3,4,5,6,7,8]}
+  end
+end)
+
+let n = 5000
+for i = 0, n
+  send(w, 1)
+end
+send(w, "stop")
+let r = receive()
+print("counter: " + to_string(r.counter))

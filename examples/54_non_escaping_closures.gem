@@ -1,0 +1,80 @@
+# closures passed straight to pcall (non-escaping) still see their captures, mutations included
+
+fn read_capture(x)
+  let r = pcall(fn() x + 100 end)
+  r.value
+end
+print(read_capture(7))
+
+fn mutate_capture()
+  let counter = 0
+  pcall(fn() counter = counter + 5 end)
+  pcall(fn() counter = counter * 2 end)
+  counter
+end
+print(mutate_capture())
+
+# the error comes back and the fn carries on
+fn pcall_error_path(label)
+  let r = pcall(fn() error("boom from {label}") end)
+  r.ok
+end
+print(pcall_error_path("test3"))
+
+fn sort_with_threshold(arr, t)
+  sort(arr, fn(a, b)
+    let aa = a
+    let bb = b
+    if aa < t and bb >= t
+      return -1
+    end
+    if aa >= t and bb < t
+      return 1
+    end
+    if aa < bb then -1 elif aa > bb then 1 else 0 end
+  end)
+end
+let s = sort_with_threshold([5, 1, 8, 3, 7, 2], 4)
+for v in s
+  print(v)
+end
+# items < 4 first, then the rest
+
+fn escaping_let(x)
+  let f = fn() x + 1 end
+  f() + f()
+end
+print(escaping_let(10))
+
+fn make_adder(n)
+  fn(x) x + n end
+end
+let add3 = make_adder(3)
+print(add3(7))
+
+fn spawn_capture()
+  let parent = self()
+  let value = 42
+  spawn(fn()
+    send(parent, value * 2)
+  end)
+  receive()
+end
+print(spawn_capture())
+
+fn nested_pcalls()
+  let x = 1
+  pcall(fn()
+    x = x + 10
+    pcall(fn() x = x * 3 end)
+  end)
+  x
+end
+print(nested_pcalls())
+
+fn pcall_returns_capture()
+  let payload = "hello"
+  let r = pcall(fn() payload + " world" end)
+  r.value
+end
+print(pcall_returns_capture())

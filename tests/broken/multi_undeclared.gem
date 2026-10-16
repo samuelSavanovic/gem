@@ -1,0 +1,4 @@
+# Three undeclared identifiers in one expression. Codegen reports each
+# rather than aborting on the first.
+let x = unknown_a + unknown_b + unknown_c
+print(x)

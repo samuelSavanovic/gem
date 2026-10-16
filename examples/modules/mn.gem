@@ -1,0 +1,13 @@
+# with mn_pre.gem: `mn` + `pre_f` and `mn_pre` + `f` would collide if modules were named by base name
+let hits = 0
+
+fn pre_f()
+  hits += 1
+  "mn.pre_f"
+end
+
+fn count()
+  hits
+end
+
+export pre_f, count

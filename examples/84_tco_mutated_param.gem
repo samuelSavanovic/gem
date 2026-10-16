@@ -1,0 +1,22 @@
+# a self-recursive TCO fn whose param an inner closure captures and mutates: each tail call
+# resets the arena and the next iteration gets a fresh box
+
+let main_pid = self()
+
+fn loop(count, n)
+  if n == 0
+    send(main_pid, {tag: "result", count: count})
+    return
+  end
+  let bump = fn() count = count + 1 end
+  bump()
+  let junk = [n, n + 1, n + 2, n + 3, n + 4, n + 5, n + 6, n + 7, n + 8, n + 9, "pad-" + to_string(n)]
+  loop(count, n - 1)
+end
+
+let worker = spawn(fn()
+  loop(0, 10000)
+end)
+
+let r = receive()
+print("result: " + to_string(r.count))

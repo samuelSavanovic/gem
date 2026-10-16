@@ -1,0 +1,216 @@
+## regex: POSIX extended regular expressions.
+##
+##   regex.test("^[a-z]+$", "hello")                    # true
+##   regex.find("(\\w+)@(\\w+)", "bob@example").groups  # ["bob", "example"]
+##   regex.replace("\\d+", "a1b22", "#")                 # "a#b#"
+##
+## Adds `\d \w \s \D \W \S \t \n \r`; no `\b`, back-references or lazy quantifiers.
+## `{4}` in a double-quoted string is interpolation, so write bounds in single quotes: `'\d{4}'`.
+## A match is `{text, start, stop, groups}` (byte offsets; nil for a group that didn't take part).
+## Matching runs on the scheduler thread, so a long match blocks other processes.
+
+load "std/string"
+
+# `find` below hides the builtin, hence string.index_of in this file
+extern fn gem_regex_exec(pat: String, flags: Int, s: Bytes, start: Int) -> Table
+extern fn gem_regex_groups(pat: String, flags: Int) -> Int
+
+let METACHARS = '.[]()*+?{}|^$\\'
+
+fn check(fname, pattern, s)
+  if type(pattern) != "string"
+    error("regex.{fname}: pattern must be a string, got {type(pattern)}")
+  end
+  if type(s) != "string"
+    error("regex.{fname}: s must be a string, got {type(s)}")
+  end
+end
+
+fn flag_bits(icase, multiline)
+  let f = 0
+  if icase
+    f += 1
+  end
+  if multiline
+    f += 2
+  end
+  f
+end
+
+fn to_match(s, m)
+  let groups = []
+  let g = 2
+  while g < len(m)
+    push(groups, if m[g] < 0 then nil else substr(s, m[g], m[g + 1] - m[g]) end)
+    g += 2
+  end
+  {text: substr(s, m[0], m[1] - m[0]), start: m[0], stop: m[1], groups: groups}
+end
+
+## True when `pattern` matches somewhere in `s`.
+fn test(pattern, s, {icase = false, multiline = false} = {})
+  check("test", pattern, s)
+  gem_regex_exec(pattern, flag_bits(icase, multiline), s, 0) != nil
+end
+
+## The first match of `pattern` in `s` at or after byte `start`, or nil.
+fn find(pattern, s, {icase = false, multiline = false, start = 0} = {})
+  check("find", pattern, s)
+  let m = gem_regex_exec(pattern, flag_bits(icase, multiline), s, start)
+  if m == nil
+    return nil
+  end
+  to_match(s, m)
+end
+
+## Every non-overlapping match of `pattern` in `s`, left to right.
+fn find_all(pattern, s, {icase = false, multiline = false} = {})
+  check("find_all", pattern, s)
+  let flags = flag_bits(icase, multiline)
+  let out = []
+  let pos = 0
+  let n = len(s)
+  while pos <= n
+    let m = gem_regex_exec(pattern, flags, s, pos)
+    if m == nil
+      break
+    end
+    push(out, to_match(s, m))
+    pos = if m[1] > m[0] then m[1] else m[1] + 1 end
+  end
+  out
+end
+
+fn expand(repl, s, m)
+  if string.index_of(repl, "\\") < 0
+    return repl
+  end
+  build_string do |add|
+    let i = 0
+    let n = len(repl)
+    while i < n
+      let c = ord(repl, i)
+      if c == 92 and i + 1 < n
+        let d = ord(repl, i + 1)
+        if d >= 48 and d <= 57
+          let g = (d - 48) * 2
+          if g + 1 < len(m) and m[g] >= 0
+            add(substr(s, m[g], m[g + 1] - m[g]))
+          end
+          i += 2
+          continue
+        end
+        if d == 92
+          add("\\")
+          i += 2
+          continue
+        end
+      end
+      add(repl[i])
+      i += 1
+    end
+  end
+end
+
+fn replace_n(fname, pattern, s, repl, limit, flags)
+  check(fname, pattern, s)
+  let rt = type(repl)
+  if rt != "string" and rt != "fn"
+    error("regex.{fname}: repl must be a string or a fn, got {rt}")
+  end
+  let n = len(s)
+  let count = 0
+  let pos = 0
+  let last = 0
+  let out = build_string do |add|
+    while pos <= n and (limit < 0 or count < limit)
+      let m = gem_regex_exec(pattern, flags, s, pos)
+      if m == nil
+        break
+      end
+      add(substr(s, last, m[0] - last))
+      if rt == "string"
+        add(expand(repl, s, m))
+      else
+        add(repl(to_match(s, m)))
+      end
+      last = m[1]
+      count += 1
+      if m[1] > m[0]
+        pos = m[1]
+      else
+        if m[1] < n
+          add(s[m[1]])
+        end
+        last = m[1] + 1
+        pos = m[1] + 1
+      end
+    end
+    if last < n
+      add(substr(s, last))
+    end
+  end
+  out
+end
+
+## Replaces every match with `repl`: a string (`\0` the match, `\1`..`\9` its groups) or a fn taking the match.
+fn replace(pattern, s, repl, {icase = false, multiline = false} = {})
+  replace_n("replace", pattern, s, repl, -1, flag_bits(icase, multiline))
+end
+
+## Like `replace`, but replaces only the first match.
+fn replace_first(pattern, s, repl, {icase = false, multiline = false} = {})
+  replace_n("replace_first", pattern, s, repl, 1, flag_bits(icase, multiline))
+end
+
+## Splits `s` at every match. Adjacent or edge matches give empty pieces; an empty match doesn't split.
+fn split(pattern, s, {icase = false, multiline = false} = {})
+  check("split", pattern, s)
+  let flags = flag_bits(icase, multiline)
+  let out = []
+  let n = len(s)
+  let pos = 0
+  let last = 0
+  while pos <= n
+    let m = gem_regex_exec(pattern, flags, s, pos)
+    if m == nil
+      break
+    end
+    if m[1] > m[0]
+      push(out, substr(s, last, m[0] - last))
+      last = m[1]
+      pos = m[1]
+    else
+      pos = m[1] + 1
+    end
+  end
+  push(out, substr(s, last))
+  out
+end
+
+## `s` with its metacharacters escaped, so it matches literally.
+fn escape(s)
+  if type(s) != "string"
+    error("regex.escape: s must be a string, got {type(s)}")
+  end
+  build_string do |add|
+    for i = 0, len(s)
+      let ch = s[i]
+      if string.index_of(METACHARS, ch) >= 0
+        add("\\")
+      end
+      add(ch)
+    end
+  end
+end
+
+## nil when `pattern` compiles, else the error the other fns would raise.
+fn check_pattern(pattern, {icase = false, multiline = false} = {})
+  if type(pattern) != "string"
+    error("regex.check_pattern: pattern must be a string, got {type(pattern)}")
+  end
+  let r = pcall gem_regex_groups(pattern, flag_bits(icase, multiline))
+  if r.ok then nil else r.error end
+end
+
+export test, find, find_all, replace, replace_first, split, escape, check_pattern

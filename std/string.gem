@@ -1,0 +1,217 @@
+## string: split, join, search, trim, ASCII case, all on bytes. String arguments also accept a buffer.
+
+fn text(fname, what, v)
+  let t = type(v)
+  if t == "string"
+    return v
+  end
+  if t == "buffer"
+    return to_string(v)
+  end
+  error("string.{fname}: {what} must be a string, got {t}")
+end
+
+fn is_space(c)
+  c == 32 or (c >= 9 and c <= 13)
+end
+
+## Pieces of `s` between each `delim`: `split("a,,b", ",")` is ["a", "", "b"]. An empty `delim` gives [s].
+fn split(s, delim)
+  s = text("split", "s", s)
+  delim = text("split", "delim", delim)
+  let dlen = len(delim)
+  if dlen == 0
+    return [s]
+  end
+  let parts = []
+  let start = 0
+  while true
+    let at = find(s, delim, start)
+    if at < 0
+      break
+    end
+    push(parts, substr(s, start, at - start))
+    start = at + dlen
+  end
+  push(parts, substr(s, start, len(s) - start))
+  parts
+end
+
+## Byte offset of the first `needle` in `s` at or after `start` (negative counts as 0), or -1.
+fn index_of(s, needle, start = 0)
+  s = text("index_of", "s", s)
+  needle = text("index_of", "needle", needle)
+  if type(start) != "int"
+    error("string.index_of: start must be an int, got {type(start)}")
+  end
+  find(s, needle, start)
+end
+
+## True when `needle` occurs in `s` ("" always does).
+fn contains(s, needle)
+  s = text("contains", "s", s)
+  needle = text("contains", "needle", needle)
+  find(s, needle) >= 0
+end
+
+## The elements of `arr` joined by `delim`, non-strings formatted as in interpolation.
+fn join(arr, delim)
+  if type(arr) != "table"
+    error("string.join: arr must be an array, got {type(arr)}")
+  end
+  if not __is_array_n(arr, len(arr))
+    error("string.join: arr must be an array, got a table with keys other than 0 .. n-1")
+  end
+  delim = text("join", "delim", delim)
+  build_string() do |add|
+    for i = 0, len(arr)
+      if i > 0
+        add(delim)
+      end
+      add(arr[i])
+    end
+  end
+end
+
+## `s` without leading and trailing ASCII whitespace.
+fn trim(s)
+  s = text("trim", "s", s)
+  let slen = len(s)
+  let start = 0
+  while start < slen and is_space(ord(s, start))
+    start += 1
+  end
+  let stop = slen
+  while stop > start and is_space(ord(s, stop - 1))
+    stop -= 1
+  end
+  if start == 0 and stop == slen
+    return s
+  end
+  substr(s, start, stop - start)
+end
+
+## True when `s` begins with `prefix`.
+fn starts_with(s, prefix)
+  s = text("starts_with", "s", s)
+  prefix = text("starts_with", "prefix", prefix)
+  let plen = len(prefix)
+  plen <= len(s) and substr(s, 0, plen) == prefix
+end
+
+## True when `s` ends with `suffix`.
+fn ends_with(s, suffix)
+  s = text("ends_with", "s", s)
+  suffix = text("ends_with", "suffix", suffix)
+  let plen = len(suffix)
+  plen <= len(s) and substr(s, len(s) - plen, plen) == suffix
+end
+
+# add delta to every byte in lo..hi; returns s itself if none are
+fn shift_range(s, lo, hi, delta)
+  let slen = len(s)
+  let run = 0
+  let out = build_string() do |add|
+    for i = 0, slen
+      let c = ord(s, i)
+      if c >= lo and c <= hi
+        if i > run
+          add(substr(s, run, i - run))
+        end
+        add(chr(c + delta))
+        run = i + 1
+      end
+    end
+    if run > 0 and run < slen
+      add(substr(s, run, slen - run))
+    end
+  end
+  if run == 0
+    return s
+  end
+  out
+end
+
+## `s` with a-z changed to A-Z; other bytes (UTF-8 too) stay as they are.
+fn upper(s)
+  s = text("upper", "s", s)
+  shift_range(s, 97, 122, -32)
+end
+
+## `s` with A-Z changed to a-z; other bytes (UTF-8 too) stay as they are.
+fn lower(s)
+  s = text("lower", "s", s)
+  shift_range(s, 65, 90, 32)
+end
+
+## `s` repeated `n` times ("" for n <= 0).
+fn repeat(s, n)
+  s = text("repeat", "s", s)
+  if type(n) != "int"
+    error("string.repeat: n must be an int, got {type(n)}")
+  end
+  build_string() do |add|
+    for i = 0, n
+      add(s)
+    end
+  end
+end
+
+# edit distance, with a swap of two neighbouring bytes as one edit
+fn distance(a, b)
+  let alen = len(a)
+  let blen = len(b)
+  if alen == 0 then return blen end
+  if blen == 0 then return alen end
+  let before = []
+  let prev = []
+  for j = 0, blen + 1
+    push(prev, j)
+    push(before, 0)
+  end
+  for i = 1, alen + 1
+    let curr = [i]
+    for j = 1, blen + 1
+      let cost = if ord(a, i - 1) == ord(b, j - 1) then 0 else 1 end
+      let m = prev[j] + 1
+      if curr[j - 1] + 1 < m then m = curr[j - 1] + 1 end
+      if prev[j - 1] + cost < m then m = prev[j - 1] + cost end
+      if i > 1 and j > 1 and ord(a, i - 1) == ord(b, j - 2) and ord(a, i - 2) == ord(b, j - 1) and before[j - 2] + 1 < m
+        m = before[j - 2] + 1
+      end
+      push(curr, m)
+    end
+    before = prev
+    prev = curr
+  end
+  prev[blen]
+end
+
+## For "did you mean": the candidate closest to `word` (1 edit up to 4 bytes, 2 for longer),
+## else one that is `word` + "_..." (`timeout` finds `timeout_ms`), else nil.
+fn closest(word, candidates)
+  word = text("closest", "word", word)
+  let best = nil
+  let best_d = 999
+  for c in candidates
+    if type(c) == "string" and c != word
+      let d = distance(word, c)
+      if d < best_d
+        best_d = d
+        best = c
+      end
+    end
+  end
+  let limit = if len(word) <= 4 then 1 else 2 end
+  if best_d <= limit
+    return best
+  end
+  for c in candidates
+    if type(c) == "string" and len(word) >= 3 and starts_with(c, word + "_")
+      return c
+    end
+  end
+  nil
+end
+
+export split, index_of, join, trim, starts_with, ends_with, upper, lower, contains, repeat, closest

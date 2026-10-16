@@ -1,0 +1,4 @@
+# Empty interpolations: each `{}` is one error.
+let x = 1
+print("a{}b")
+print("{x}{}")

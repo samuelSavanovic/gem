@@ -1,0 +1,2069 @@
+# Recursive descent parser: tokens -> AST (constructors in ast.gem).
+
+load "./checks" (check_semantics)
+load "./ast" (make_program, make_int, make_float, make_string, make_bool, make_nil_node, make_var, make_binop, make_unop, make_call, make_dot, make_index, make_anon_fn, make_table, make_table_entry, make_array, make_interp, make_let, make_assign, make_dot_assign, make_index_assign, make_fn_def, make_if, make_while, make_match, make_when, make_for_in, make_for_range, make_match_arm, make_pat_table, make_pat_table_entry, make_pat_array, make_pat_literal, make_pat_name, make_pat_pin, make_pat_error, make_receive_match, make_return, make_break, make_continue, make_export, make_extern_fn, make_extern_param, make_extern_include, make_error_expr, make_error_stmt)
+load "./lexer" (tokenize, normalize_newlines, check_reserved_names)
+load "./errors" (make_error_sink)
+
+# the parser recurses several frames per nesting level; a few hundred levels can overflow the compiler's stack
+let MAX_NEST = 200
+# nesting plus operator/postfix chain links; later passes and cc recurse per level (clang dies under 2000)
+let MAX_DEPTH = 1000
+
+# not allowed as an extern fn's name (the C symbol): C keywords that aren't Gem's, and the types our prototypes use
+let C_RESERVED = {}
+for w in ["auto", "case", "char", "const", "default", "double", "enum", "float", "goto", "inline", "int", "long", "register", "restrict", "short", "signed", "sizeof", "static", "struct", "switch", "typedef", "union", "unsigned", "void", "volatile", "asm", "typeof", "_Alignas", "_Alignof", "_Atomic", "_Bool", "_Complex", "_Generic", "_Imaginary", "_Noreturn", "_Static_assert", "_Thread_local", "bool", "int64_t", "uint8_t", "GemVal", "GemBytes"]
+  C_RESERVED[w] = true
+end
+
+extern fn atof(s: String) -> Float
+
+fn digit_val(ch)
+  match ch
+  when "0"
+    0
+  when "1"
+    1
+  when "2"
+    2
+  when "3"
+    3
+  when "4"
+    4
+  when "5"
+    5
+  when "6"
+    6
+  when "7"
+    7
+  when "8"
+    8
+  when "9"
+    9
+  else
+    error("not a digit: {ch}")
+  end
+end
+
+fn str_to_int(s)
+  let result = 0
+  for i = 0, len(s)
+    result = result * 10 + digit_val(s[i])
+  end
+  result
+end
+
+# "ok" (fits int64), "min" (exactly 9223372036854775808, valid only negated) or "over"
+fn int_literal_range(s)
+  let start = 0
+  while start < len(s) - 1 and s[start] == "0"
+    start += 1
+  end
+  let digits = len(s) - start
+  if digits < 19 then return "ok" end
+  if digits > 19 then return "over" end
+  let d = substr(s, start, 19)
+  if d <= "9223372036854775807" then return "ok" end
+  if d == "9223372036854775808" then return "min" end
+  "over"
+end
+
+fn int64_min()
+  0 - 9223372036854775807 - 1
+end
+
+fn contains_dot(s)
+  for i = 0, len(s)
+    if s[i] == "."
+      return true
+    end
+  end
+  false
+end
+
+fn parse_source(source, file, sink)
+  if sink == nil
+    sink = make_error_sink()
+  end
+  let errors_before = sink.count()
+  source = normalize_newlines(source)
+  let tokens = tokenize(source, file, sink)
+  # after lexer errors the tokens are junk and would only cascade; the sink is shared across files, hence errors_before
+  if sink.count() > errors_before or sink.suppressed()
+    return make_program([])
+  end
+  check_reserved_names(tokens, source, file, sink)
+  let p = make_parser(tokens, source, file, sink)
+  let ast = p.parse()
+  if sink.count() == errors_before
+    check_semantics(ast, source, file, sink)
+  end
+  ast
+end
+
+fn collect_pattern_names(pat, bound, pins)
+  if pat == nil
+    return nil
+  end
+  if pat.tag == "pat_name"
+    bound[pat.name] = true
+  elif pat.tag == "pat_pin"
+    push(pins, pat.var)
+  elif pat.tag == "pat_table"
+    for e in pat.entries
+      if e.value == nil
+        bound[e.key] = true
+      else
+        collect_pattern_names(e.value, bound, pins)
+      end
+    end
+  elif pat.tag == "pat_array"
+    for el in pat.elements
+      collect_pattern_names(el, bound, pins)
+    end
+  end
+end
+
+fn make_parser(tokens, source, file, sink)
+  if sink == nil
+    sink = make_error_sink()
+  end
+  let pos = 0
+  let gensym_counter = 0
+  # One destructured `let name = value`. The default applies only when the key is missing (an explicit nil
+  # stays nil). The value is read first so a non-table still raises, and the default goes through a temp so it
+  # sees the `name` being shadowed.
+  let push_destructured = fn(stmts, name, obj_name, key, value, dflt, line)
+    if dflt == nil
+      push(stmts, make_let(name, value, line))
+      return nil
+    end
+    gensym_counter += 1
+    let tmp = "__d{gensym_counter}v"
+    push(stmts, make_let(tmp, value, line))
+    let missing = make_binop("and",
+      make_binop("==", make_var(tmp), make_nil_node()),
+      make_unop("not", make_call(make_var("__has_key"), [make_var(obj_name), key], line)),
+      line)
+    push(stmts, make_if(missing, [make_assign(tmp, dflt, line)], [], line))
+    push(stmts, make_let(name, make_var(tmp), line))
+  end
+  let fn_depth = 0
+  # nesting levels and chain links around the cursor, checked against MAX_NEST / MAX_DEPTH
+  let nest = 0
+  let links = 0
+  let nest_overflow = false
+  # names the current pattern binds so far; pattern depth
+  let pat_bound = {}
+  let pat_level = 0
+  # same names with positions; a `when` arm keeps them for checks.gem
+  let pat_binds = []
+  # 1 for a top-level statement, more inside any block; named fns and externs only live at 1
+  let stmt_depth = 0
+  # > 0 in an if/while/for header: no trailing blocks there, so `f() do` reports a stray Lua-style `do`
+  let header_depth = 0
+  # where an if/match/receive value is banned: "default" (param default) or "when" (arm value); cleared in fns and blocks
+  let block_ban = nil
+  # loops around the statement up to the enclosing fn boundary, whose kind is closure_kind (nil, "fn", "do", "spawn").
+  # A closure is its own C function, so break/continue can't reach a loop outside it.
+  let loop_depth = 0
+  # loop_depth outside the `while` being parsed; break/continue in its condition is an error
+  let while_cond_depth = nil
+  let closure_kind = nil
+  # pos of the current top-level statement: module-scope or nested?
+  let top_stmt_pos = -1
+  # module-scope names -> {kind, line}; only a `let` may repeat (it rebinds)
+  let top_names = {}
+
+  let peek = fn()
+    tokens[pos]
+  end
+
+  # past the end: the EOF token
+  let peek_at = fn(n)
+    if pos + n >= len(tokens)
+      return tokens[-1]
+    end
+    tokens[pos + n]
+  end
+
+  let advance = fn()
+    let t = tokens[pos]
+    pos += 1
+    t
+  end
+
+  let at_end = fn()
+    tokens[pos].type == "EOF"
+  end
+
+  # after a nesting overflow everything is recovery noise, so drop it
+  let report = fn(line, col, span, msg, hint)
+    if nest_overflow
+      return nil
+    end
+    sink.report(source, file, line, col, span, msg, hint)
+  end
+
+  let warn = fn(line, col, span, msg, hint)
+    if nest_overflow
+      return nil
+    end
+    sink.warn(source, file, line, col, span, msg, hint)
+  end
+
+  # only the first overflow is reported
+  let report_nest = fn(msg, hint)
+    if not nest_overflow
+      let t = tokens[pos]
+      report(t.line, t.col, 1, msg, hint)
+      nest_overflow = true
+    end
+  end
+
+  # false (and nothing opened) past a limit
+  let enter_nest = fn()
+    if nest >= MAX_NEST
+      report_nest("nested too deeply: more than {MAX_NEST} levels", "split the code with `let` or a helper fn")
+      return false
+    end
+    if nest + links >= MAX_DEPTH
+      report_nest("expression too deep: more than {MAX_DEPTH} levels", "each operator of a chain like `a + b + c` adds a level; split it with `let`")
+      return false
+    end
+    nest += 1
+    true
+  end
+
+  let enter_link = fn()
+    if nest + links >= MAX_DEPTH
+      report_nest("expression too deep: more than {MAX_DEPTH} levels", "each operator of a chain like `a + b + c` adds a level; split it with `let`")
+      return false
+    end
+    links += 1
+    true
+  end
+
+  # a name bound twice in one pattern reads like an equality test but just binds the last match (`_` may repeat)
+  let bind_pattern_name = fn(tok)
+    if tok.value != "_" and has_key(pat_bound, tok.value)
+      report(tok.line, tok.col, len(tok.value), "'{tok.value}' is bound twice in this pattern", "a repeated name doesn't compare the values; pin it with `^{tok.value}` against an earlier binding, or compare in the body")
+    end
+    pat_bound[tok.value] = true
+    push(pat_binds, {name: tok.value, line: tok.line, col: tok.col})
+  end
+
+  # kind: "let", "load", "module", "fn" or "extern fn"; only lets and loads can share a name. `span`: underline width
+  let note_top_name = fn(tok, kind, span = nil)
+    if tok.synthetic == true or type(tok.value) != "string"
+      return nil
+    end
+    let name = tok.value
+    let prev = top_names[name]
+    if prev == nil
+      top_names[name] = {kind: kind, line: tok.line}
+      return nil
+    end
+    if (prev.kind == "module" and kind == "let") or (prev.kind == "let" and kind == "module")
+      let mline = if prev.kind == "module" then prev.line else tok.line end
+      report(tok.line, tok.col, if span == nil then len(name) else span end, "`{name}` names the module loaded at line {mline}; a module-level `let {name}` would hide it in every fn of this file", "pick another name for the variable")
+      return nil
+    end
+    let rebindable = {let: true, load: true, module: true}
+    if rebindable[prev.kind] and rebindable[kind]
+      return nil
+    end
+    let shown = if prev.kind == "module" then "load" else prev.kind end
+    let article = if prev.kind == "extern fn" then "an" else "a" end
+    if span == nil
+      span = len(name)
+    end
+    report(tok.line, tok.col, span, "`{name}` is already defined at line {prev.line} ({article} `{shown}`)", "pick another name; a module-level name has one definition (only a `let` can be repeated, and it rebinds the name)")
+  end
+
+  let report_int_range = fn(t)
+    report(t.line, t.col, len(t.value), "integer literal out of range (max 9223372036854775807)", "ints are 64-bit signed: -9223372036854775808 to 9223372036854775807")
+  end
+
+  # an int key (`3: v`) in a table literal or pattern: consumes the number, not the `:`, and returns it.
+  # Negative, float and out-of-range keys are reported and read as 0; nil, consuming nothing, if it isn't one.
+  let parse_int_key = fn()
+    let negative = peek().type == "-"
+    let off = if negative then 1 else 0 end
+    let nt = peek_at(off)
+    if nt.type != "NUMBER" or peek_at(off + 1).type != ":"
+      return nil
+    end
+    if contains_dot(nt.value)
+      let first = advance()
+      let text = nt.value
+      if negative
+        advance()
+        text = "-" + text
+      end
+      report(first.line, first.col, nt.col + len(nt.value) - first.col, "a float can't be a table key in a literal or pattern", "set it with an index: `t[{text}] = v`, or key the entry with a string")
+      return 0
+    end
+    let first = advance()
+    if negative
+      advance()
+      report(first.line, first.col, nt.col + len(nt.value) - first.col, "a negative int can't be a table key", "a negative int indexes from the end of an array (`t[-1]` is the last element); key the entry with a string")
+      return 0
+    end
+    if int_literal_range(nt.value) != "ok"
+      report_int_range(nt)
+      return 0
+    end
+    str_to_int(nt.value)
+  end
+
+  # key is the decimal text, int_key the int (codegen and pattern lowering use it); a string key stays a string
+  let set_int_key = fn(entry, n)
+    entry.key = to_string(n)
+    entry.int_key = n
+    entry
+  end
+
+  # returns what leave_fn_body restores
+  let enter_fn_body = fn(kind)
+    let saved = {depth: loop_depth, kind: closure_kind, cond_depth: while_cond_depth}
+    loop_depth = 0
+    closure_kind = kind
+    while_cond_depth = nil
+    saved
+  end
+
+  let leave_fn_body = fn(saved)
+    loop_depth = saved.depth
+    closure_kind = saved.kind
+    while_cond_depth = saved.cond_depth
+  end
+
+  let report_loop_exit = fn(t)
+    let kw = "`{t.type}`"
+    if closure_kind == "do"
+      report(t.line, t.col, len(t.type), "{kw} inside a `do` block; use a `for` loop", "a `do` block is a closure, so {kw} can't reach a loop in the caller; `return` leaves the block")
+    elif closure_kind == "spawn"
+      report(t.line, t.col, len(t.type), "{kw} inside a `spawn do` block, outside any loop", "a process body is not a loop; `return` ends the process")
+    elif closure_kind == "fn"
+      report(t.line, t.col, len(t.type), "{kw} inside a `fn` closure, outside any loop", "a closure is a separate function, so {kw} can't reach a loop outside it; `return` leaves the closure")
+    else
+      report(t.line, t.col, len(t.type), "{kw} outside a loop", nil)
+    end
+  end
+
+  # non-fatal: on a mismatch it reports and returns a synthetic token without consuming (see force_progress)
+  let expect = fn(tp)
+    let t = tokens[pos]
+    if t.type != tp
+      report(t.line, t.col, len(t.value), "expected '{tp}' but got '{t.type}'", nil)
+      return {type: tp, value: tp, line: t.line, col: t.col, synthetic: true}
+    end
+    pos += 1
+    t
+  end
+
+  # Blocks waiting for their `end`, innermost last. A missing `end` only shows up later (a column-1 `fn` in a
+  # body, or EOF); the error goes to the first block whose `end` was indented unlike its opener, else the innermost.
+  let open_blocks = []
+  let end_suspect = nil
+  let missing_end_reported = false
+  let line_indent = {}
+  for tok in tokens
+    if not has_key(line_indent, tok.line)
+      line_indent[tok.line] = tok.col
+    end
+  end
+
+  let open_block = fn(tok, kw)
+    push(open_blocks, {tok: tok, kw: kw})
+  end
+
+  let report_missing_end = fn(blk, why)
+    missing_end_reported = true
+    let hint = "close it with `end` (every `if`, `while`, `for`, `fn`, `do`, `match` and `receive` block ends with one)"
+    if blk.end_line != nil
+      hint = "{hint}; the `end` at line {blk.end_line} is indented like an enclosing block, so it most likely closes that one"
+    else
+      hint = "{hint}; the first line indented less than its body is usually where it belongs"
+    end
+    report(blk.tok.line, blk.tok.col, len(blk.kw), "this `{blk.kw}` has no `end`: {why}", hint)
+  end
+
+  let missing_end_block = fn()
+    if end_suspect != nil
+      return end_suspect
+    end
+    if len(open_blocks) > 0
+      return open_blocks[len(open_blocks) - 1]
+    end
+    nil
+  end
+
+  # at EOF, point at the block missing its `end`, not at EOF
+  let expect_end = fn(open_tok, kw)
+    let i = len(open_blocks) - 1
+    while i >= 0 and open_blocks[i].tok != open_tok
+      i -= 1
+    end
+    let blk = if i >= 0 then open_blocks[i] else {tok: open_tok, kw: kw} end
+    while i >= 0 and len(open_blocks) > i
+      pop(open_blocks)
+    end
+    let t = tokens[pos]
+    if t.type == "EOF" and open_tok != nil and open_tok.line != nil
+      if not missing_end_reported
+        let culprit = missing_end_block()
+        if culprit == nil
+          culprit = blk
+        end
+        report_missing_end(culprit, "the file ended first")
+      end
+      return {type: "end", value: "end", line: t.line, col: t.col, synthetic: true}
+    end
+    let first_on_line = pos == 0 or tokens[pos - 1].line != t.line
+    if t.type == "end" and end_suspect == nil and open_tok != nil and first_on_line and t.line != open_tok.line and line_indent[open_tok.line] != t.col
+      end_suspect = {tok: open_tok, kw: kw, end_line: t.line}
+    end
+    expect("end")
+  end
+
+  # an extern param or return type; reports what can't be marshaled
+  let expect_extern_type = fn(is_ret, is_blocking)
+    let t = expect("NAME")
+    let ty = t.value
+    if t.synthetic == true
+      return ty
+    end
+    let known = ty == "Int" or ty == "Float" or ty == "String" or ty == "Bool" or ty == "Ptr" or ty == "Bytes" or ty == "Table"
+    if is_ret and ty == "Nil"
+      known = true
+    end
+    if not is_ret and ty == "Socket"
+      known = true
+    end
+    if is_ret and ty == "Socket"
+      report(t.line, t.col, len(ty), "an extern fn cannot return a Socket", "return the fd as an Int and register it with tcp_from_fd")
+    elif not known
+      let allowed = "Int, Float, String, Bool, Ptr, Bytes, Table"
+      if is_ret
+        allowed = allowed + ", Nil"
+      else
+        allowed = allowed + ", Socket"
+      end
+      report(t.line, t.col, len(ty), "unknown extern type '{ty}'", "expected one of {allowed}")
+    elif is_blocking and ty == "Table" and is_ret
+      report(t.line, t.col, len(ty), "extern blocking fn cannot return a Table", "the C function runs on a worker thread, which cannot allocate in the calling process's memory; return Bytes or Ptr instead")
+    elif is_blocking and ty == "Table"
+      report(t.line, t.col, len(ty), "extern blocking fn cannot take a Table", "a Table points into the calling process's memory, which is freed if the process is killed mid-call; pass its fields as separate arguments")
+    end
+    ty
+  end
+
+  # called in every `while peek().type != X`: skips a token if the turn made no progress (expect() doesn't consume)
+  let force_progress = fn(last_pos)
+    if pos == last_pos and tokens[pos].type != "EOF"
+      pos += 1
+    end
+  end
+
+  let skip_nl = fn()
+    while tokens[pos].type == "NEWLINE"
+      pos += 1
+    end
+  end
+
+  let parse_expr = nil
+  # assignment or value (parse_expr rejects assignments)
+  let parse_stmt_expr = nil
+  let parse_stmt = nil
+  let parse_unary = nil
+  let parse_not = nil
+  let parse_pattern = nil
+
+  let parse_banned = fn(ban)
+    let saved = block_ban
+    block_ban = ban
+    let e = parse_expr()
+    block_ban = saved
+    e
+  end
+
+  # a destructuring field is a name: both the key read and the variable bound
+  let check_destructure_field = fn(field_tok)
+    if field_tok.type != "NAME"
+      let v = field_tok.value
+      if v == "" or v == "\n"
+        v = field_tok.type
+      elif field_tok.type == "STRING"
+        v = "\"" + v + "\""
+      end
+      report(field_tok.line, field_tok.col, len(field_tok.value), "expected a field name in a destructuring pattern, got `{v}`", "each field binds a variable of the same name: `let \{a, b\} = t`")
+    end
+  end
+
+  # `{key: name}` renames, which only match/receive patterns can do: report at the field, skip the rest of the entry
+  let reject_destructure_rename = fn(field_tok, example)
+    if peek().type != ":"
+      return nil
+    end
+    let f = field_tok.value
+    report(field_tok.line, field_tok.col, len(f), "destructuring can't rename `{f}`: write `{example}` and use `{f}`", nil)
+    advance()
+    let depth = 0
+    while not at_end()
+      let tp = peek().type
+      if depth == 0 and (tp == "," or tp == "}" or tp == ")")
+        break
+      end
+      if tp == "\{" or tp == "[" or tp == "("
+        depth += 1
+      elif tp == "}" or tp == "]" or tp == ")"
+        depth -= 1
+      end
+      advance()
+    end
+  end
+
+  # -> {params, rest_param, defaults (parallel, nil for none), prelude (destructured params' statements for the body)}
+  let parse_params = fn()
+    let params = []
+    let rest_param = nil
+    let defaults = []
+    let prelude = []
+    let has_default = false
+    let bound = {}
+    let bind = fn(tok)
+      if has_key(bound, tok.value)
+        report(tok.line, tok.col, len(tok.value), "duplicate parameter '{tok.value}'", nil)
+      end
+      bound[tok.value] = true
+    end
+
+    while peek().type == "NAME" or peek().type == "..." or peek().type == "\{"
+      if peek().type == "..."
+        advance()
+        let rest_tok = expect("NAME")
+        rest_param = rest_tok.value
+        if not rest_tok.synthetic
+          bind(rest_tok)
+        end
+        break
+      end
+
+      # {name [= expr], ...} [= outer_default]
+      if peek().type == "\{"
+        let dline = peek().line
+        let dcol = peek().col
+        advance()
+        skip_nl()
+        let dnames = []
+        let ddflts = []
+        let drest = nil
+        while peek().type != "}" and not at_end()
+          let _lp = pos
+          if peek().type == "..."
+            # `...rest`: the other keys, in a table; no unknown-key check
+            advance()
+            let rest_tok = expect("NAME")
+            if not rest_tok.synthetic
+              bind(rest_tok)
+              drest = rest_tok.value
+            end
+            skip_nl()
+            if peek().type == ","
+              advance()
+              skip_nl()
+            end
+            if peek().type != "}"
+              let bad = peek()
+              report(bad.line, bad.col, len(bad.value), "`...{drest}` must be the last entry of the pattern", nil)
+            end
+            force_progress(_lp)
+            continue
+          end
+          let field_tok = peek()
+          advance()
+          push(dnames, field_tok.value)
+          bind(field_tok)
+          check_destructure_field(field_tok)
+          reject_destructure_rename(field_tok, "\{" + field_tok.value + "\}")
+          skip_nl()
+          if peek().type == "="
+            advance()
+            skip_nl()
+            push(ddflts, parse_expr())
+          else
+            push(ddflts, nil)
+          end
+          skip_nl()
+          if peek().type == ","
+            advance()
+            skip_nl()
+          end
+          force_progress(_lp)
+        end
+        expect("}")
+
+        gensym_counter += 1
+        let pname = "__pdestr{gensym_counter}"
+        push(params, pname)
+
+        if peek().type == "="
+          advance()
+          let outer_default = parse_banned("default")
+          # missing arg: the normal default path; an explicit nil gets it too, at body start
+          push(defaults, outer_default)
+          has_default = true
+          push(prelude, make_if(
+            make_binop("==", make_var(pname), make_nil_node()),
+            [make_assign(pname, outer_default, dline)],
+            [],
+            dline
+          ))
+        else
+          if has_default
+            report(dline, dcol, 1, "required parameter after optional parameter", nil)
+          end
+          push(defaults, nil)
+        end
+
+        # With `...rest`, unnamed keys go to rest. Otherwise an outer default (`{port = 80} = {}`) makes an option bag
+        # rejecting unknown keys, and with neither it's a record pattern that ignores them. Names go NUL-separated.
+        let is_bag = defaults[len(defaults) - 1] != nil
+        let name_list = build_string do |add|
+          for di = 0, len(dnames)
+            if di > 0
+              add(chr(0))
+            end
+            add(dnames[di])
+          end
+        end
+        if drest != nil
+          push(prelude, make_let(drest, make_call(make_var("__opts_rest"), [make_var(pname), make_string(name_list)], dline), dline))
+        elif is_bag
+          push(prelude, make_call(make_var("__check_opts"), [make_var(pname), make_string(name_list)], dline))
+        end
+
+        # the prelude is part of the body, so a TCO'd self call reruns it
+        for di = 0, len(dnames)
+          push_destructured(prelude, dnames[di], pname, make_string(dnames[di]), make_dot(make_var(pname), dnames[di]), ddflts[di], dline)
+        end
+
+        if peek().type != ","
+          break
+        end
+        advance()
+        skip_nl()
+        continue
+      end
+
+      let name_tok = advance()
+      push(params, name_tok.value)
+      bind(name_tok)
+      if peek().type == "="
+        advance()
+        push(defaults, parse_banned("default"))
+        has_default = true
+      else
+        if has_default
+          report(name_tok.line, name_tok.col, len(name_tok.value), "required parameter after optional parameter", nil)
+        end
+        push(defaults, nil)
+      end
+      if peek().type != ","
+        break
+      end
+      advance()
+    end
+
+    {params: params, rest_param: rest_param, defaults: defaults, prelude: prelude}
+  end
+
+  let with_prelude = fn(prelude, body)
+    if len(prelude) == 0
+      return body
+    end
+    let full = []
+    for s in prelude
+      push(full, s)
+    end
+    for s in body
+      push(full, s)
+    end
+    full
+  end
+
+  # if/while/when/else bodies: up to end, elif, else, when, after, then or EOF
+  let parse_body = fn()
+    let stmts = []
+    skip_nl()
+    while peek().type != "end" and peek().type != "elif" and peek().type != "else" and peek().type != "when" and peek().type != "after" and peek().type != "then" and not at_end()
+      let _lp = pos
+      push(stmts, parse_stmt())
+      skip_nl()
+      force_progress(_lp)
+    end
+    stmts
+  end
+
+  # fn and do bodies: up to end or EOF
+  let parse_fn_body = fn()
+    let saved_header_depth = header_depth
+    header_depth = 0
+    let stmts = []
+    skip_nl()
+    while peek().type != "end" and not at_end()
+      let _lp = pos
+      push(stmts, parse_stmt())
+      skip_nl()
+      force_progress(_lp)
+    end
+    header_depth = saved_header_depth
+    stmts
+  end
+
+  # if/match/receive also works as an operand (lower.gem moves it out), except in a param default or `when` value
+
+  # `receive` is a block only when `when`, `after` or `end` follows (across newlines); else it's the builtin
+  let block_value_keyword = fn()
+    let t = peek()
+    if t.type == "if" or t.type == "match"
+      return t.type
+    end
+    if t.type == "NAME" and t.value == "receive"
+      let la = 1
+      while peek_at(la).type == "NEWLINE"
+        la += 1
+      end
+      let nt = peek_at(la).type
+      if nt == "when" or nt == "after" or nt == "end"
+        return "receive"
+      end
+    end
+    nil
+  end
+
+  let block_article = fn(kw)
+    if kw == "if"
+      return "an `if`"
+    end
+    "a `{kw}`"
+  end
+
+  # expressions, lowest precedence last
+  let parse_atom = fn()
+    let t = peek()
+
+    if t.type == "NUMBER"
+      advance()
+      if contains_dot(t.value)
+        return make_float(atof(t.value))
+      end
+      if int_literal_range(t.value) != "ok"
+        report_int_range(t)
+        return make_int(0)
+      end
+      return make_int(str_to_int(t.value))
+    end
+
+    if t.type == "STRING"
+      advance()
+      return make_string(t.value)
+    end
+
+    if t.type == "INTERP_START"
+      advance()
+      # INTERP_TEXT expr INTERP_TEXT ... INTERP_END; text has its own token type so `"{"a" in t}"` still parses
+      let parts = []
+      let want_text = true
+      skip_nl()
+      while peek().type != "INTERP_END" and not at_end()
+        let _lp = pos
+        let it = peek()
+        if it.type == "INTERP_TEXT"
+          if not want_text
+            # two texts in a row: an empty `{}`
+            report(it.line, it.col, 1, "empty string interpolation", "put an expression between '\{' and '}', or write '\\\{' for a literal brace")
+          end
+          advance()
+          if len(it.value) > 0
+            push(parts, make_string(it.value))
+          end
+          want_text = false
+        else
+          push(parts, parse_expr())
+          skip_nl()
+          let nt = peek()
+          if nt.type != "INTERP_TEXT" and nt.type != "INTERP_END" and nt.type != "EOF"
+            report(nt.line, nt.col, len(nt.value), "unexpected '{nt.type}' in string interpolation", "expected '}' to close the interpolation")
+            while peek().type != "INTERP_TEXT" and peek().type != "INTERP_END" and not at_end()
+              advance()
+            end
+          end
+          want_text = true
+        end
+        skip_nl()
+        force_progress(_lp)
+      end
+      expect("INTERP_END")
+      return make_interp(parts)
+    end
+
+    if t.type == "true"
+      advance()
+      return make_bool(true)
+    end
+    if t.type == "false"
+      advance()
+      return make_bool(false)
+    end
+
+    if t.type == "nil"
+      advance()
+      return make_nil_node()
+    end
+
+    if t.type == "fn"
+      advance()
+      open_block(t, "fn")
+      let saved_ban = block_ban
+      block_ban = nil
+      expect("(")
+      let pr = parse_params()
+      expect(")")
+      fn_depth += 1
+      let saved_loops = enter_fn_body("fn")
+      let body = parse_fn_body()
+      leave_fn_body(saved_loops)
+      fn_depth -= 1
+      expect_end(t, "fn")
+      block_ban = saved_ban
+      return make_anon_fn(pr.params, pr.rest_param, with_prelude(pr.prelude, body), pr.defaults, t.line)
+    end
+
+    # keys: names, keywords, strings or non-negative ints
+    if t.type == "\{"
+      advance()
+      skip_nl()
+      let entries = []
+      while peek().type != "}" and not at_end()
+        let _lp = pos
+        let key_tok = peek()
+        let int_key = parse_int_key()
+        if int_key == nil
+          if key_tok.type == "NAME"
+            advance()
+          elif not at_end() and peek_at(1).type == ":"
+            advance()
+          else
+            report(key_tok.line, key_tok.col, len(key_tok.value), "expected '}' or table key but got '{key_tok.type}'", nil)
+            force_progress(_lp)
+            continue
+          end
+        end
+        expect(":")
+        let val = parse_expr()
+        let entry = make_table_entry(key_tok.value, val)
+        if int_key != nil then set_int_key(entry, int_key) end
+        push(entries, entry)
+        skip_nl()
+        if peek().type == ","
+          advance()
+          skip_nl()
+        end
+        force_progress(_lp)
+      end
+      expect("}")
+      return make_table(entries)
+    end
+
+    if t.type == "["
+      advance()
+      skip_nl()
+      let elements = []
+      while peek().type != "]" and not at_end()
+        let _lp = pos
+        push(elements, parse_expr())
+        skip_nl()
+        if peek().type == ","
+          advance()
+          skip_nl()
+        end
+        force_progress(_lp)
+      end
+      expect("]")
+      return make_array(elements)
+    end
+
+    if t.type == "("
+      advance()
+      let e = parse_expr()
+      expect(")")
+      return e
+    end
+
+    # `pcall <expr>` is pcall(fn() <expr> end)
+    if t.type == "NAME" and t.value == "pcall" and peek_at(1).type != "(" and peek_at(1).type != "do"
+      advance()
+      let expr = parse_stmt_expr()
+      # evaluating a fn literal or a variable can't raise; they meant to run it
+      if expr.tag == "anon_fn"
+        report(t.line, t.col, len("pcall"), "`pcall fn() ... end` returns the fn without running it", "write `pcall do ... end` to run a block, or `pcall f(x)` to run a call")
+      elif expr.tag == "var"
+        report(t.line, t.col, len("pcall") + 1 + len(expr.name), "`pcall {expr.name}` returns `{expr.name}` without calling it", "write `pcall {expr.name}()` to run it")
+      end
+      return make_call(make_var("pcall"), [make_anon_fn([], nil, [expr], [], t.line)], t.line)
+    end
+
+    # if/match/receive as a value, parsed whole as a statement even where banned (so its keywords don't report too)
+    let kw = block_value_keyword()
+    if kw != nil
+      if block_ban == "default"
+        report(t.line, t.col, len(t.value), "{block_article(kw)} can't be a parameter default", "compute the value in the function body")
+        parse_stmt()
+        return make_error_expr(t.line, t.col)
+      elif block_ban == "when"
+        report(t.line, t.col, len(t.value), "{block_article(kw)} can't be a `when` arm's value", "bind it before the block (`let v = {kw} ... end`) and pin it: `when ^v`")
+        parse_stmt()
+        return make_error_expr(t.line, t.col)
+      end
+      # its bodies take trailing blocks, even inside a header
+      let saved_header_depth = header_depth
+      header_depth = 0
+      let block = parse_stmt()
+      header_depth = saved_header_depth
+      return block
+    end
+
+    if t.type == "NAME"
+      advance()
+      return make_var(t.value, t.line, t.col)
+    end
+
+    # not an expression: report, skip the token, return a stub; an interpolation's closing `}` is left for its loop
+    if t.type == "INTERP_TEXT" or t.type == "INTERP_END"
+      report(t.line, t.col, 1, "expected expression before '}' in string interpolation", nil)
+      return make_error_expr(t.line, t.col)
+    end
+    report(t.line, t.col, len(t.value), "unexpected token '{t.type}' (expected expression)", nil)
+    if not at_end()
+      advance()
+    end
+    make_error_expr(t.line, t.col)
+  end
+
+  let parse_block_params = fn()
+    if peek().type == "|"
+      advance()
+      let r = parse_params()
+      expect("|")
+      r
+    else
+      {params: [], rest_param: nil, defaults: [], prelude: []}
+    end
+  end
+
+  # `do [|params|] body end` -> anon fn. is_spawn: the body of `spawn do`.
+  let parse_do_block = fn(is_spawn = false)
+    let do_tok = peek()
+    let do_line = do_tok.line
+    expect("do")
+    open_block(do_tok, "do")
+    let saved_ban = block_ban
+    block_ban = nil
+    let bp = parse_block_params()
+    fn_depth += 1
+    let kind = if is_spawn then "spawn" else "do" end
+    let saved_loops = enter_fn_body(kind)
+    let body = parse_fn_body()
+    leave_fn_body(saved_loops)
+    fn_depth -= 1
+    expect_end(do_tok, "do")
+    block_ban = saved_ban
+    let block = make_anon_fn(bp.params, bp.rest_param, with_prelude(bp.prelude, body), bp.defaults, do_line)
+    block.do_block = true
+    block
+  end
+
+  # `{ [|params|] expr }` -> anon fn
+  let parse_brace_block = fn()
+    let brace_line = peek().line
+    expect("\{")
+    let saved_ban = block_ban
+    block_ban = nil
+    let bp = parse_block_params()
+    let bexpr = parse_stmt_expr()
+    block_ban = saved_ban
+    if peek().type == "}"
+      advance()
+    else
+      expect("}")
+      # skip to this line's closing `}`, or the leftovers end the enclosing statement early (a later `break` misreports)
+      let depth = 0
+      while not at_end() and peek().type != "NEWLINE"
+        let bt = advance().type
+        if bt == "\{"
+          depth += 1
+        elif bt == "}"
+          if depth == 0
+            break
+          end
+          depth -= 1
+        end
+      end
+    end
+    make_anon_fn(bp.params, bp.rest_param, with_prelude(bp.prelude, [bexpr]), bp.defaults, brace_line)
+  end
+
+  let report_header_block = fn(tok)
+    report(tok.line, tok.col, 1, "a trailing block can't be used in an if / while / for header", "assign the call's result to a variable before the header")
+  end
+
+  let is_assign_node = fn(e)
+    type(e) == "table" and (e.tag == "assign" or e.tag == "dot_assign" or e.tag == "index_assign")
+  end
+
+  let report_assign_as_value = fn(e, msg)
+    let span = if e.eq_len != nil then e.eq_len else 1 end
+    report(e.eq_line, e.eq_col, span, msg, nil)
+  end
+
+  # if/while/for header. These take no `do`: one is reported and skipped.
+  let parse_header_expr = fn(keyword)
+    header_depth += 1
+    let e = parse_stmt_expr()
+    header_depth -= 1
+    if peek().type == "do" and peek_at(1).type == "|"
+      # `f() do |x| ... end` is a block, not a stray `do`
+      report_header_block(peek())
+      parse_do_block()
+    elif peek().type == "do"
+      let d = peek()
+      report(d.line, d.col, 2, "'{keyword}' does not take 'do'", "start the body on the next line")
+      advance()
+    end
+    if keyword == "for" and is_assign_node(e)
+      report_assign_as_value(e, "an assignment is a statement, not a value; use '==' to compare")
+    end
+    e
+  end
+
+  let parse_call = fn()
+    let node = parse_atom()
+
+    # each postfix nests the node once more: one chain link per turn
+    let opened = 0
+    while enter_link()
+      opened += 1
+      # `f do ... end`, `m.f { |x| ... }`: the block is the only argument; a brace block needs |params| here (else a table)
+      if node.tag == "var" or node.tag == "dot"
+        let call_line = peek().line
+        if peek().type == "do" and header_depth == 0
+          let is_spawn = node.tag == "var" and node.name == "spawn"
+          node = make_call(node, [parse_do_block(is_spawn)], call_line)
+          continue
+        end
+        if peek().type == "\{" and peek_at(1).type == "|"
+          if header_depth > 0
+            report_header_block(peek())
+          end
+          node = make_call(node, [parse_brace_block()], call_line)
+          continue
+        end
+      end
+
+      if peek().type == "("
+        let call_line = peek().line
+        advance()
+        skip_nl()
+        let args = []
+        if peek().type != ")"
+          push(args, parse_expr())
+          while peek().type == ","
+            advance()
+            skip_nl()
+            push(args, parse_expr())
+          end
+        end
+        skip_nl()
+        expect(")")
+
+        if peek().type == "do" and header_depth == 0
+          push(args, parse_do_block(node.tag == "var" and node.name == "spawn"))
+        else
+          # trailing brace block, told apart from a table literal by lookahead
+          if peek().type == "\{"
+            let is_block = if peek_at(1).type == "|"
+              true
+            elif peek_at(1).type == "}" or (peek_at(1).type == "NAME" and peek_at(2).type == ":")
+              false
+            else
+              true
+            end
+            if is_block
+              let brace_tok = peek()
+              if header_depth > 0
+                report_header_block(brace_tok)
+              end
+              push(args, parse_brace_block())
+            end
+          end
+        end
+
+        # `pcall(f(x))` runs f(x) unprotected; only right when f(x) returns the fn to call
+        if node.tag == "var" and node.name == "pcall" and len(args) == 1 and type(args[0]) == "table" and args[0].tag == "call"
+          warn(node.line, node.col, len("pcall"), "`pcall(f(x))` runs f(x) before `pcall` is called, so an error raised in f(x) is not caught; `pcall` catches errors only of the fn f(x) returns", "to catch errors of the call itself, write `pcall f(x)` (no parentheses), or `pcall do ... end` for several statements")
+        end
+        node = make_call(node, args, call_line)
+        continue
+      end
+
+      if peek().type == "."
+        let dot_tok = tokens[pos]
+        advance()
+        let field_tok = peek()
+        # a NAME or a keyword (obj.match); anything else is an error, notably the second `.` of `..`
+        let c0 = if len(field_tok.type) > 0 then field_tok.type[0] else "" end
+        let is_keyword_tok = c0 >= "a" and c0 <= "z"
+        if field_tok.type != "NAME" and not is_keyword_tok
+          if field_tok.type == "."
+            report(dot_tok.line, dot_tok.col, 2, "'..' is not an operator", "Gem uses '+' for both arithmetic and string concatenation")
+          else
+            report(field_tok.line, field_tok.col, len(field_tok.value), "expected field name after '.', got '{field_tok.type}'", nil)
+          end
+          if field_tok.type != "EOF"
+            advance()
+          end
+          node = make_dot(node, "", field_tok.line)
+          continue
+        end
+        advance()
+        node = make_dot(node, field_tok.value, field_tok.line)
+        node.col = field_tok.col
+        continue
+      end
+
+      if peek().type == "["
+        let index_line = advance().line
+        let key = parse_expr()
+        expect("]")
+        node = make_index(node, key, index_line)
+        continue
+      end
+
+      break
+    end
+    links -= opened
+
+    node
+  end
+
+  parse_unary = fn()
+    if peek().type == "-"
+      # `-9223372036854775808` is INT64_MIN, the one literal that only fits negated. Not with a postfix after it
+      # (`-N.x` is `-(N.x)`): then the literal reports out of range.
+      let nt = peek_at(1)
+      if nt.type == "NUMBER" and not contains_dot(nt.value) and int_literal_range(nt.value) == "min"
+        let follow = peek_at(2).type
+        if follow != "(" and follow != "." and follow != "["
+          advance()
+          advance()
+          return make_int(int64_min())
+        end
+      end
+      if not enter_nest()
+        return make_error_expr(peek().line, peek().col)
+      end
+      let minus_line = advance().line
+      let operand = parse_unary()
+      nest -= 1
+      return make_unop("-", operand, minus_line)
+    end
+    parse_call()
+  end
+
+  let parse_mul = fn()
+    let start_line = peek().line
+    let left = parse_unary()
+    let opened = 0
+    while (peek().type == "*" or peek().type == "/" or peek().type == "%") and enter_link()
+      opened += 1
+      let op = advance().type
+      let right = parse_unary()
+      left = make_binop(op, left, right, start_line)
+    end
+    links -= opened
+    left
+  end
+
+  let parse_add = fn()
+    let start_line = peek().line
+    let left = parse_mul()
+    let opened = 0
+    while (peek().type == "+" or peek().type == "-") and enter_link()
+      opened += 1
+      let op = advance().type
+      let right = parse_mul()
+      left = make_binop(op, left, right, start_line)
+    end
+    links -= opened
+    left
+  end
+
+  let parse_compare = fn()
+    let start_line = peek().line
+    let left = parse_add()
+    let opened = 0
+    while (peek().type == "==" or peek().type == "!=" or peek().type == "<" or peek().type == ">" or peek().type == "<=" or peek().type == ">=" or peek().type == "in") and enter_link()
+      opened += 1
+      let op = advance().type
+      let right = parse_add()
+      left = make_binop(op, left, right, start_line)
+    end
+    links -= opened
+    left
+  end
+
+  parse_not = fn()
+    if peek().type == "not"
+      if not enter_nest()
+        return make_error_expr(peek().line, peek().col)
+      end
+      let not_line = advance().line
+      let operand = parse_not()
+      nest -= 1
+      return make_unop("not", operand, not_line)
+    end
+    parse_compare()
+  end
+
+  let parse_and = fn()
+    let start_line = peek().line
+    let left = parse_not()
+    let opened = 0
+    while peek().type == "and" and enter_link()
+      opened += 1
+      advance()
+      let right = parse_not()
+      left = make_binop("and", left, right, start_line)
+    end
+    links -= opened
+    left
+  end
+
+  let parse_or = fn()
+    let start_line = peek().line
+    let left = parse_and()
+    let opened = 0
+    while peek().type == "or" and enter_link()
+      opened += 1
+      advance()
+      let right = parse_and()
+      left = make_binop("or", left, right, start_line)
+    end
+    links -= opened
+    left
+  end
+
+  let parse_assign_fn = fn()
+    let start_line = peek().line
+    let lhs = parse_or()
+
+    if peek().type == "="
+      let eq_tok = advance()
+      let value = parse_expr()
+      let a = nil
+      if lhs.tag == "var"
+        a = make_assign(lhs.name, value, start_line)
+        a.col = lhs.col
+      elif lhs.tag == "dot"
+        a = make_dot_assign(lhs.object, lhs.field, value, start_line)
+      elif lhs.tag == "index"
+        a = make_index_assign(lhs.object, lhs.key, value, start_line)
+      end
+      if a != nil
+        a.eq_line = eq_tok.line
+        a.eq_col = eq_tok.col
+        return a
+      end
+      report(start_line, 1, 1, "invalid assignment target (expected variable, field, or index)", nil)
+      return make_error_stmt(start_line, 1)
+    end
+
+    if peek().type == "+=" or peek().type == "-=" or peek().type == "*=" or peek().type == "/="
+      let op_tok = advance()
+      let base_op = op_tok.value[0]
+      let value = parse_expr()
+      if lhs.tag != "var"
+        report(op_tok.line, op_tok.col, len(op_tok.value), "compound assignment requires variable target", nil)
+        return make_error_stmt(op_tok.line, op_tok.col)
+      end
+      # read and assignment share the target's position so a diagnostic about the name shows once
+      let a = make_assign(lhs.name, make_binop(base_op, make_var(lhs.name, lhs.line, lhs.col), value), start_line)
+      a.col = lhs.col
+      a.eq_line = op_tok.line
+      a.eq_col = op_tok.col
+      a.eq_len = len(op_tok.value)
+      return a
+    end
+
+    lhs
+  end
+
+  # assignment is only a statement: parse_stmt_expr allows one, parse_expr reports `f(a = 1)`
+  parse_stmt_expr = parse_assign_fn
+  parse_expr = fn()
+    let t = peek()
+    if not enter_nest()
+      return make_error_expr(t.line, t.col)
+    end
+    let e = parse_assign_fn()
+    nest -= 1
+    if is_assign_node(e)
+      report_assign_as_value(e, "an assignment is a statement, not a value; use '==' to compare")
+      return make_error_expr(e.eq_line, e.eq_col)
+    end
+    e
+  end
+
+  # patterns stay structural (pat_* nodes); lower.gem turns them into a condition and bindings
+  let parse_pattern_fn = fn()
+    let t = peek()
+
+    if t.type == "\{"
+      advance()
+      skip_nl()
+      let entries = []
+      while peek().type != "}" and not at_end()
+        let _lp = pos
+        let key_tok = peek()
+        let int_key = parse_int_key()
+        if int_key == nil
+          if key_tok.type == "NAME"
+            advance()
+          elif peek_at(1).type == ":"
+            advance()
+          else
+            report(key_tok.line, key_tok.col, len(key_tok.value), "expected key name in table pattern", nil)
+            force_progress(_lp)
+            continue
+          end
+        end
+        let key_name = key_tok.value
+        let sub_pat = if peek().type == ":"
+          advance()
+          skip_nl()
+          parse_pattern()
+        end
+        if sub_pat == nil
+          bind_pattern_name(key_tok)
+        end
+        let entry = make_pat_table_entry(key_name, sub_pat)
+        if int_key != nil then set_int_key(entry, int_key) end
+        push(entries, entry)
+        skip_nl()
+        if peek().type == ","
+          advance()
+          skip_nl()
+        end
+        force_progress(_lp)
+      end
+      expect("}")
+      return make_pat_table(entries)
+    end
+
+    if t.type == "["
+      advance()
+      skip_nl()
+      let elements = []
+      while peek().type != "]" and not at_end()
+        let _lp = pos
+        push(elements, parse_pattern())
+        skip_nl()
+        if peek().type == ","
+          advance()
+          skip_nl()
+        end
+        force_progress(_lp)
+      end
+      expect("]")
+      return make_pat_array(elements)
+    end
+
+    if t.type == "NUMBER" or (t.type == "-" and peek_at(1).type == "NUMBER")
+      let negative = t.type == "-"
+      if negative
+        advance()
+      end
+      let nt = peek()
+      advance()
+      let lit = if contains_dot(nt.value)
+        let f = atof(nt.value)
+        if negative then f = 0.0 - f end
+        make_float(f)
+      else
+        let range = int_literal_range(nt.value)
+        if range == "min" and negative
+          make_int(int64_min())
+        elif range != "ok"
+          report_int_range(nt)
+          make_int(0)
+        else
+          let n = str_to_int(nt.value)
+          if negative then n = 0 - n end
+          make_int(n)
+        end
+      end
+      return make_pat_literal(lit)
+    end
+    if t.type == "STRING"
+      advance()
+      return make_pat_literal(make_string(t.value))
+    end
+    if t.type == "true"
+      advance()
+      return make_pat_literal(make_bool(true))
+    end
+    if t.type == "false"
+      advance()
+      return make_pat_literal(make_bool(false))
+    end
+    if t.type == "nil"
+      advance()
+      return make_pat_literal(make_nil_node())
+    end
+
+    if t.type == "^"
+      advance()
+      let nt = peek()
+      if nt.type != "NAME"
+        report(nt.line, nt.col, len(nt.value), "expected variable name after '^' but got '{nt.type}'", nil)
+        let nty = nt.type
+        if not at_end() and nty != "NEWLINE" and nty != "}" and nty != "]" and nty != ","
+          advance()
+        end
+        return make_pat_error()
+      end
+      advance()
+      let pin_next = peek()
+      if pin_next.type == "." or pin_next.type == "[" or pin_next.type == "("
+        report(pin_next.line, pin_next.col, len(pin_next.value), "'^' pins a plain variable name", "bind the expression to a local variable first, then pin that variable")
+        while not at_end() and peek().type != "NEWLINE" and peek().type != "}" and peek().type != "]" and peek().type != ","
+          advance()
+        end
+        return make_pat_error()
+      end
+      return make_pat_pin(nt.value, nt.line, nt.col)
+    end
+
+    if t.type == "NAME"
+      advance()
+      bind_pattern_name(t)
+      return make_pat_name(t.value)
+    end
+
+    # not a pattern: report, skip the token, return one that never matches
+    report(t.line, t.col, len(t.value), "expected pattern but got '{t.type}'", nil)
+    if not at_end()
+      advance()
+    end
+    make_pat_error()
+  end
+
+  parse_pattern = fn()
+    if not enter_nest()
+      return make_pat_error()
+    end
+    if pat_level == 0
+      pat_bound = {}
+      pat_binds = []
+    end
+    pat_level += 1
+    let p = parse_pattern_fn()
+    pat_level -= 1
+    nest -= 1
+    p
+  end
+
+
+  # a pin can't name a variable the same pattern binds: it compares against the value from before the pattern
+  let parse_arm_pattern = fn()
+    let pat = parse_pattern()
+    let bound = {}
+    let pins = []
+    collect_pattern_names(pat, bound, pins)
+    for v in pins
+      if has_key(bound, v.name)
+        report(v.line, v.col, len(v.name), "`^{v.name}` pins `{v.name}`, which this same pattern binds", "a pin compares against a variable bound before the pattern; rename the binding")
+      end
+    end
+    pat
+  end
+
+  let ends_arm_head = fn(tp)
+    tp == "then" or tp == "NEWLINE" or tp == "EOF" or tp == "end" or tp == "else" or tp == "when" or tp == "after"
+  end
+
+  # `then` for a same-line body, else the body starts on the next line
+  let parse_arm_body = fn()
+    let nt = peek()
+    if nt.type == "then"
+      advance()
+    elif not ends_arm_head(nt.type)
+      report(nt.line, nt.col, len(to_string(nt.value)), "expected `then` or a newline after the `when` pattern", "write `when <pattern> then <body>` for a one-line arm")
+    end
+    parse_body()
+  end
+
+  # after `when`: `{`, `[`, `^` or a lone name makes a pattern arm, anything else a value compared with ==
+  let parse_when_arm = fn()
+    let pt = peek().type
+    if pt == "\{" or pt == "[" or pt == "^" or (pt == "NAME" and ends_arm_head(peek_at(1).type))
+      let pat = parse_arm_pattern()
+      let binds = pat_binds
+      pat_binds = []
+      let arm = make_match_arm(pat, nil, parse_arm_body())
+      arm.binds = binds
+      return arm
+    end
+    let wstart = peek()
+    let wval = parse_banned("when")
+    # no guards: a comparison here would compare the target with its result
+    let cond_ops = {"==": true, "!=": true, "<": true, ">": true, "<=": true, ">=": true, "and": true, "or": true, "in": true}
+    let operand_failed = (wval.tag == "binop" and (wval.left.tag == "error_expr" or wval.right.tag == "error_expr")) or (wval.tag == "unop" and wval.expr.tag == "error_expr")
+    if not operand_failed and ((wval.tag == "binop" and has_key(cond_ops, wval.op)) or (wval.tag == "unop" and wval.op == "not"))
+      let last = tokens[pos - 1]
+      let span = 1
+      if last.line == wstart.line and last.col >= wstart.col
+        span = last.col - wstart.col + len(to_string(last.value))
+        if last.type == "STRING"
+          span += 2
+        end
+      end
+      report(wstart.line, wstart.col, span, "a `when` arm can't test a condition: this compares the match target with the value of this expression", "there are no guards; use an `if`/`elif` chain, or one arm per value")
+    end
+    if wval.tag == "var" and not ends_arm_head(peek().type)
+      # `when x foo`: report the missing `then` once and keep `x` a binding, so its uses don't report as undeclared
+      return make_match_arm(make_pat_name(wval.name), nil, parse_arm_body())
+    end
+    make_match_arm(nil, wval, parse_arm_body())
+  end
+
+  let parse_stmt_fn = fn()
+    let t = peek()
+
+    if t.type == "let"
+      let line = t.line
+      let at_top = pos == top_stmt_pos
+      advance()
+
+      # let {a, b = dflt} = expr
+      if peek().type == "\{"
+        advance()
+        let names = []
+        let dflts = []
+        pat_bound = {}
+        pat_binds = []
+        skip_nl()
+        while peek().type != "}" and not at_end()
+          let _lp = pos
+          let field_tok = peek()
+          advance()
+          push(names, field_tok.value)
+          bind_pattern_name(field_tok)
+          check_destructure_field(field_tok)
+          reject_destructure_rename(field_tok, "let \{" + field_tok.value + "\} = ...")
+          if at_top
+            note_top_name(field_tok, "let")
+          end
+          skip_nl()
+          if peek().type == "="
+            advance()
+            skip_nl()
+            push(dflts, parse_expr())
+          else
+            push(dflts, nil)
+          end
+          skip_nl()
+          if peek().type == ","
+            advance()
+            skip_nl()
+          end
+          force_progress(_lp)
+        end
+        expect("}")
+        expect("=")
+        let rhs = parse_expr()
+        gensym_counter += 1
+        let tmp = "__d{gensym_counter}"
+        let stmts = [make_let(tmp, rhs, line)]
+        for di = 0, len(names)
+          push_destructured(stmts, names[di], tmp, make_string(names[di]), make_dot(make_var(tmp), names[di]), dflts[di], line)
+        end
+        return {tag: "block", stmts: stmts}
+      end
+
+      # let [a, b = dflt] = expr
+      if peek().type == "["
+        advance()
+        let names = []
+        let dflts = []
+        pat_bound = {}
+        pat_binds = []
+        skip_nl()
+        while peek().type != "]" and not at_end()
+          let _lp = pos
+          let name_tok = expect("NAME")
+          push(names, name_tok.value)
+          if not name_tok.synthetic
+            bind_pattern_name(name_tok)
+          end
+          if at_top
+            note_top_name(name_tok, "let")
+          end
+          skip_nl()
+          if peek().type == "="
+            advance()
+            skip_nl()
+            push(dflts, parse_expr())
+          else
+            push(dflts, nil)
+          end
+          skip_nl()
+          if peek().type == ","
+            advance()
+            skip_nl()
+          end
+          force_progress(_lp)
+        end
+        expect("]")
+        expect("=")
+        let rhs = parse_expr()
+        gensym_counter += 1
+        let tmp = "__d{gensym_counter}"
+        let stmts = [make_let(tmp, rhs, line)]
+        for di = 0, len(names)
+          push_destructured(stmts, names[di], tmp, make_int(di), make_index(make_var(tmp), make_int(di)), dflts[di], line)
+        end
+        return {tag: "block", stmts: stmts}
+      end
+
+      let name_tok = expect("NAME")
+      let name = name_tok.value
+      if at_top
+        note_top_name(name_tok, "let")
+      end
+      expect("=")
+      let value = parse_expr()
+      return make_let(name, value, line)
+    end
+
+    if t.type == "fn" and peek_at(1).type == "NAME"
+      let line = t.line
+      let at_top = pos == top_stmt_pos
+      advance()
+      let name_tok = expect("NAME")
+      let name = name_tok.value
+      if at_top
+        note_top_name(name_tok, "fn")
+      end
+      let culprit = if t.col == 1 and (fn_depth > 0 or stmt_depth > 1) then missing_end_block() end
+      if culprit != nil
+        if not missing_end_reported
+          report_missing_end(culprit, "`fn {name}` at line {line} starts a new top-level function inside it")
+        end
+      elif fn_depth > 0
+        report(line, t.col, len(name) + 3, "named fn inside function body is not supported", "use: let {name} = fn(...) ... end")
+      elif stmt_depth > 1
+        report(line, t.col, len(name) + 3, "named fn inside a block is not supported", "define it at the top level, or use: let {name} = fn(...) ... end")
+      end
+      open_block(t, "fn")
+      expect("(")
+      let pr = parse_params()
+      expect(")")
+      fn_depth += 1
+      let saved_loops = enter_fn_body(nil)
+      let body = parse_fn_body()
+      leave_fn_body(saved_loops)
+      fn_depth -= 1
+      expect_end(t, "fn")
+      return make_fn_def(name, pr.params, pr.rest_param, with_prelude(pr.prelude, body), line, pr.defaults)
+    end
+
+    if t.type == "if" or t.type == "elif"
+      let line = t.line
+      advance()
+      if t.type == "if"
+        open_block(t, "if")
+      end
+      let cond = parse_header_expr(t.value)
+      if is_assign_node(cond)
+        report_assign_as_value(cond, "assignment is not allowed in condition; use '==' for comparison")
+      end
+      if peek().type == "then"
+        advance()
+      end
+      let then_body = parse_body()
+      let else_body = if peek().type == "elif"
+        # elif is a nested if in the else branch
+        [parse_stmt()]
+      elif peek().type == "else"
+        advance()
+        if peek().type == "if"
+          let err_tok = peek()
+          report(err_tok.line, err_tok.col, 2, "use 'elif' instead of 'else if'", "Gem uses 'elif' for chained conditions")
+        end
+        parse_body()
+      end
+      # elifs share the outer if's `end`
+      if t.type == "if"
+        expect_end(t, "if")
+      end
+      return make_if(cond, then_body, else_body, line)
+    end
+
+    if t.type == "while"
+      let line = t.line
+      advance()
+      open_block(t, "while")
+      let saved_cond_depth = while_cond_depth
+      while_cond_depth = loop_depth
+      let cond = parse_header_expr("while")
+      while_cond_depth = saved_cond_depth
+      if is_assign_node(cond)
+        report_assign_as_value(cond, "assignment is not allowed in condition; use '==' for comparison")
+      end
+      loop_depth += 1
+      let wbody = parse_body()
+      loop_depth -= 1
+      expect_end(t, "while")
+      return make_while(cond, wbody, line)
+    end
+
+    if t.type == "for"
+      let line = t.line
+      advance()
+      open_block(t, "for")
+      let var_name = expect("NAME").value
+
+      if peek().type == "," and peek_at(1).type == "NAME"
+        # for k, v in table ... end
+        advance()
+        let val_tok = expect("NAME")
+        let val_name = val_tok.value
+        if val_name == var_name and val_name != "_"
+          report(val_tok.line, val_tok.col, len(val_name), "'{val_name}' is bound twice in this loop", "name the key and the value differently")
+        end
+        expect("in")
+        let tbl_expr = parse_header_expr("for")
+        loop_depth += 1
+        let fbody = parse_body()
+        loop_depth -= 1
+        expect_end(t, "for")
+        return make_for_in(var_name, val_name, tbl_expr, fbody, line)
+      elif peek().type == "in"
+        # for x in items ... end
+        advance()
+        let items_expr = parse_header_expr("for")
+        loop_depth += 1
+        let fbody = parse_body()
+        loop_depth -= 1
+        expect_end(t, "for")
+        return make_for_in(var_name, nil, items_expr, fbody, line)
+      elif peek().type == "="
+        # for i = start, end ... end
+        advance()
+        let start_expr = parse_header_expr("for")
+        expect(",")
+        let end_expr = parse_header_expr("for")
+        loop_depth += 1
+        let fbody = parse_body()
+        loop_depth -= 1
+        expect_end(t, "for")
+        return make_for_range(var_name, start_expr, end_expr, fbody, line)
+      else
+        let bad = peek()
+        report(bad.line, bad.col, len(bad.value), "expected 'in' or '=' after for variable", nil)
+        # sync to the `end` so the surrounding body resumes
+        while not at_end() and peek().type != "end"
+          advance()
+        end
+        if peek().type == "end"
+          advance()
+        end
+        return make_error_stmt(line, 1)
+      end
+    end
+
+    if t.type == "match"
+      let line = t.line
+      advance()
+      open_block(t, "match")
+      let target = parse_expr()
+      skip_nl()
+      let arms = []
+      while peek().type == "when"
+        advance()
+        push(arms, parse_when_arm())
+        skip_nl()
+      end
+      let else_body = if peek().type == "else"
+        advance()
+        parse_body()
+      end
+      expect_end(t, "match")
+      # lower() names the target
+      return make_match(target, arms, else_body, line, nil)
+    end
+
+    if t.type == "return"
+      let line = t.line
+      advance()
+      let value = if peek().type != "NEWLINE" and peek().type != "EOF" and peek().type != "end" and peek().type != "elif" and peek().type != "else" and peek().type != "when"
+        parse_expr()
+      end
+      return make_return(value, line)
+    end
+
+    if t.type == "break"
+      advance()
+      if loop_depth == 0
+        report_loop_exit(t)
+      elif loop_depth == while_cond_depth
+        report(t.line, t.col, len(t.type), "`break` can't be used in a `while` condition", "test the condition at the top of the loop body instead")
+      end
+      return make_break()
+    end
+
+    if t.type == "continue"
+      advance()
+      if loop_depth == 0
+        report_loop_exit(t)
+      elif loop_depth == while_cond_depth
+        report(t.line, t.col, len(t.type), "`continue` can't be used in a `while` condition", "test the condition at the top of the loop body instead")
+      end
+      return make_continue()
+    end
+
+    # load "path" [as name | (name, ...)]
+    if t.type == "load"
+      if stmt_depth > 1
+        report(t.line, t.col, 4, "`load` must be at the top level", "move it out of the enclosing block or function")
+      end
+      let at_top = pos == top_stmt_pos
+      advance()
+      let path_tok = expect("STRING")
+      let path = path_tok.value
+      let alias_name = nil
+      let selective = nil
+      let selective_pos = nil
+      if peek().type == "NAME" and peek().value == "as"
+        advance()
+        let alias_tok = expect("NAME")
+        alias_name = alias_tok.value
+        if at_top
+          note_top_name(alias_tok, "module")
+        end
+      elif peek().type == "("
+        advance()
+        # positions, for "not exported" errors
+        let nt = expect("NAME")
+        selective = [nt.value]
+        selective_pos = [{line: nt.line, col: nt.col}]
+        if at_top
+          note_top_name(nt, "load")
+        end
+        while peek().type == ","
+          advance()
+          nt = expect("NAME")
+          push(selective, nt.value)
+          push(selective_pos, {line: nt.line, col: nt.col})
+          if at_top
+            note_top_name(nt, "load")
+          end
+        end
+        expect(")")
+      elif at_top and path_tok.synthetic != true
+        # the namespace is named after the file's base name
+        let start = 0
+        for i = 0, len(path)
+          if ord(path, i) == 47
+            start = i + 1
+          end
+        end
+        let base = substr(path, start, len(path) - start)
+        if len(base) > 4 and substr(base, len(base) - 4, 4) == ".gem"
+          base = substr(base, 0, len(base) - 4)
+        end
+        note_top_name({type: "NAME", value: base, line: path_tok.line, col: path_tok.col}, "module", len(path) + 2)
+      end
+      return {tag: "load", path: path, alias: alias_name, selective: selective, selective_pos: selective_pos, line: t.line, col: t.col}
+    end
+
+    if t.type == "export"
+      if stmt_depth > 1
+        report(t.line, t.col, 6, "`export` must be at the top level", "move it out of the enclosing block or function")
+      end
+      advance()
+      # positions, for "not defined" errors
+      let nt = expect("NAME")
+      let names = [nt.value]
+      let name_pos = [{line: nt.line, col: nt.col}]
+      while peek().type == ","
+        advance()
+        skip_nl()
+        nt = expect("NAME")
+        push(names, nt.value)
+        push(name_pos, {line: nt.line, col: nt.col})
+      end
+      let node = make_export(names)
+      node.name_pos = name_pos
+      node.line = t.line
+      node.col = t.col
+      return node
+    end
+
+    if t.type == "extern"
+      if stmt_depth > 1
+        report(t.line, t.col, 6, "extern declaration must be at the top level", "move it out of the enclosing block or function")
+      end
+      let at_top = pos == top_stmt_pos
+      advance()
+      let is_blocking = false
+      if peek().type == "blocking"
+        is_blocking = true
+        advance()
+      end
+      if peek().type == "fn"
+        advance()
+        let name_tok = expect("NAME")
+        let name = name_tok.value
+        if at_top
+          note_top_name(name_tok, "extern fn")
+        end
+        if has_key(C_RESERVED, name)
+          report(name_tok.line, name_tok.col, len(name), "`{name}` is reserved in C and can't name an extern fn", "an extern fn is the C function of the same name")
+        end
+        expect("(")
+        let eparams = []
+        if peek().type != ")"
+          let pname = expect("NAME").value
+          expect(":")
+          let ptype = expect_extern_type(false, is_blocking)
+          push(eparams, make_extern_param(pname, ptype))
+          while peek().type == ","
+            advance()
+            let pn2 = expect("NAME").value
+            expect(":")
+            let pt2 = expect_extern_type(false, is_blocking)
+            push(eparams, make_extern_param(pn2, pt2))
+          end
+        end
+        expect(")")
+        let ret_type = if peek().type == "->"
+          advance()
+          expect_extern_type(true, is_blocking)
+        else
+          "Nil"
+        end
+        return make_extern_fn(name, eparams, ret_type, is_blocking, name_tok.line, name_tok.col)
+      elif not is_blocking and peek().type == "NAME" and peek().value == "include"
+        advance()
+        let path_tok = expect("STRING")
+        let inc = make_extern_include(path_tok.value)
+        inc.line = path_tok.line
+        inc.col = path_tok.col
+        return inc
+      else
+        let bad = peek()
+        report(bad.line, bad.col, len(bad.value), "expected 'fn' after 'extern blocking'", nil)
+        return make_error_stmt(bad.line, bad.col)
+      end
+    end
+
+    if t.type == "NAME" and t.value == "receive"
+      let rla = 1
+      while peek_at(rla).type == "NEWLINE"
+        rla += 1
+      end
+      let rnext = peek_at(rla).type
+      if rnext == "end"
+        # `receive end`: a block with nothing to wait for, not the builtin
+        report(t.line, t.col, len(t.value), "a `receive` block needs at least one `when` arm or an `after` clause", "add `after <ms>` to wait, or `when <pattern>` arms to take a message")
+        advance()
+        # take the `end` only if it's indented like the receive; one further out probably closes an enclosing block
+        if peek_at(rla - 1).col >= t.col
+          skip_nl()
+          advance()
+        end
+        return make_error_stmt(t.line, t.col)
+      end
+      if rnext == "when" or rnext == "after"
+        let rline = t.line
+        advance()
+        open_block(t, "receive")
+        skip_nl()
+        let rarms = []
+        while peek().type == "when"
+          advance()
+          push(rarms, parse_when_arm())
+          skip_nl()
+        end
+        let rafter_ms = nil
+        let rafter_body = nil
+        if peek().type == "after"
+          advance()
+          rafter_ms = parse_expr()
+          # `then` optional, unlike a `when` arm
+          if peek().type == "then"
+            advance()
+          end
+          rafter_body = parse_body()
+        end
+        expect_end(t, "receive")
+        # lower() fills in recv_var
+        return make_receive_match(rarms, rafter_ms, rafter_body, rline, nil)
+      end
+    end
+
+    # expression statement; literals carry no line, so it takes its first token's for codegen's line updates
+    let e = parse_assign_fn()
+    if type(e) == "table" and e.line == nil
+      e.line = t.line
+    end
+    if type(e) == "table"
+      e.stmt_col = t.col
+    end
+    e
+  end
+
+  parse_stmt = fn()
+    let t = peek()
+    if not enter_nest()
+      return make_error_stmt(t.line, t.col)
+    end
+    stmt_depth += 1
+    let s = parse_stmt_fn()
+    stmt_depth -= 1
+    nest -= 1
+    s
+  end
+
+  let parse = fn()
+    let stmts = []
+    skip_nl()
+    while not at_end()
+      let _lp = pos
+      top_stmt_pos = pos
+      push(stmts, parse_stmt())
+      skip_nl()
+      force_progress(_lp)
+    end
+    make_program(stmts)
+  end
+
+  {parse: parse}
+end
+
+export parse_source, collect_pattern_names

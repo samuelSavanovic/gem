@@ -1,0 +1,28 @@
+# an `extern fn` named like a builtin shadows it in its own file: calls go to the C function. The C
+# symbol keeps the declared name, only the Gem binding is renamed. Externs in modules work the same.
+load "./modules/extern_name_mod"
+load "./modules/extern_name_mod" (strlen)
+
+extern include "math.h"
+extern fn sqrt(x: Float) -> Float
+extern blocking fn ceil(x: Float) -> Float
+
+print(sqrt(16.0))
+# the builtin `sqrt` takes an int; the extern's wrapper wants a Float
+let r = pcall sqrt(16)
+print(r.ok, r.error)
+let f = sqrt
+print(f(2.25))
+
+print(extern_name_mod.floor(2.7))
+print(extern_name_mod.floor_twice(2.7))
+let r2 = pcall extern_name_mod.floor(3)
+print(r2.ok, r2.error)
+print(strlen("hello"))
+# `floor` isn't shadowed here, so it's still the builtin
+print(floor(3))
+
+# a blocking extern named like a builtin, run on the thread pool
+print(ceil(2.2))
+let r3 = pcall ceil(2)
+print(r3.ok, r3.error)

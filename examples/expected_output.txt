@@ -1,0 +1,5011 @@
+13
+7
+30
+3
+1
+-10
+3.14
+4.140000000000001
+hello world
+5
+w
+true
+false
+nil
+15
+12
+24
+6
+7
+hello gem
+120
+7
+20
+99
+big
+medium
+0
+1
+2
+3
+4
+loop 0
+loop 1
+loop 2
+odd 1
+odd 3
+odd 5
+one
+two
+three
+other: 99
+1
+-1
+1
+2
+3
+15
+25
+6
+42
+99
+10
+20
+10
+30
+20
+0
+100
+10
+20
+30
+3
+99
+0
+0
+0
+9
+16
+iteration 0
+iteration 1
+iteration 2
+10
+20
+30
+2
+4
+6
+10
+25
+27
+16
+9
+8
+36
+64
+11
+12
+11
+h
+w
+foobar
+value: 42
+pi: 3.14
+flag: true
+nothing: nil
+true
+false
+true
+true
+g
+e
+m
+abababab
+tab:	here
+newline follows
+quote: "hi"
+int
+float
+string
+bool
+nil
+table
+fn
+fn
+1 is truthy
+0 is truthy
+ is truthy
+x is truthy
+true is truthy
+false is falsy
+nil is falsy
+true
+false
+true
+false
+false
+true
+true
+nil
+42
+5
+apple
+banana
+cherry
+0
+1
+2
+3
+4
+0
+11
+22
+1
+2
+1
+2
+4
+5
+0
+1
+2
+4
+5
+after empty
+after empty range
+0:a
+1:b
+2:c
+3:d
+1
+2
+4
+5
+6
+two
+d
+five
+fell through
+b3
+negative
+zero
+small
+big
+3
+10
+20
+30
+99
+4
+0
+10
+20
+30
+40
+hello
+world
+30
+10
+600
+11
+15
+hello world
+1 + 2 = 3
+count: 42
+flag: true
+nothing: nil
+length: 5
+gem
+12
+literal {brace}
+val: 10
+pi: 3.14
+mid!
+!mid
+result: 14
+false
+boom
+true
+42
+false
+type error in +: got int and string
+true
+inner boom
+still running
+false
+true
+false
+expr boom
+true
+3
+false
+zero
+true
+50
+matched: zero
+true
+false
+true
+false
+true
+true
+false
+true
+self works: int
+20
+40
+60
+80
+pong 0
+pong 1
+pong 2
+chain result: 5
+10 20 30
+100 200 300
+val=1 counter=1
+1 nil nil
+gem nil
+1 2
+v=0
+v=10
+v=20
+empty ok
+42 99
+ok=true value=42 calls=1
+inner=yes
+10 20 30
+3
+a
+b
+c
+1
+hello
+4
+
+a
+b
+
+1
+
+3
+a
+b
+c
+6
+-1
+0
+-1
+1
+a, b, c
+solo
+
+hello
+no_spaces
+
+
+true
+false
+true
+false
+false
+false
+HELLO
+hello
+HELLO WORLD 123!
+hello world 123!
+10
+20
+30
+2
+4
+6
+0
+3
+2
+4
+6
+0
+true
+false
+false
+true
+false
+hello
+world
+line one
+line two
+base
+  indented
+base
+{not interpolated}
+tab:	here
+quote:"fine"
+it's fine
+say "hello"
+sum: 7
+empty: ''
+X and Y
+a=1
+b=2
+c=3
+empty ok
+call_count=1
+total=6
+found_key is b: true
+2
+4
+hello:1
+world:2
+6
+30
+42
+empty
+x
+INFO: server started
+INFO: port 8080
+0
+3
+x:a
+x:b
+x:c
+hello
+world
+35
+15
+10
+3
+fallback
+after
+0:a
+1:b
+2:c
+0
+0
+0
+val=1
+sum=30
+1
+2
+3
+deep
+99
+nil
+0
+1
+2
+solo
+100
+200
+a+b=3, a*b=2
+true
+false
+true
+false
+true
+false
+true
+55
+false
+division by zero
+false
+division by zero
+false
+division by zero
+false
+false
+false
+3.0
+3.0
+7.5
+1.5
+6.0
+6.0
+3
+3.5
+0
+-0.0
+false
+true
+c
+nil
+nil
+int_zero
+str_zero
+2
+x
+y
+0
+0
+true
+false
+true
+false
+true
+42
+true
+inner
+
+
+bbbbbb
+abc
+1: table literal match
+2: Alice is 30
+3: (3, 4)
+4: value=42
+5: click at (10, 20)
+6: caught 99
+7: literal match works
+8: number=7
+9: fell through to else
+10: matched 3: 1,2,3
+11: string did not match table pattern
+12: int did not match array pattern
+13: user=Bob
+14: OK
+15: 2D point (1, 2)
+16: circle r=5
+16: rect 3x4
+16: unknown
+17: empty table pattern matched
+18: false matched
+19: nil matched
+20: var expr match works
+1: missing key falls through
+2: partial match works
+3: empty array matched
+4: non-empty rejected by empty pattern
+5: nested=first
+6: circle(10)
+6: pair(3,4)
+6: other
+7: 404 matched
+8: inner
+8b: outer
+9: zero count
+10: nil fell through
+11: negative int matched, f=2.5
+11: negative float matched
+test3: got pid=int
+
+[Runtime Error in process 18]: boom
+  --> examples/28_process_monitor.gem:13
+    |
+ 13 |     error("boom")
+    |
+Stack trace:
+  at anonymous fn (examples/28_process_monitor.gem:13)
+
+[Runtime Error in process 23]: kaboom
+  --> examples/28_process_monitor.gem:71
+    |
+ 71 |     error("kaboom")
+    |
+Stack trace:
+  at anonymous fn (examples/28_process_monitor.gem:71)
+test6: healthy process completed
+test7: pcall ok=false error=caught locally
+test10: whereis found=int
+test10: whereis missing=nil
+
+[Runtime Error in process 34]: chain-crash
+  --> examples/28_process_monitor.gem:97
+    |
+ 97 |       error("chain-crash")
+    |
+Stack trace:
+  at anonymous fn (examples/28_process_monitor.gem:97)
+test1: tag=DOWN reason=normal
+test2: tag=DOWN reason=boom
+test3: tag=DOWN reason=normal
+test4a: tag=DOWN reason=normal
+test4b: tag=DOWN reason=normal
+test5: tag=DOWN reason=noproc
+test6: crasher reason=kaboom
+test7: tag=DOWN reason=normal
+test11: after death whereis=nil
+test8: B got DOWN from C, reason=chain-crash
+
+[Runtime Error in process 26]: b-also-crashes
+  --> examples/28_process_monitor.gem:102
+     |
+ 102 |     error("b-also-crashes")
+     |
+Stack trace:
+  at anonymous fn (examples/28_process_monitor.gem:102)
+test9: worker got hello by name
+test12: server got from client
+test8: A got DOWN from B, reason=b-also-crashes
+test1: got b val=2
+test2: y=20
+test2: next=10
+test3: data=42
+test3: remaining=ping
+test4: a=100 b=200
+test6: timed out
+test7: timed out
+test7: leftover=wrong
+test8: result=42
+test9: plain message
+test10: outer=1
+test10: inner=2
+
+[Runtime Error in process 11]: crash!
+  --> examples/29_selective_receive.gem:58
+    |
+ 58 |     error("crash!")
+    |
+Stack trace:
+  at anonymous fn (examples/29_selective_receive.gem:58)
+test5: down reason=crash!
+test5: app data=hello
+
+[Runtime Error in process 14]: crash
+  --> examples/30_supervisor.gem:11
+    |
+ 11 |         error("crash")
+    |
+Stack trace:
+  at anonymous fn (examples/30_supervisor.gem:11)
+
+[Runtime Error in process 17]: crash
+  --> examples/30_supervisor.gem:11
+    |
+ 11 |         error("crash")
+    |
+Stack trace:
+  at anonymous fn (examples/30_supervisor.gem:11)
+
+[Runtime Error in process 20]: crash
+  --> examples/30_supervisor.gem:11
+    |
+ 11 |         error("crash")
+    |
+Stack trace:
+  at anonymous fn (examples/30_supervisor.gem:11)
+
+[Runtime Error in process 21]: crash
+  --> examples/30_supervisor.gem:11
+    |
+ 11 |         error("crash")
+    |
+Stack trace:
+  at anonymous fn (examples/30_supervisor.gem:11)
+
+[Runtime Error in process 22]: crash
+  --> examples/30_supervisor.gem:11
+    |
+ 11 |         error("crash")
+    |
+Stack trace:
+  at anonymous fn (examples/30_supervisor.gem:11)
+test5: children count=2
+test5: id=wc1 restart=permanent
+test5: id=wc2 restart=temporary
+test6: named supervisor ok, children=1
+test1: one_for_one restart ok
+test2: one_for_all restart ok
+test3: transient crash restarted ok
+
+[Runtime Error in process 19]: crash
+  --> examples/30_supervisor.gem:11
+    |
+ 11 |         error("crash")
+    |
+Stack trace:
+  at anonymous fn (examples/30_supervisor.gem:11)
+
+[Runtime Error in process 31]: crash
+  --> examples/30_supervisor.gem:11
+    |
+ 11 |         error("crash")
+    |
+Stack trace:
+  at anonymous fn (examples/30_supervisor.gem:11)
+test3: permanent crash restarted ok
+test3: temporary not restarted ok
+
+[Runtime Error in process 33]: crash
+  --> examples/30_supervisor.gem:11
+    |
+ 11 |         error("crash")
+    |
+Stack trace:
+  at anonymous fn (examples/30_supervisor.gem:11)
+
+[Runtime Error in process 10]: supervisor: max restart intensity reached
+  --> std/supervisor.gem:307
+     |
+ 307 |     error(res.error)
+     |
+Stack trace:
+  at supervisor.sup_main (std/supervisor.gem:307)
+  at anonymous fn (std/supervisor.gem:395)
+test4: supervisor crashed: supervisor: max restart intensity reached
+test1: equal_self=true different=true
+test2: type=ref
+test3: r1=first r2=second
+test4: ref_equal=true
+test5: unique=true count=100
+
+[Runtime Error in process 15]: crash1
+  --> examples/32_links.gem:4
+   |
+ 4 |       error("crash1")
+   |
+Stack trace:
+  at anonymous fn (examples/32_links.gem:4)
+
+[Runtime Error in process 16]: crash2
+  --> examples/32_links.gem:21
+    |
+ 21 |         error("crash2")
+    |
+Stack trace:
+  at anonymous fn (examples/32_links.gem:21)
+
+[Runtime Error in process 19]: ignored-crash
+  --> examples/32_links.gem:77
+    |
+ 77 |         error("ignored-crash")
+    |
+Stack trace:
+  at anonymous fn (examples/32_links.gem:77)
+
+[Runtime Error in process 20]: already-gone
+  --> examples/32_links.gem:101
+     |
+ 101 |       error("already-gone")
+     |
+Stack trace:
+  at anonymous fn (examples/32_links.gem:101)
+
+[Runtime Error in process 22]: chain-boom
+  --> examples/32_links.gem:58
+    |
+ 58 |         error("chain-boom")
+    |
+Stack trace:
+  at anonymous fn (examples/32_links.gem:58)
+test1: parent died: crash1
+test2: parent died: crash2
+test4: A died: chain-boom
+test3: parent died: normal
+test5: parent died: normal
+test6: parent died: noproc
+test1: prev_flag=false
+test3: prev_seq=false true false
+
+[Runtime Error in process 6]: boom
+  --> examples/33_trap_exit.gem:8
+   |
+ 8 |     error("boom")
+   |
+Stack trace:
+  at anonymous fn (examples/33_trap_exit.gem:8)
+
+[Runtime Error in process 8]: first
+  --> examples/33_trap_exit.gem:36
+    |
+ 36 |     error("first")
+    |
+Stack trace:
+  at anonymous fn (examples/33_trap_exit.gem:36)
+
+[Runtime Error in process 9]: second
+  --> examples/33_trap_exit.gem:39
+    |
+ 39 |     error("second")
+    |
+Stack trace:
+  at anonymous fn (examples/33_trap_exit.gem:39)
+
+[Runtime Error in process 11]: now-fatal
+  --> examples/33_trap_exit.gem:70
+    |
+ 70 |       error("now-fatal")
+    |
+Stack trace:
+  at anonymous fn (examples/33_trap_exit.gem:70)
+test1: got EXIT reason=boom
+test2: got EXIT reason=normal
+test4: received 2 EXIT messages
+test4: first=true second=true
+test5: parent died: now-fatal
+
+[Runtime Error in process 9]: kaboom from server
+  --> examples/34_gen_server.gem:88
+    |
+ 88 |     error("kaboom from server")
+    |
+Stack trace:
+  at anonymous fn (examples/34_gen_server.gem:88)
+  at gen_server.loop (std/gen_server.gem:87)
+  at gen_server.serve (std/gen_server.gem:192)
+  at anonymous fn (std/gen_server.gem:150)
+test1: after incr 10 = 10
+test3: count=2 first=raw1 second=raw2
+test4: ok=false err=gen_server.call: server exited: kaboom from server
+test1: after incr 5 = 15
+test2: got delayed: request
+test1: after reset = 0
+test5: timeouts_fired=true
+test5: still_counting=true
+test1: type=ref
+test2: cancelled=true
+test3: cancel_bogus=false
+test6: unique=true
+test1: got tick
+test2: got fallback
+test5: done
+test4: first second third
+test1: state=ready trap=false
+test2: mailbox_len=3
+test3: links_count=2
+test4: monitors_count=1
+test6: nil
+test7: before=false
+test7: after=true
+test5: nil
+test1: got tick
+test2: received through 10 spinners
+test3: for loop preempted
+42
+-7
+0
+3
+3
+1
+0
+99
+3.14
+-2.5
+0.0
+42.0
+1.0
+1.5
+123
+3.14
+false
+false
+false
+false
+55
+delete removed: 2
+delete len: 2
+delete has_key b: false
+delete has_key a: true
+delete has_key c: true
+delete missing: nil
+delete int key: 20
+delete int len: 2
+pop: 5
+pop len: 4
+pop2: 4
+pop single: 42
+pop empty len: 0
+values len: 3
+values arr: 10 20 30
+this goes to stderr
+stderr multi: 42 true nil
+sort nums: 1 2 3 4 5
+sort strings: apple banana cherry
+sort desc: 5 4 3 2 1
+sort empty: 0
+sort single: 42
+sort returns same: 1 1
+sort mixed: 1 2 2.5 3.0
+argv type: table
+argv len >= 1: true
+floor 3.7: 3
+floor -2.3: -3
+floor int: 5
+ceil 3.2: 4
+ceil -2.7: -2
+ceil int: 5
+round 3.5: 4
+round 3.4: 3
+round -2.5: -3
+round int: 5
+abs -5: 5
+abs 5: 5
+abs 0: 0
+abs -3.14: 3.14
+abs 2.7: 2.7
+pow 2 10: 1024
+pow 3 0: 1
+pow 2.0 0.5: 1.4142135623730951
+sqrt 4: 2.0
+sqrt 2: true
+sqrt 0: 0.0
+random float: true
+random int: true
+random range: true
+append_file: true
+getenv HOME: true
+getenv missing: nil
+insert: 1 99 2 3
+insert len: 4
+insert front: 5 10 20
+insert end: 1 2 3
+remove_at: 20
+remove_at arr: 10 30 40
+remove_at len: 3
+remove_at front: 2 3
+remove_at back: 1 2
+remove_at back len: 2
+delete all len: 0
+delete twice: nil
+pop empty err: true
+pop preserve: 10 20
+sort sorted: 1 2 3 4 5
+sort reverse: 1 2 3 4 5
+sort dups: 1 1 2 3 3
+sort 100: true
+floor 0.0: 0
+ceil 0.0: 0
+round 0.0: 0
+abs min int: 1
+pow neg exp: 0.5
+sqrt 1: 1.0
+sqrt neg: true
+random 1: true
+random 0: true
+random neg: true
+insert empty: first
+insert empty len: 1
+remove_at to empty: 0
+insert neg idx: true
+insert past end: true
+remove_at empty: true
+remove_at oob: true
+getenv non-str: true
+append_file bad: true
+exit type: fn
+values empty: 0
+delete consistency: true
+delete access: true
+ALL EDGE CASES PASSED
+last: 50
+second-to-last: 40
+first via neg: 10
+first via neg len: 10
+set last: 99
+set middle: 77
+str last: o
+str first: h
+str second: e
+oob neg get: true
+oob neg set: true
+oob str neg: true
+single -1: 42
+empty neg: true
+NEGATIVE INDEXING DONE
+band: 8
+bor: 14
+bxor: 6
+bnot 0: -1
+bshl: 16
+bshr: 4
+bshr neg: 9223372036854775807
+band same: 255
+bor zero: 0
+bxor same: 0
+bnot -1: 0
+bshl 0: 7
+bshr 0: 7
+bshl 63: -9223372036854775808
+bshr 63: 1
+first-class: 2
+band float: true
+bor str: true
+bnot bool: true
+bshl oob: true
+bshr neg: true
+BITWISE DONE
+/foo
+/
+a/b
+a/b
+/b
+true
+false
+true
+false
+false
+string
+true
+true
+false
+false
+false
+true
+false
+false
+true
+false
+true
+false
+false
+true
+true
+false
+false
+=== parse simple values ===
+42
+-7
+0
+3.14
+-0.5
+true
+false
+nil
+hello world
+
+=== parse arrays ===
+1
+2
+3
+3
+1
+4
+0
+=== parse objects ===
+gem
+1
+0
+=== parse nested ===
+2
+alice
+30
+bob
+25
+42
+=== parse string escapes ===
+hello
+world
+tab	here
+back\slash
+quote"here
+slash/ok
+=== parse unicode ===
+A
+BC
+é
+😀
+=== parse numbers ===
+0
+0
+123
+1.5
+100.0
+150.0
+100.0
+-0.15
+=== parse whitespace ===
+1
+2
+42
+=== parse mixed ===
+1
+two
+true
+false
+nil
+3
+=== encode simple values ===
+42
+-7
+3.14
+true
+false
+null
+"hello"
+""
+=== encode string escapes ===
+"hello\nworld"
+"tab\there"
+"back\\slash"
+"quote\"here"
+=== encode arrays ===
+[]
+[1,2,3]
+[1,"two",true,null]
+[[1,2],[3,4]]
+=== encode objects ===
+{"a":1,"b":"two"}
+=== roundtrip ===
+gem
+lang
+compiler
+1
+true
+nil
+=== error handling ===
+false
+false
+false
+false
+false
+false
+=== all json tests passed ===
+=== mime lookup ===
+text/html; charset=utf-8
+text/css; charset=utf-8
+text/javascript; charset=utf-8
+application/json; charset=utf-8
+image/png
+image/jpeg
+image/svg+xml
+font/woff2
+application/pdf
+video/mp4
+=== bare extensions ===
+text/html; charset=utf-8
+text/css; charset=utf-8
+text/javascript; charset=utf-8
+=== case insensitive ===
+text/html; charset=utf-8
+text/css; charset=utf-8
+=== unknown extension ===
+application/octet-stream
+application/x-tar
+=== charset ===
+text/html; charset=utf-8
+application/json; charset=utf-8
+text/javascript; charset=utf-8
+application/xml; charset=utf-8
+text/plain; charset=utf-8
+image/png
+=== ext reverse ===
+.html
+.css
+.json
+.png
+.pdf
+=== ext with charset ===
+.html
+=== ext unknown ===
+nil
+=== edge cases ===
+application/gzip
+application/octet-stream
+text/css; charset=utf-8
+application/wasm
+=== all mime tests passed ===
+=== url encode ===
+hello
+test-value_2.0~ok
+=== encode special ===
+hello%20world
+a%3D1%26b%3D2
+%2Fpath%2Fto%2Ffile
+caf%C3%A9
+=== url decode ===
+hello
+hello world
+hello world
+a=1&b=2
+/path/to/file
+=== decode mixed case ===
+hello/world
+hello/world
+=== parse_query ===
+1
+hello world
+/
+=== parse_query empty ===
+0
+=== parse_query single ===
+value
+=== parse_query duplicate ===
+3
+=== build_query ===
+a=1&b=hello world
+=== url parse ===
+/users/123
+q=foo&page=2
+foo
+2
+=== parse no query ===
+/about
+
+0
+=== parse empty query ===
+/search
+
+=== roundtrip ===
+hello world & goodbye=true
+=== edge cases ===
+
+
+%25
+%
+abc%2
+abc%
+
+1
+2
+/search
+a?b
+=== all url tests passed ===
+1
+2
+1
+2
+Alice
+alice@example.com
+99.0
+Bob
+nil
+80.0
+1
+Alice
+99.0
+0
+nil
+int
+float
+1
+important
+false
+false
+1
+1
+0
+11
+false
+1
+false
+=== all sqlite tests passed ===
+
+Results: 56 passed, 0 failed
+http: GET /error: intentional error
+Stack trace:
+  at anonymous fn (examples/51_http_server_test.gem:39)
+Results: 12 passed, 0 failed
+Results: 12 passed, 0 failed
+test1: 2000
+test2: 6000
+test3: 500
+test4: 2000
+arena_compact: all tests passed
+107
+10
+false
+1
+2
+3
+5
+7
+8
+22
+10
+84
+33
+hello world
+result: 10000
+result: 50000000
+result: 5000
+result: 5000
+result: 5000
+ok: 50
+25000
+count: 10000
+last: tick-9999
+received: 1000
+last_n: 999
+last_payload: iter-999
+value: 10000
+label: iter-10000
+hlen: 10000
+total: 250000
+counter: 5000
+count: 5000
+a: 5000
+b: 5000
+c: 5000
+inner: 5000
+ok: true
+value: 5000
+total: 19900
+expected: 19900
+total: 400000
+done
+hello from worker
+true
+false
+false
+true
+true
+true
+false
+true false
+true false
+true
+false
+true false false
+true false false
+false true
+true
+true true false
+false false false
+true true false
+false in: right operand must be a table, got string
+
+math stdlib tests: 19 passed, 0 failed
+
+table stdlib tests: 49 passed, 0 failed
+epoch_ms: ok
+format_time: ok
+format_time http_date: ok
+format_time iso8601: ok
+format_time_local: ok
+time.now: ok
+time.format: ok
+time.format_local: ok
+time.http_date: ok
+time.iso8601: ok
+time.date: ok
+time.http_date() default: ok
+time.iso8601() default: ok
+time.date() default: ok
+
+[Runtime Error]: boom
+  --> examples/79_stack_trace.gem:2
+   |
+ 2 |   error("boom")
+   |
+Stack trace:
+  at c (examples/79_stack_trace.gem:2)
+  at b (examples/79_stack_trace.gem:6)
+  at a (examples/79_stack_trace.gem:10)
+  at main (examples/79_stack_trace.gem:13)
+Hello, Alice!
+Hey, Alice!
+0,0,0
+1,0,0
+1,2,0
+1,2,3
+16
+101
+abab
+ababab
+test1: quiet
+test2: verbose
+default
+nil
+custom
+>>hello.
+>>hello!
+10
+15
+105
+15
+1
+4
+10
+20
+99
+PASS equality on primitives
+PASS inequality
+PASS plain assert
+PASS assert_throws catches errors
+FAIL intentional failure: test.assert_eq: expected 2, got 1
+4 passed / 1 failed
+{name: "alice", age: 30}
+{name: "alice", age: 30}
+user: {name: "alice", age: 30}
+[10, 20, 30]
+{users: [{name: "a"}, {name: "b"}], count: 2}
+{x: 1, self: <cycle>}
+{"hello world": 1, 42: "answer"}
+13
+72
+world
+7
+true
+true
+true
+HELLO, WORLD!
+world!
+result: 10000
+count=1000 in_order=true cancelled=200
+5
+neg
+zero
+pos
+99
+-1
+15
+3
+6
+21
+3
+2
+4.0
+3.5
+2.5
+hello
+abc
+-5
+-3.5
+false
+true
+false
+true
+false
+true
+false
+false
+true
+kept
+fallback
+false
+12
+0
+0
+6
+0
+true
+false
+8
+12
+true
+count=100 in_order=true
+hibyeABCDXYZ
+s1 len=6 wrote=6
+s2 len=5 wrote=5
+s3 len=5 wrote=5
+missing: false strlen: expected 1 argument(s), got 0
+wrong type: false strlen: arg 0 expected String, got int
+ok: 5
+let-table: strategy=one_for_all max_restarts=3 name=nil
+let-nil: x=nil y=42
+let-fwd: a=5 b=10
+let-extra: p=10
+let-array: first=1 second=2 third=100
+let-array-nil: u=10 v=nil
+let-array-short: w=10 z=6
+fn-req: 0 5 8
+0.0.0.0:8080/nil
+0.0.0.0:8080/nil
+0.0.0.0:8080/nil
+0.0.0.0:9000/nil
+server: unknown option "x"
+server: unknown option "prot" (did you mean "port"?)
+2 {color: "red"} 1 {}
+3 1
+0.0.0.0:nil/nil
+sid=abc;Path=/;Secure=false
+sid=abc;Path=/;Secure=false
+sid=abc;Path=/;Secure=true
+anon: 3 30
+block: i=0 doubled=0
+block: i=1 doubled=2
+block: i=2 doubled=4
+closure: 10 15 20
+mut: 1 101
+3
+3
+false
+true
+false
+true
+false
+true
+true
+7
+true
+7
+timeout: nil
+eof: empty-string
+test1: started alpha beta
+test2: count 2
+
+[Runtime Error in process 2]: boom
+  --> examples/95_dynamic_supervisor.gem:14
+    |
+ 14 |           error("boom")
+    |
+Stack trace:
+  at anonymous fn (examples/95_dynamic_supervisor.gem:14)
+test3: restarted id alpha
+test3: count after crash 2
+test4: terminate_child ok true
+test4: count after terminate 1
+test5: bogus terminate ok false
+true
+true
+ok
+10000
+nil
+nil
+ok
+test1: a -> A
+test1: b -> B
+test2: top-level pin
+test2: array pin
+test2: mismatch falls through
+test3: nil pin
+test4: no match, mailbox_len=1
+test5: sentinel, nested sentinel, other
+test5: binding shadows module var: bound
+test6: child got 2
+test7: sum=3
+test7: noise left=300
+test8: loop done 20000
+slow call: ok=false error=gen_server.call: timeout
+next call: fast result
+leftover messages: 1
+test1: slow fast concurrent=true
+test2: nil false gem 2
+test3: ok=false error=boom
+test4: ok=false error=task.await: timeout task_alive=false
+test5: ok=false error=task.await: task exited: external
+test6: task.await: task was already awaited
+test7: task.await: only the process that started a task can await it
+test7: owner still gets 7
+test8: 0 1 4 9 16
+test8: await_all([]) len=0
+test9: ok=false error=first fails second_alive=false mailbox=0
+test9b: ok=false error=late failure slot_reused=true new_pid=true bystander_alive=true
+test10: ok=false error=task.await_all: timeout
+test11: 6
+test12: total=124750
+test13: took _task_result; await error=task.await: task exited with reason "normal" before its result was received; a catch-all receive may have taken the result
+test14: done mailbox=1 msg=unrelated
+test15: task.await: task exited and its result is no longer in the mailbox; a catch-all receive may have taken it
+test16: task.await_all: the same task appears more than once
+test16: still awaitable: 1
+test17: task.await: task exited with reason "normal" before its result was received; a catch-all receive may have taken the result
+final mailbox=0
+
+[Runtime Error]: main failed
+  --> examples/101_process_stack_traces.gem:11
+    |
+ 11 |   error("main failed")
+    |
+Stack trace:
+  at fail_after_yield (examples/101_process_stack_traces.gem:11)
+  at main_entry (examples/101_process_stack_traces.gem:14)
+  at main (examples/101_process_stack_traces.gem:20)
+test1: 10
+test1: 11
+test2: 30
+test2: 7
+test3: [2, 4, 6]
+test3: spawned with a block
+test4: ok=false error=boom
+test4: abc
+test5: 2
+test5: 3
+slot reused, new pid differs: true
+stale process_info: nil
+stale kill: nil
+bystander alive: true
+bystander mailbox: 0
+stale monitor: DOWN noproc for the stale pid: true
+heir got no DOWN
+same table: true true
+equal contents: false
+same fn: true; other fn: false
+same buffer: true; other buffer: false type=buffer
+table in array: true; copy in array: false
+table key: len=1 value=second other=nil
+message copy: false 1
+test1: slept the full time: true
+test2: other ran, then parent continued
+test3: DOWN reason=goodbye
+test4: DOWN reason=no escape
+test5: DOWN reason=chain
+read_file: kill returned true, DOWN reason=killed
+write_file: kill returned true, DOWN reason=killed
+append_file: kill returned true, DOWN reason=killed
+exec: kill returned true, DOWN reason=killed
+sqlite_open: kill returned true, DOWN reason=killed
+extern Int: kill returned true, DOWN reason=killed
+extern String: kill returned true, DOWN reason=killed
+stress: killed 100 of 100 while waiting
+file: fine, still
+exec: 0
+sqlite: row
+extern: 0 copied
+test1: cancel after kill: false false
+test2: cancel after normal exit: false
+test3: ref returned: ref, cancel: false
+test4: ["first", "second", "third"]
+test4: timer for live process cancels: true
+test5: from beyond
+
+[Runtime Error in process 1]: stack overflow in depth
+  --> examples/108_stack_overflow_containment.gem:11
+    |
+ 11 |   1 + depth(n - 1)
+    |
+Stack trace:
+  ... (deeper frames not recorded)
+  at depth (examples/108_stack_overflow_containment.gem:11)
+  ... same frame repeated 254 more times
+  at anonymous fn (examples/108_stack_overflow_containment.gem:22)
+test1: stack overflow in depth
+
+[Runtime Error in process 5]: stack overflow in depth
+  --> examples/108_stack_overflow_containment.gem:11
+    |
+ 11 |   1 + depth(n - 1)
+    |
+Stack trace:
+  ... (deeper frames not recorded)
+  at depth (examples/108_stack_overflow_containment.gem:11)
+  ... same frame repeated 254 more times
+  at anonymous fn (examples/108_stack_overflow_containment.gem:35)
+test2: stack overflow in depth
+test2: ["worker 0 got ping", "worker 1 got ping", "worker 2 got ping"]
+
+[Runtime Error in process 6]: stack overflow in depth
+  --> examples/108_stack_overflow_containment.gem:11
+    |
+ 11 |   1 + depth(n - 1)
+    |
+Stack trace:
+  ... (deeper frames not recorded)
+  at depth (examples/108_stack_overflow_containment.gem:11)
+  ... same frame repeated 254 more times
+  at anonymous fn (examples/108_stack_overflow_containment.gem:50)
+test3: EXIT stack overflow in depth
+
+[Runtime Error in process 8]: stack overflow in depth
+  --> examples/108_stack_overflow_containment.gem:11
+    |
+ 11 |   1 + depth(n - 1)
+    |
+Stack trace:
+  ... (deeper frames not recorded)
+  at depth (examples/108_stack_overflow_containment.gem:11)
+  ... same frame repeated 254 more times
+  at anonymous fn (examples/108_stack_overflow_containment.gem:60)
+test3: linked stack overflow in depth
+
+[Runtime Error in process 9]: stack overflow in depth
+  --> examples/108_stack_overflow_containment.gem:11
+    |
+ 11 |   1 + depth(n - 1)
+    |
+Stack trace:
+  ... (deeper frames not recorded)
+  at depth (examples/108_stack_overflow_containment.gem:11)
+  ... same frame repeated 254 more times
+  at anonymous fn (examples/108_stack_overflow_containment.gem:70)
+
+[Runtime Error in process 10]: stack overflow in depth
+  --> examples/108_stack_overflow_containment.gem:11
+    |
+ 11 |   1 + depth(n - 1)
+    |
+Stack trace:
+  ... (deeper frames not recorded)
+  at depth (examples/108_stack_overflow_containment.gem:11)
+  ... same frame repeated 254 more times
+  at anonymous fn (examples/108_stack_overflow_containment.gem:70)
+
+[Runtime Error in process 11]: stack overflow in depth
+  --> examples/108_stack_overflow_containment.gem:11
+    |
+ 11 |   1 + depth(n - 1)
+    |
+Stack trace:
+  ... (deeper frames not recorded)
+  at depth (examples/108_stack_overflow_containment.gem:11)
+  ... same frame repeated 254 more times
+  at anonymous fn (examples/108_stack_overflow_containment.gem:70)
+
+[Runtime Error in process 12]: stack overflow in depth
+  --> examples/108_stack_overflow_containment.gem:11
+    |
+ 11 |   1 + depth(n - 1)
+    |
+Stack trace:
+  ... (deeper frames not recorded)
+  at depth (examples/108_stack_overflow_containment.gem:11)
+  ... same frame repeated 254 more times
+  at anonymous fn (examples/108_stack_overflow_containment.gem:70)
+
+[Runtime Error in process 13]: stack overflow in depth
+  --> examples/108_stack_overflow_containment.gem:11
+    |
+ 11 |   1 + depth(n - 1)
+    |
+Stack trace:
+  ... (deeper frames not recorded)
+  at depth (examples/108_stack_overflow_containment.gem:11)
+  ... same frame repeated 254 more times
+  at anonymous fn (examples/108_stack_overflow_containment.gem:70)
+
+[Runtime Error in process 14]: stack overflow in depth
+  --> examples/108_stack_overflow_containment.gem:11
+    |
+ 11 |   1 + depth(n - 1)
+    |
+Stack trace:
+  ... (deeper frames not recorded)
+  at depth (examples/108_stack_overflow_containment.gem:11)
+  ... same frame repeated 254 more times
+  at anonymous fn (examples/108_stack_overflow_containment.gem:70)
+
+[Runtime Error in process 15]: stack overflow in depth
+  --> examples/108_stack_overflow_containment.gem:11
+    |
+ 11 |   1 + depth(n - 1)
+    |
+Stack trace:
+  ... (deeper frames not recorded)
+  at depth (examples/108_stack_overflow_containment.gem:11)
+  ... same frame repeated 254 more times
+  at anonymous fn (examples/108_stack_overflow_containment.gem:70)
+
+[Runtime Error in process 16]: stack overflow in depth
+  --> examples/108_stack_overflow_containment.gem:11
+    |
+ 11 |   1 + depth(n - 1)
+    |
+Stack trace:
+  ... (deeper frames not recorded)
+  at depth (examples/108_stack_overflow_containment.gem:11)
+  ... same frame repeated 254 more times
+  at anonymous fn (examples/108_stack_overflow_containment.gem:70)
+
+[Runtime Error in process 17]: stack overflow in depth
+  --> examples/108_stack_overflow_containment.gem:11
+    |
+ 11 |   1 + depth(n - 1)
+    |
+Stack trace:
+  ... (deeper frames not recorded)
+  at depth (examples/108_stack_overflow_containment.gem:11)
+  ... same frame repeated 254 more times
+  at anonymous fn (examples/108_stack_overflow_containment.gem:70)
+
+[Runtime Error in process 18]: stack overflow in depth
+  --> examples/108_stack_overflow_containment.gem:11
+    |
+ 11 |   1 + depth(n - 1)
+    |
+Stack trace:
+  ... (deeper frames not recorded)
+  at depth (examples/108_stack_overflow_containment.gem:11)
+  ... same frame repeated 254 more times
+  at anonymous fn (examples/108_stack_overflow_containment.gem:70)
+
+[Runtime Error in process 19]: stack overflow in depth
+  --> examples/108_stack_overflow_containment.gem:11
+    |
+ 11 |   1 + depth(n - 1)
+    |
+Stack trace:
+  ... (deeper frames not recorded)
+  at depth (examples/108_stack_overflow_containment.gem:11)
+  ... same frame repeated 254 more times
+  at anonymous fn (examples/108_stack_overflow_containment.gem:70)
+
+[Runtime Error in process 20]: stack overflow in depth
+  --> examples/108_stack_overflow_containment.gem:11
+    |
+ 11 |   1 + depth(n - 1)
+    |
+Stack trace:
+  ... (deeper frames not recorded)
+  at depth (examples/108_stack_overflow_containment.gem:11)
+  ... same frame repeated 254 more times
+  at anonymous fn (examples/108_stack_overflow_containment.gem:70)
+
+[Runtime Error in process 21]: stack overflow in depth
+  --> examples/108_stack_overflow_containment.gem:11
+    |
+ 11 |   1 + depth(n - 1)
+    |
+Stack trace:
+  ... (deeper frames not recorded)
+  at depth (examples/108_stack_overflow_containment.gem:11)
+  ... same frame repeated 254 more times
+  at anonymous fn (examples/108_stack_overflow_containment.gem:70)
+
+[Runtime Error in process 22]: stack overflow in depth
+  --> examples/108_stack_overflow_containment.gem:11
+    |
+ 11 |   1 + depth(n - 1)
+    |
+Stack trace:
+  ... (deeper frames not recorded)
+  at depth (examples/108_stack_overflow_containment.gem:11)
+  ... same frame repeated 254 more times
+  at anonymous fn (examples/108_stack_overflow_containment.gem:70)
+
+[Runtime Error in process 23]: stack overflow in depth
+  --> examples/108_stack_overflow_containment.gem:11
+    |
+ 11 |   1 + depth(n - 1)
+    |
+Stack trace:
+  ... (deeper frames not recorded)
+  at depth (examples/108_stack_overflow_containment.gem:11)
+  ... same frame repeated 254 more times
+  at anonymous fn (examples/108_stack_overflow_containment.gem:70)
+
+[Runtime Error in process 24]: stack overflow in depth
+  --> examples/108_stack_overflow_containment.gem:11
+    |
+ 11 |   1 + depth(n - 1)
+    |
+Stack trace:
+  ... (deeper frames not recorded)
+  at depth (examples/108_stack_overflow_containment.gem:11)
+  ... same frame repeated 254 more times
+  at anonymous fn (examples/108_stack_overflow_containment.gem:70)
+
+[Runtime Error in process 25]: stack overflow in depth
+  --> examples/108_stack_overflow_containment.gem:11
+    |
+ 11 |   1 + depth(n - 1)
+    |
+Stack trace:
+  ... (deeper frames not recorded)
+  at depth (examples/108_stack_overflow_containment.gem:11)
+  ... same frame repeated 254 more times
+  at anonymous fn (examples/108_stack_overflow_containment.gem:70)
+
+[Runtime Error in process 26]: stack overflow in depth
+  --> examples/108_stack_overflow_containment.gem:11
+    |
+ 11 |   1 + depth(n - 1)
+    |
+Stack trace:
+  ... (deeper frames not recorded)
+  at depth (examples/108_stack_overflow_containment.gem:11)
+  ... same frame repeated 254 more times
+  at anonymous fn (examples/108_stack_overflow_containment.gem:70)
+
+[Runtime Error in process 27]: stack overflow in depth
+  --> examples/108_stack_overflow_containment.gem:11
+    |
+ 11 |   1 + depth(n - 1)
+    |
+Stack trace:
+  ... (deeper frames not recorded)
+  at depth (examples/108_stack_overflow_containment.gem:11)
+  ... same frame repeated 254 more times
+  at anonymous fn (examples/108_stack_overflow_containment.gem:70)
+
+[Runtime Error in process 28]: stack overflow in depth
+  --> examples/108_stack_overflow_containment.gem:11
+    |
+ 11 |   1 + depth(n - 1)
+    |
+Stack trace:
+  ... (deeper frames not recorded)
+  at depth (examples/108_stack_overflow_containment.gem:11)
+  ... same frame repeated 254 more times
+  at anonymous fn (examples/108_stack_overflow_containment.gem:70)
+test4: {"stack overflow in depth": 20}
+
+[Runtime Error in process 29]: stack overflow in native code called from anonymous fn
+  --> examples/108_stack_overflow_containment.gem:80
+    |
+ 80 |   gem_example_native_recurse(100000000)
+    |
+Stack trace:
+  at anonymous fn (examples/108_stack_overflow_containment.gem:80)
+test5: stack overflow in native code called from anonymous fn
+
+[Runtime Error in process 30]: stack overflow in native code called from anonymous fn
+  --> examples/108_stack_overflow_containment.gem:87
+    |
+ 87 |   gem_example_native_recurse(100000000)
+    |
+Stack trace:
+  at anonymous fn (examples/108_stack_overflow_containment.gem:87)
+test5: shallow call returned 5
+test5: again stack overflow in native code called from anonymous fn
+test6: 10000
+test1: spawned depth 20000
+test1: main depth 20000
+test2: ok=false error=stack overflow in depth
+test2: still running, depth 1000
+test2: again ok=false error=stack overflow in depth
+test3: stack overflow in is_even
+test3: closure ok=false error=stack overflow in anonymous fn deep=true
+test4: main ok=false error=stack overflow in depth
+test5: depth 63 ok=true error=nil
+test5: depth 1000 ok=true error=nil
+test5: depth 1001 ok=false error=json.parse: nesting deeper than 1000 levels at byte 1000
+test6: 200 10
+test6: 500 stack overflow in depth
+test6: 200 20
+test6: 500 stack overflow in depth
+test6: 200 30
+before
+
+[Runtime Error]: stack overflow in depth
+  --> examples/110_main_stack_overflow.gem:5
+   |
+ 5 |   1 + depth(n - 1)
+   |
+Stack trace:
+  ... (deeper frames not recorded)
+  at depth (examples/110_main_stack_overflow.gem:5)
+  ... same frame repeated 253 more times
+  at start (examples/110_main_stack_overflow.gem:9)
+  at main (examples/110_main_stack_overflow.gem:13)
+shallow 5
+
+[Runtime Error]: stack overflow in native code called from main
+  --> examples/111_main_guard_overflow.gem:9
+   |
+ 9 | gem_example_native_recurse(100000000)
+   |
+Stack trace:
+  at main (examples/111_main_guard_overflow.gem:9)
+5000050000
+[3, 2, 1, 0]
+[203, 102, 101, 100]
+9
+[2999998, 250000]
+[2999998, 250000]
+[nil, nil]
+1000000
+100 7
+[[4, 40], [3, 30], [2, 20], [1, nil], [0, 0]]
+[3, 2, 1, 0]
+4 4
+6 6
+[5, 6] [5, 6] [5, 6]
+[["x", "y", "z", 4], ["b", "c", 3], [2], ["a", 1], ["b", "c", 0]]
+1000002
+[[3, 6, 0], [2, nil, 2], [1, 2, 0], [0, nil, 2]]
+1000000
+13 3 7
+["Az", "AB", "AB", "AB", "xB", "pq"]
+5
+102 1101 100
+["set2"] [2] [1]
+false boom at 2
+1000
+2
+[3, 2, 1]
+6
+[7, 100]
+2
+[1000000, 1000002, 1000000, 5]
+[5, 4, 3, 2, 1, 0]
+[5, 4, 3, 2, 1, 0]
+10
+closure saw false
+true
+["before", 1988895, "after"] kept
+kept-too [1, 2, 3]
+["before", "t:23893", "t:1988896", "after"] 30000 row-29999
+["before", "tick-300000", "after"]
+false true after
+["child-1", 1988895]
+true ["w2", ["w1", ["x49999", "x99999", "x149999", "x199999"]]]
+{done: 3, last: "x149999"}
+main after bump: 1 1 ["a"]
+child saw: {counter: 2, closure: 2, names: ["a", "b"], mode: "replaced"}
+main still: 1 1 ["a"] main main
+aliasing: {same: true, second: 99, top: 99}
+spawned at 10, main moved to 20: {counter: 10} 20
+std in child: {doc: "{\"ok\":true,\"n\":3}", parts: ["a", "b", "c"]}
+children: [22, 22, 22] main: 20 1
+shadow: ["module", "local"] module
+fill 20000 row0 row19999
+index 2 40000 1554 true false
+buffer 208890 chunk0;chunk1;ch
+boxes ["value-29999", 30000]
+pcall [true, "acc-29999", "acc-29999"]
+nested cur-29999
+globals entry-29900 entry-29999 t29999 100
+chain 2000
+sort 0 1 3000
+build_string 108890 0,1,2,3,4,
+mailbox 126640
+mutual ["before", false, true, "after"] kept
+default [40100, "state-0", "d1000", "d"]
+rest [40100, 2, "m1"]
+destructured [40100, "bag1"]
+boxed [40100, 100001]
+state intact 40100 state-0 d1000
+tail spawn 800000
+non-tail spawn 800000 cleanup
+pcall depth 3 true [800000]
+zero-arg row-400000
+sink done
+store 14890 2000 true
+backlog drained 13107200
+top-level builds 20000 3000000 3000000 true
+peak memory bounded true
+workers 32 checksum 409600 bad 0 pongs <= workers true
+main built [400000, 79999800000]
+walker got [400000, 79999800000]
+walker got via timer [400000, 79999800000]
+timer cancelled true
+["child extra 1988890", "walked [400000, 79999800000]"]
+captured [200000, 19999900000]
+1 spawn global: {n: 100000, s: "x100000"}
+2 spawn local: {n: 100000, s: "x100000"}
+3 send: {n: 100000, s: "x100000"}
+4 send_after: {n: 100000, s: "x100000"}
+5 nested: {n: 100000, s: "x100000"}
+6 deep: {n: 100000, s: "x100000"}
+7 shared boxes: [{v: "y60000"}, {v: "x50000"}] via a: [{v: "y60000"}, {v: "x50000"}]
+8 many resets: {n: 5, s: "x5"}
+9 independent: child=child parent=parent
+10 sent back: {n: 100000, s: "back100000"}
+while {n: 100000, s: "w100000"}
+for ["range", "r100000"] ["in", "v100000"]
+nested {i: 200, j: 250, s: "n200-250"}
+do/error first0 {e: "e199999"} false
+return ret100000
+sort [1, 2, 3] {cmp: "c20000"} true
+concat <0><40000><80000><120000><160000>
+inside heap {z: "z100000"} {y: "y100000"}
+pcall in pcall {pp: "p100000"}
+caller loop [{r: 0, s: "b0"}, {r: 1, s: "b1"}, {r: 2, s: "b2"}, {r: 3, s: "b3"}] {caller: "c100000"}
+tco ["t5", "t4", "t3", "t2", "t1"]
+shadow outer
+spawn {p: "proc100000"}
+1: 10 20 x=1
+2: 0 1 2 i=100
+3: p=1 q=2 k=K v=V
+4: 10 100 1 20 200 2 x=1
+5: 10 100 20 200
+6: 43 z=3
+7: x=5
+8: b w=g
+9: 1 2 2 i=100
+10: inner msg name=outer
+11: get_x=5 x=99
+12: 8 8 3
+13: 41 42 x=5
+14: iter 0:0 iter 2:4 msg=global total=4
+15: [10, 20, "block-z", "mod-loop", 1, "mod-z", "mod-a", "mod-b"] x=5 y=main-y z=3 a=main-a
+identity: 1 1 1
+push via namespace: 2 ["a", "b"]
+label: relabeled
+after reset: 0 0
+first-class: 2 true 2
+child: [4, 4, true, ["c", "d", "child", "child2"]]
+main after child: 2 ["c", "d"]
+busy child saw: 12
+main still: 2 ["c", "d"]
+holder child: {i: 99000, label: "v99000"}
+holder main: main value
+frozen delete false cannot modify a module table
+frozen dot_set false cannot modify a module table
+frozen index_set false cannot modify a module table
+frozen insert false cannot modify a module table
+frozen pop false cannot modify a module table
+frozen push false cannot modify a module table
+frozen remove_at false cannot modify a module table
+frozen sort false cannot modify a module table
+unchanged: 2 fn
+frozen in child: cannot modify a module table
+sent copy: 2 cannot modify a module table
+1 child: [5, 0, 0, "a", ["x"], "short", 200, "one", 1, 0]
+1 main: [6, 100, 100, "b", nil, "changed", 7, "onetwo", 2, 1]
+2 aliasing: [true, "child", true]
+3 rows at spawn: 6
+3 rows at spawn: 6
+3 rows at spawn: 7
+4 merged: via extra
+5 ["grandchild of quiet child", "b", 7]
+5 ["grandchild of busy child", "set by child", 8, 77]
+6 child: [7, 214] main rows: 11
+7 child: [1749996, 15, "n75000"] main rows: 11
+8 sum: 48
+9 300 spawns with 100k-entry module array under 1500 ms: true
+9 child: [100000, "item 99999"] 100001
+10 capture: ["through capture", -1, true] main 100
+1500000 true
+13500000 true
+3750005 true
+x:300000:x
+y:300001:y
+750000 true
+false bottom 2100000 true
+200010000 200010000 true
+4
+0
+2
+5000050000
+2
+false
+1 111 111
+26 26
+6
+6 6 5
+w 1
+w 2
+w 3
+f 11
+f 21
+r 100
+r 101
+r 102
+kv a 2
+1 3
+arm 1 2
+after outer
+tbl 42
+after outer
+else outer
+after outer
+recv hi!
+after outer
+22 10
+inner 8
+3
+8
+2 3 10
+20
+2
+1
+inner y 20
+outer y 2
+2 3 4 2
+for 10
+for 12
+base 1
+match 8
+base 1
+2 2
+nil
+3
+42
+got oldnew
+5 250000
+0
+30000
+60000
+90000
+120000
+0 5 s0:yyyyyyyyyyyyyyyyyyyyyyyyyyyyyy s90000:yyyyyyyyyyyyyyyyyyyyyyyyyyyyyy
+150000 v1zzzzzzzzzzzzzzzzzzzzzzzzzzzzzz
+t0qqqqqqqqqqqqqqqqqqqqqqqqqqqqqq
+t50000qqqqqqqqqqqqqqqqqqqqqqqqqqqqqq
+t100000qqqqqqqqqqqqqqqqqqqqqqqqqqqqqq
+0 0
+zero
+string s
+nil
+true
+pair 1 2
+pt 3,4
+minus one
+other 99
+pinned
+expr arm
+underscore
+then + newline
+two statements
+a
+nested 1 2 3
+nested one-line
+nine
+empty arm before
+recv hi 1
+recv 42
+recv str
+timeout
+timeout old style
+timeout multiline
+pinned recv 5
+2 3
+1 1
+[1, 2, 3]
+99
+3
+local
+[1, 2, 3]
+[100, 20, 300]
+first
+42 -1
+kept
+8 9
+7
+14 after
+3
+42
+118
+10
+11
+47
+a+b
+4
+6
+{ok: true, value: 4}
+[3, 2, 1]
+hi 11
+int
+true
+false
+ab
+true
+a
+xb
+true
+n=4
+}
+{ and "
+<{}>
+x
+<x!>
+[xxa3]
+ab
+{literal} x
+v
+a bc d
+e inner x f
+g hxi j
+a
+8081
+42
+10
+3
+[1, 2]
+[1, 9]
+2 20 nil
+1 99 nil 1
+[10, 20, 30]
+for 1
+for 2
+match a=1
+match 7 8
+user type
+my sort
+outer len
+outer error: x
+3
+outer error: y
+4
+6
+106
+called param
+local err
+real error
+42
+child total: 2, child hits: 1
+parent total: 0, parent hits: 0
+
+[Runtime Error in process 1]: boom 1
+  --> examples/135_spawn_crash_report.gem:8
+   |
+ 8 |   error("boom {x}")
+   |
+Stack trace:
+  at inner (examples/135_spawn_crash_report.gem:8)
+  at worker (examples/135_spawn_crash_report.gem:12)
+  at anonymous fn (examples/135_spawn_crash_report.gem:21)
+test1: DOWN boom 1
+
+[Runtime Error in process 2]: type error in +: got nil and int
+  --> examples/135_spawn_crash_report.gem:28
+    |
+ 28 |   print(x + 1)
+    |
+Stack trace:
+  at anonymous fn (examples/135_spawn_crash_report.gem:28)
+test2: type error in +: got nil and int
+
+[Runtime Error in process 3]: field access on non-table: got nil (reading .field)
+  --> examples/135_spawn_crash_report.gem:34
+    |
+ 34 |   print(t.field)
+    |
+Stack trace:
+  at anonymous fn (examples/135_spawn_crash_report.gem:34)
+test2: field access on non-table: got nil (reading .field)
+
+[Runtime Error in process 4 "logger"]: boom 3
+  --> examples/135_spawn_crash_report.gem:8
+   |
+ 8 |   error("boom {x}")
+   |
+Stack trace:
+  at inner (examples/135_spawn_crash_report.gem:8)
+  at worker (examples/135_spawn_crash_report.gem:12)
+  at anonymous fn (examples/135_spawn_crash_report.gem:41)
+test3: boom 3
+test4: caught boom 4
+test4: killed shutdown
+test4: normal normal
+test4: self-kill done
+
+[Runtime Error in process 10]: boom 5
+  --> examples/135_spawn_crash_report.gem:8
+   |
+ 8 |   error("boom {x}")
+   |
+Stack trace:
+  at inner (examples/135_spawn_crash_report.gem:8)
+  at worker (examples/135_spawn_crash_report.gem:12)
+  at anonymous fn (examples/135_spawn_crash_report.gem:66)
+test5: linked boom 5
+
+[Runtime Error in process 12]: boom 6
+  --> examples/135_spawn_crash_report.gem:8
+   |
+ 8 |   error("boom {x}")
+   |
+Stack trace:
+  at inner (examples/135_spawn_crash_report.gem:8)
+  at worker (examples/135_spawn_crash_report.gem:12)
+  at anonymous fn (examples/135_spawn_crash_report.gem:73)
+test5: trapped EXIT boom 6
+
+[Runtime Error in process 13]: stack overflow in depth
+  --> examples/135_spawn_crash_report.gem:17
+    |
+ 17 |   1 + depth(n - 1)
+    |
+Stack trace:
+  ... (deeper frames not recorded)
+  at depth (examples/135_spawn_crash_report.gem:17)
+  ... same frame repeated 254 more times
+  at anonymous fn (examples/135_spawn_crash_report.gem:79)
+test6: stack overflow in depth
+done
+from sleeper
+from timer
+receive timed out
+child timed out
+exec finished
+
+[Runtime Error in process 4]: crashed
+  --> examples/136_main_receive_deadlock.gem:52
+    |
+ 52 |   error("crashed")
+    |
+Stack trace:
+  at anonymous fn (examples/136_main_receive_deadlock.gem:52)
+got DOWN
+child exits without sending
+
+[Runtime Error]: deadlock: main process is waiting in receive and no other process can send to it
+  --> examples/136_main_receive_deadlock.gem:69
+    |
+ 69 |   receive
+    |
+Stack trace:
+  at wait_for_reply (examples/136_main_receive_deadlock.gem:69)
+  at main (examples/136_main_receive_deadlock.gem:74)
+shadowed: i = 0, steps = 5
+assigned: j = 3
+assigned and shadowed: k = 3
+closure: m = 3
+module var changed by a fn: count = 3
+outer inner
+tail
+a deep gem b
+  c x} {literal}
+<p>hi</p>
+--help exit: 0
+-h exit: 0
+--help shows usage: 0
+unknown option exit: 2
+no source exit: 2
+-o without name exit: 2
+no stack trace: 1
+flag after source: 0
+fn literal: boom
+  anonymous fn (examples/140_stack_frame_names.gem:20)
+  anonymous fn (examples/140_stack_frame_names.gem:21)
+module fn: not an int: a
+  stack_name_mod.check (examples/modules/stack_name_mod.gem:5)
+  stack_name_mod.fail_outer (examples/modules/stack_name_mod.gem:11)
+  anonymous fn (examples/140_stack_frame_names.gem:22)
+closure from a module: not an int: nil
+  stack_name_mod.check (examples/modules/stack_name_mod.gem:5)
+  stack_name_mod.fail_outer (examples/modules/stack_name_mod.gem:11)
+  anonymous fn (examples/modules/stack_name_mod.gem:16)
+  anonymous fn (examples/140_stack_frame_names.gem:24)
+builtin-named fn: not an int: b
+  stack_name_mod.check (examples/modules/stack_name_mod.gem:5)
+  stack_name_mod.fail_outer (examples/modules/stack_name_mod.gem:11)
+  len (examples/140_stack_frame_names.gem:9)
+  anonymous fn (examples/140_stack_frame_names.gem:25)
+nested fn literals: not an int: 2.5
+  stack_name_mod.check (examples/modules/stack_name_mod.gem:5)
+  stack_name_mod.fail_outer (examples/modules/stack_name_mod.gem:11)
+  len (examples/140_stack_frame_names.gem:9)
+  anonymous fn (examples/140_stack_frame_names.gem:28)
+  anonymous fn (examples/140_stack_frame_names.gem:29)
+  anonymous fn (examples/140_stack_frame_names.gem:31)
+
+[Runtime Error]: not an int: c
+  --> examples/modules/stack_name_mod.gem:5
+   |
+ 5 |     error("not an int: {x}")
+   |
+Stack trace:
+  at stack_name_mod.check (examples/modules/stack_name_mod.gem:5)
+  at stack_name_mod.fail_outer (examples/modules/stack_name_mod.gem:11)
+  at len (examples/140_stack_frame_names.gem:9)
+  at main (examples/140_stack_frame_names.gem:33)
+4.0
+false sqrt: arg 0 expected Float, got int
+1.5
+2.0
+4.0
+false floor: arg 0 expected Float, got int
+5
+3
+3.0
+false ceil: arg 0 expected Float, got int
+record saw 0 item(s)
+hits after run_now: 1
+own push: 7
+counter: 0
+hits after block spawn: 2
+child counter: 1
+main counter: 0
+normal link ok
+
+[Runtime Error in process 2]: trapped crash
+  --> examples/143_main_link_exit.gem:10
+    |
+ 10 |   error("trapped crash")
+    |
+Stack trace:
+  at anonymous fn (examples/143_main_link_exit.gem:10)
+main trapped: trapped crash
+main trapped link: noproc
+child DOWN: noproc
+
+[Runtime Error in process 5]: deep crash
+  --> examples/143_main_link_exit.gem:36
+    |
+ 36 |     error("deep crash")
+    |
+Stack trace:
+  at anonymous fn (examples/143_main_link_exit.gem:36)
+
+[Runtime Error]: main process killed by linked process 4: deep crash
+  --> examples/143_main_link_exit.gem:40
+    |
+ 40 | sleep(100)
+    |
+Stack trace:
+  at main (examples/143_main_link_exit.gem:40)
+
+[Runtime Error in process 1]: type error in +: got int and string
+  --> examples/144_leaf_crash_location.gem:3
+   |
+ 3 | spawn(fn() 1 + "a" end)
+   |
+Stack trace:
+  at anonymous fn (examples/144_leaf_crash_location.gem:3)
+
+[Runtime Error in process 2]: type error in +: got string and int
+  --> examples/144_leaf_crash_location.gem:8
+   |
+ 8 |   y + 1
+   |
+Stack trace:
+  at add_one (examples/144_leaf_crash_location.gem:8)
+  at caller (examples/144_leaf_crash_location.gem:12)
+  at anonymous fn (examples/144_leaf_crash_location.gem:15)
+false type error in +: got nil and int
+add_one 8
+1
+1 31
+4999950001
+
+[Runtime Error in process 4]: type error in +: got int and string
+  --> examples/144_leaf_crash_location.gem:42
+    |
+ 42 |   s + extra
+    |
+Stack trace:
+  at spin (examples/144_leaf_crash_location.gem:42)
+  at anonymous fn (examples/144_leaf_crash_location.gem:49)
+
+[Runtime Error]: type error in +: got table and int
+  --> examples/144_leaf_crash_location.gem:8
+   |
+ 8 |   y + 1
+   |
+Stack trace:
+  at add_one (examples/144_leaf_crash_location.gem:8)
+  at caller (examples/144_leaf_crash_location.gem:12)
+  at main (examples/144_leaf_crash_location.gem:54)
+in tail_expr
+type error in +: got string and int tail_expr 9
+in mid_expr
+type error in +: got nil and int mid_expr 14
+in tail_expr
+
+[Runtime Error]: type error in +: got string and int
+  --> examples/145_last_expr_line.gem:9
+   |
+ 9 |   x + y
+   |
+Stack trace:
+  at tail_expr (examples/145_last_expr_line.gem:9)
+  at main (examples/145_last_expr_line.gem:23)
+spawn: false build_string: `add` can only be called by the process that created it
+s1 = ab
+message: false build_string: `add` can only be called by the process that created it
+s2 = ok
+s3 = c
+module slot: false build_string: `add` can only be called by the process that created it
+owner call ok
+total 108890
+17 hello
+from a pipe
+child pipe
+procfs: true
+0
+4 0
+false read_file: '/tmp' is a directory
+main before
+hi from main
+main status 0
+main status 3
+child before
+hi from child
+child status 2
+read back: captured
+plain 5
+defaulted 7 8
+rest 3
+destructured d
+closure param 9
+do block [10, 20]
+boxed 12
+tco 5000050000
+mutual tco 100000
+tco rest 2
+spawn sent
+pcall [42, 22, 20]
+extern param 4
+fns FN FN fn label 1
+lexical FN
+3.14159265358979
+false
+0.1 0.5 1.0 2.0 100.0 0.0 -0.0 -2.5
+0.30000000000000004
+1e-06
+1000000.0
+0.0001 1e-05
+1000000.0
+1e-06
+0.3333333333333333
+-0.1
+1000000000000000.0
+1e+16
+1.2345678901234567e+19
+0.00015
+1.5e-06
+1234567.5 1234567.5 1234567.5 1234567.5 1234567.5 1234567.5
+[1.5, 2.0, {k: 0.25}]
+[2.0,-0.0,1e+300,1.5e-07]
+true
+8
+10
+1 9
+ABC
+xyz
+42 10 OK
+user time
+boom time.boom
+hello from my-mod hello from my-mod
+mn.pre_f mn_pre.f
+2 2
+9223372036854775807
+-9223372036854775807
+-9223372036854775808
+true
+int
+42
+-9223372036854775808
+-9223372036854775808
+-9223372036854775807
+min
+max
+other
+index [13]
+divide [14]
+compare [15]
+field [16]
+negate [17]
+not then add [18]
+logic [19]
+call [20]
+nested inner [21]
+nested outer [22]
+multi-line [23]
+in fn [27]
+fn literal [34]
+brace block [39, 39]
+do block [45, 52, 44]
+waited 30
+elapsed >= 30: true
+42
+nil
+{tag: "a"}
+b
+after 0
+fast: true
+7
+loop 3
+ticked
+child done
+empty
+empty
+one 7
+pair 1 2
+record 1 2
+other
+nested 1234
+pair [1, 2] {a: 3, b: 4}
+triple 1 2 3
+other
+other
+other
+other
+pair a b
+other
+other
+pair 1 2
+got pair 3 4
+got record 1 2
+0 a
+1 b
+2 c
+empty: 0
+["0:1:97", "1:1:0", "2:1:195", "3:1:169"]
+consistent: true
+0=h
+2=l
+first[0] = a
+first[1] = b
+second[0] = c
+count: 4
+for: expected a table or string to iterate, got int
+for: expected a table or string to iterate, got int
+for: expected a table or string to iterate, got nil
+for: expected a table or string to iterate, got nil
+for: expected a table or string to iterate, got float
+for: expected a table or string to iterate, got float
+for: expected a table or string to iterate, got bool
+for: expected a table or string to iterate, got bool
+for: expected a table or string to iterate, got buffer
+for: expected a table or string to iterate, got buffer
+tabs: [hello\n\tnested]
+mixed: [one\n  two]
+mismatch: [    spaces\ntab-only\nfull]
+blank: [x\n\ny]
+interp: [hi gem\n  inner done]
+single: [{literal}\n\tdeeper]
+spaces: [plain\n  indented]
+kill main normal -> true
+main survives
+kill normal -> true
+child still alive
+kill shutdown -> true
+DOWN shutdown
+kill trapper -> true
+trapper got EXIT normal
+self DOWN normal
+linked partner alive: true
+dead -> nil
+<hi>
+abababab
+4
+80
+6
+nil: true
+bool: true
+bool: true
+int: true
+int: true
+float: true
+fn: true
+ref: true
+int: true
+table: true
+table: true
+string: true
+nil true <fn> {a: 1}
+true
+[hi]1nil<fn>true
+true
+hi<fn>
+2
+fn
+["a", "b"]
+2 ["a", "b"]
+12
+[1, 3]
+3
+["x", "y", "z"] 3
+[mod] hello
+my floor 2.5
+entry header: 40
+module header: 407
+system header: 3
+strlen exact: ok 3
+strlen extra: error strlen: expected 1 argument(s), got 2
+strlen none: error strlen: expected 1 argument(s), got 0
+getpid exact: ok true
+getpid extra: error getpid: expected 0 argument(s), got 1
+write extra: error write: expected 2 argument(s), got 3
+write few: error write: expected 2 argument(s), got 1
+usleep exact: ok 0
+usleep extra: error usleep: expected 1 argument(s), got 2
+getppid exact: ok true
+getppid extra: error getppid: expected 0 argument(s), got 1
+value extra: error strlen: expected 1 argument(s), got 3
+call1 extra: error getpid: expected 0 argument(s), got 1
+call1 exact: ok 5
+[{a: nil, b: 1, c: 2, d: 1.5, e: "s"}]
+[{one: 1}]
+[{one: 1}]
+[{two: 2}]
+[{a: 7, b: 7}]
+[{x: "p", y: "q"}]
+error: sqlite_query: statement has 2 parameter(s), got 1
+error: sqlite_query: statement has 1 parameter(s), got 2
+error: sqlite_query: statement has 1 parameter(s), got 0
+error: sqlite_query: statement has 0 parameter(s), got 1
+error: sqlite_query: parameter 1 is a table; expected nil, bool, int, float or string
+error: sqlite_query: parameter 2 is a fn; expected nil, bool, int, float or string
+error: sqlite_query: params must be a table, got int
+sqlite_query: parameter 1 is a table; expected nil, bool, int, float or string
+[{v: "ok"}]
+{10: "ten", "5": "five", "09": "nine", 7: "seven", 9223372036854775807: "max", 0: "zero"}
+ten
+false
+true
+false
+nine
+max
+{1: "b", 0: "a", 2: "c"}
+3
+int 20
+string s
+int lead
+none
+seven five zero
+terminate first: true
+left: ["b", "c"]
+terminate again: false
+terminate by handle: true
+left: ["c"]
+temporary left: [2, 4]
+temporary after crash: [4]
+transient left: ["y", "z"] y restarted: true
+after 5000 exits: 0
+handle child pid is int: int
+handle child replies: 10
+handle child restarted: true 10
+dynamic_supervisor.start_child: no luck
+dynamic_supervisor.start_child: child start must return a pid or a {pid} handle, got nil
+bad still up: 0
+by name: ["n1"]
+dynamic_supervisor.which_children: no process registered as "nobody"
+dynamic_supervisor.which_children: expected a pid, a {pid} handle or a registered name, got nil
+dynamic_supervisor.start: the name "pool" is already registered
+dynamic_supervisor.start_child: timeout
+dynamic_supervisor.start_child: supervisor exited: shutdown
+dynamic_supervisor.start_child: supervisor exited: boom
+1: 2 children, gs pid is int
+1: call -> 1
+1: gs restarted: true, fresh state -> 1
+2: whereis matches: true
+2: children by name: 1
+2: duplicate: supervisor.start: the name "sup175" is already registered
+2: name still points at the first: true
+3: bare pid: 1
+3: unknown name: supervisor.which_children: no process registered as "nope175"
+3: bad target: supervisor.which_children: expected a pid, a {pid} handle or a registered name, got nil
+3: no answer: supervisor.which_children: timeout
+3: dead supervisor: supervisor.which_children: supervisor exited: shutdown, at once: true
+4: still alive, temp pid -1, perm restarted true
+5: 3 of 3 restarted, ids abc
+6: supervisor.start: unknown strategy "rest_for_one"
+1: handle=3 pid=3 name=3
+1: nil reply=nil deferred=deferred 3
+2: gen_server.call: no process registered as "nobody"
+2: gen_server.cast: no process registered as "nobody"
+2: gen_server.call: expected a {pid} handle, a pid or a registered name, got nil
+2: gen_server.cast: expected a {pid} handle, a pid or a registered name, got table
+2: gen_server.call: expected a {pid} handle, a pid or a registered name, got float
+3: gen_server.call: timeout
+4: gen_server.call: server exited: noproc fast=true
+4: downs left=0
+4: gen_server.call: server exited: told to die fast=true
+4: downs left=0
+5: get=0
+5: own monitor reason=stop extra=0
+
+[Runtime Error in process 5]: gen_server: handle_call returned nil, expected {reply: value, state: state} or {noreply: state}
+  --> std/gen_server.gem:50
+    |
+ 50 |   error("gen_server: {callback} returned {describe(result)}, expected {expected}")
+    |
+Stack trace:
+  at gen_server.bad_result (std/gen_server.gem:50)
+  at gen_server.check_call_result (std/gen_server.gem:81)
+  at gen_server.loop (std/gen_server.gem:88)
+  at gen_server.serve (std/gen_server.gem:192)
+  at anonymous fn (std/gen_server.gem:150)
+6: gen_server.call: server exited: gen_server: handle_call returned nil, expected {reply: value, state: state} or {noreply: state}
+
+[Runtime Error in process 6]: gen_server: handle_call returned a table with keys ["value"], expected {reply: value, state: state} or {noreply: state}
+  --> std/gen_server.gem:50
+    |
+ 50 |   error("gen_server: {callback} returned {describe(result)}, expected {expected}")
+    |
+Stack trace:
+  at gen_server.bad_result (std/gen_server.gem:50)
+  at gen_server.check_call_result (std/gen_server.gem:81)
+  at gen_server.loop (std/gen_server.gem:88)
+  at gen_server.serve (std/gen_server.gem:192)
+  at anonymous fn (std/gen_server.gem:150)
+6: gen_server.call: server exited: gen_server: handle_call returned a table with keys ["value"], expected {reply: value, state: state} or {noreply: state}
+
+[Runtime Error in process 7]: gen_server: handle_call returned a table with keys ["reply"], expected {reply: value, state: state} or {noreply: state}
+  --> std/gen_server.gem:50
+    |
+ 50 |   error("gen_server: {callback} returned {describe(result)}, expected {expected}")
+    |
+Stack trace:
+  at gen_server.bad_result (std/gen_server.gem:50)
+  at gen_server.check_call_result (std/gen_server.gem:81)
+  at gen_server.loop (std/gen_server.gem:88)
+  at gen_server.serve (std/gen_server.gem:192)
+  at anonymous fn (std/gen_server.gem:150)
+6: gen_server.call: server exited: gen_server: handle_call returned a table with keys ["reply"], expected {reply: value, state: state} or {noreply: state}
+
+[Runtime Error in process 8]: gen_server: handle_cast returned nil, expected {state: state}
+  --> std/gen_server.gem:50
+    |
+ 50 |   error("gen_server: {callback} returned {describe(result)}, expected {expected}")
+    |
+Stack trace:
+  at gen_server.bad_result (std/gen_server.gem:50)
+  at gen_server.check_state_result (std/gen_server.gem:62)
+  at gen_server.loop (std/gen_server.gem:98)
+  at gen_server.serve (std/gen_server.gem:192)
+  at anonymous fn (std/gen_server.gem:150)
+6: cast nil -> gen_server: handle_cast returned nil, expected {state: state}
+
+[Runtime Error in process 9]: gen_server: handle_info returned an int, expected {state: state}
+  --> std/gen_server.gem:50
+    |
+ 50 |   error("gen_server: {callback} returned {describe(result)}, expected {expected}")
+    |
+Stack trace:
+  at gen_server.bad_result (std/gen_server.gem:50)
+  at gen_server.check_state_result (std/gen_server.gem:62)
+  at gen_server.loop (std/gen_server.gem:115)
+  at gen_server.serve (std/gen_server.gem:192)
+  at anonymous fn (std/gen_server.gem:150)
+6: info int -> gen_server: handle_info returned an int, expected {state: state}
+7: info saw ["call", "cast", "gs_reply"]
+8: monitors after 300 callers=1
+start returns pid: int
+escape: &lt;a href=&#x27;x&#x27;&gt;&amp;&quot;&lt;/a&gt;
+-- default bodies
+HTTP/1.1 404 Not Found [Not Found]
+http: GET /boom: kaboom
+Stack trace:
+  at anonymous fn (examples/177_http_errors_and_headers.gem:10)
+HTTP/1.1 500 Internal Server Error [Internal Server Error]
+http: GET /nil: handler returned nil, not a response table
+HTTP/1.1 500 Internal Server Error [Internal Server Error]
+-- headers
+HTTP/1.1 200 OK [connection=close|host=t|host2=no-space|x-dup=1, 2|x-mixed-case=padded]
+HTTP/1.1 200 OK [a=1 b=2 c=3]
+-- malformed
+HTTP/1.1 400 Bad Request [Bad Request]
+HTTP/1.1 400 Bad Request [Bad Request]
+HTTP/1.1 400 Bad Request [Bad Request]
+HTTP/1.1 431 Request Header Fields Too Large [Request Header Fields Too Large]
+-- head split across writes, then a pipelined pair
+HTTP/1.1 200 OK [hello]
+HTTP/1.1 200 OK [got oneHTTP/1.1 200 OK
+Content-Length: 7
+Connection: close
+Content-Type: text/plain; charset=utf-8
+
+got two]
+-- serve
+HTTP/1.1 200 OK [hello]
+serve after kill shutdown: ok=true value=nil error=nil
+HTTP/1.1 200 OK [hello]
+serve after kill boom: ok=false value=nil error=http.serve: server died: boom
+=== keys ===
+{"42":"x"}
+{"0":"z","name":"n"}
+{"name":"a","7":"seven"}
+[10,20,30]
+[]
+[[],[1],{"a":[]}]
+{"2":"c","1":"b"}
+["A","b","c"]
+float key: error json.encode: cannot encode a float table key (only string and int keys)
+bool key: error json.encode: cannot encode a bool table key (only string and int keys)
+sparse round trip: zero two false
+=== numbers ===
+12345678901234567890 -> 1.2345678901234567e+19 (float)
+-12345678901234567890 -> -1.2345678901234567e+19 (float)
+9223372036854775807 -> 9223372036854775807 (int)
+-9223372036854775808 -> -9223372036854775808 (int)
+9223372036854775808 -> 9.223372036854776e+18 (float)
+1000000000000000000 -> 1000000000000000000 (int)
+[1, 123456789012345678901234567890, -3] -> [1, 1.2345678901234568e+29, -3] (table)
+=== strings ===
+"plain"
+""
+"\"quoted\""
+"a\tb\nc\\d"
+"ctl\u0001\u001f\u0000end"
+"café"
+aéb
+"c"
+true
+true
+=== depth ===
+parse 1000 arrays: ok 1
+parse 1001 arrays: error json.parse: nesting deeper than 1000 levels at byte 1000
+parse 1000 objects: ok 1
+parse 1001 objects: error json.parse: nesting deeper than 1000 levels at byte 5000
+parse 100000 arrays: error json.parse: nesting deeper than 1000 levels at byte 1000
+encode 1000: ok 2001
+encode 1001: error json.encode: nesting deeper than 1000 levels (or a cyclic table)
+encode cyclic: error json.encode: nesting deeper than 1000 levels (or a cyclic table)
+spawned: parse true encode true too deep json.parse: nesting deeper than 1000 levels at byte 1000
+=== errors ===
+parse "": error json.parse: unexpected end of input at byte 0
+parse "  ": error json.parse: unexpected end of input at byte 2
+parse "nul": error json.parse: expected 'null' at byte 0
+parse "[1, 2,]": error json.parse: unexpected character ']' at byte 6
+parse "{\"a\" 1}": error json.parse: expected ':' in object at byte 5
+parse "{\"a\": 1,}": error json.parse: expected string key in object at byte 8
+parse "[1 2]": error json.parse: expected ',' or ']' in array at byte 3
+parse "\"abc": error json.parse: unterminated string at byte 4
+parse "\"bad \\x escape\"": error json.parse: invalid escape sequence at byte 6
+parse "\"\\u12G4\"": error json.parse: invalid hex digit in unicode escape at byte 5
+parse "01": error json.parse: unexpected data after JSON value at byte 1
+parse "-": error json.parse: expected digit at byte 1
+parse "1.": error json.parse: expected digit after decimal point at byte 2
+parse "1e": error json.parse: expected digit in exponent at byte 2
+parse "{\"a\": 1} extra": error json.parse: unexpected data after JSON value at byte 9
+parse "\"tab\there\"": error json.parse: unescaped control character in string at byte 4
+parse "[1] [2]": error json.parse: unexpected data after JSON value at byte 4
+parse "{1: 2}": error json.parse: expected string key in object at byte 1
+parse non-string: error json.parse: expected a string, got int
+encode fn: error json.encode: cannot encode a fn
+encode ref: error json.encode: cannot encode a ref
+chunked: 200 {"transfer-encoding": "chunked"} hello, world
+chunked split: 200 {"transfer-encoding": "chunked"} abc0123456789abcdef
+chunk ext + trailer: 200 {"transfer-encoding": "chunked"} Wikipedia in a
+chunked no final CRLF: 200 {"transfer-encoding": "chunked"} ok
+chunked empty: 200 {"transfer-encoding": "chunked"} 
+bad chunk size: error: request.get: malformed chunked body: bad chunk size "zz"
+chunk too long: error: request.get: malformed chunked body: chunk data not followed by CRLF
+chunked truncated: error: request.get: malformed chunked body: connection closed inside a chunk
+chunked no last chunk: error: request.get: malformed chunked body: connection closed before the last chunk
+no reason: 204 {} 
+no reason + body: 200 {"content-length": "2"} hi
+long reason: 404 {} gone
+lowercase names: 200 {"content-type": "text/plain", "x-mixed-case": "padded", "set-cookie": "a=1\nb=2", "content-length": "0"} 
+bare LF: 200 {"content-length": "3"} abc
+100 continue: 201 {"content-length": "4"} done
+content-length stops: 200 {"content-length": "3"} abc
+read to eof: 200 {} until close
+bad status: error: request.get: malformed status line "SSH-2.0-OpenSSH"
+bad code: error: request.get: malformed status line "HTTP/1.1 2x0 OK"
+bad header: error: request.get: malformed response header line "no colon here"
+bad content-length: error: request.get: invalid Content-Length "-1"
+short body: error: request.get: connection closed before the end of the body (10 bytes expected)
+empty reply: error: request.get: connection closed before a response arrived
+closed in headers: error: request.get: connection closed inside the response headers
+silent: error: request.get: timed out after 100 ms waiting for http://127.0.0.1:PORT/
+silent took about 100 ms: true
+slow body: error: request.get: timed out after 100 ms waiting for http://127.0.0.1:PORT/
+in time: 200 {"content-length": "2"} ok
+no timeout: 200 {"content-length": "2"} ok
+zero timeout: request.get: timeout_ms must be an int > 0 (milliseconds) or nil, got 0
+bad timeout: request.get: timeout_ms must be an int > 0 (milliseconds) or nil, got string
+echo: 200 {"content-length": "73"} GET / HTTP/1.1|Host: 127.0.0.1:PORT|Connection: close|X-Token: t1||
+host has port: true
+POST /?q=1 HTTP/1.1|Connection: close|Content-Length: 3|Host: example.test||abc
+true
+ca_file: request.get: ca_file must be a string or nil, got int
+ftp: request.get: unsupported URL scheme "ftp" (only http:// and https:// are supported)
+no scheme: request.get: URL must start with http:// or https:// (got "example.com/x")
+no host: request.get: URL has no host: http:///x
+bad port: request.get: invalid port "abc" in URL http://127.0.0.1:abc/
+port range: request.get: invalid port "70000" in URL http://127.0.0.1:70000/
+userinfo: request.get: credentials in the URL are not supported: http://u:p@127.0.0.1/
+space: request.get: invalid character (byte 32) in URL
+crlf: request.get: invalid character (byte 13) in URL
+not a string: request.get: URL must be a string, got int
+header inject: request.get: invalid character (byte 13) in value of header X-A
+bad body: request.post: body must be a string, got int
+bad method: request.request: invalid character (byte 32) in method
+refused: request.get: cannot connect to 127.0.0.1:1: tcp_connect: connect failed: Connection refused
+leak check bad status: error: request.get: malformed status line "garbage"
+leak check timeout: error: request.get: timed out after 50 ms waiting for http://127.0.0.1:PORT/
+leak check refused: request.get: cannot connect to 127.0.0.1:1: tcp_connect: connect failed: Connection refused
+fds leaked: false
+sqlite_query: expected a database handle, got int
+sqlite_exec: expected a database handle, got int
+sqlite_last_insert_id: expected a database handle, got int
+sqlite_changes: expected a database handle, got int
+sqlite_close: expected a database handle, got int
+sqlite_query: expected a database handle, got string
+sqlite_close: expected a database handle, got nil
+sqlite_changes: expected a database handle, got table
+sqlite_exec: expected a database handle, got float
+sqlite
+1
+1
+child saw 2 rows, last 8
+2
+nil
+sqlite_query: not an open database handle
+sqlite_exec: not an open database handle
+sqlite_last_insert_id: not an open database handle
+sqlite_changes: not an open database handle
+nil
+nil
+true
+42
+child closed db2
+sqlite_query: not an open database handle
+both closes returned: true
+sqlite_query: not an open database handle
+PASS records compare by structure, in any key order
+PASS primitives
+PASS cycles terminate
+PASS long cycles terminate
+PASS deep nesting does not overflow
+PASS shared subtables
+test.assert_eq: expected 1 (int), got 1.0 (float)
+test.assert_eq: expected 2, got 1
+test.assert_eq: expected "ab", got "a\"b\n"
+test.assert_eq: expected {a: [1, 2]}, got {a: [1, 2.0]}: at .a[1], expected 2 (int), got 2.0 (float)
+test.assert_eq: expected {a: 1, "b c": 2}, got {a: 1}: actual is missing key ["b c"]
+test.assert_eq: expected {a: 1}, got {a: 1, z: 0}: actual has extra key .z
+test.assert_eq: expected [1, [3]], got [1, [2]]: at [1][0], expected 3, got 2
+test.assert_eq: expected {1: "y"}, got {1: "x"}: at [1], expected "y", got "x"
+test.assert_eq: expected {} (table), got nil (nil)
+test.assert_eq: expected <fn>, got a different fn <fn>
+test.assert_neq: both values are {a: [1]}
+test.assert_eq: sum: expected 3, got 2
+test.assert_eq: list: expected [2], got [1]: at [0], expected 2, got 1
+test.assert_neq: ids: both values are 1
+test.assert: assertion failed
+test.assert: assertion failed: math
+test.assert_throws: expected an error, but the call returned normally
+boom
+PASS failure messages
+PASS a case registered in a spawned process raises
+FAIL intentional failure: test.assert_eq: expected {a: [1, 3]}, got {a: [1, 2]}: at .a[1], expected 3, got 2
+8 passed / 1 failed
+-- string.split
+[0: "a", 1: "b", 2: "c"]
+[0: ""]
+[0: "abc"]
+[0: "a", 1: "", 2: "b", 3: ""]
+[0: "", 1: ""]
+[0: "a", 1: "b", 2: ":c"]
+[0: "", 1: "a"]
+[0: "é", 1: "ü", 2: "ñ"]
+[0: "a", 1: "b", 2: "c"]
+3 1 0
+[0: "no delimiter here"]
+-- string.index_of / contains
+2
+3
+-1
+3
+0
+5
+-1
+-1
+-1
+1
+1
+2
+3 [0: "key", 1: "value"] "KEY: VALUE" "key: value"
+true false true
+-- long strings take the chunked path
+index_of agrees with the naive scan: true
+split of 170089 bytes: 2001 pieces, join gives it back: true
+667
+-- string.join / trim / affixes / case / repeat
+""
+"only"
+"1-2.5-nil-true"
+"ab"
+"hi there"
+""
+"x"
+""
+"é"
+true true false true
+true true false true
+"HELLO, WöRLD 42!"
+"content-type ÉÀ"
+""
+"already lower"
+"ababab"
+""
+""
+""
+-- string errors
+string.split: s must be a string, got nil
+string.split: delim must be a string, got nil
+string.index_of: needle must be a string, got int
+string.index_of: start must be an int, got string
+string.contains: s must be a string, got nil
+string.join: arr must be an array, got nil
+string.join: delim must be a string, got nil
+string.trim: s must be a string, got int
+string.starts_with: prefix must be a string, got nil
+string.ends_with: s must be a string, got nil
+string.upper: s must be a string, got nil
+string.lower: s must be a string, got table
+string.repeat: n must be an int, got float
+-- url.encode / decode
+a%20b%2F%C3%A9~-_.%2A
+""
+unreserved-only_1.2~
+%00%0A%25%2B%26%3D
+a b c+
+€
+100%
+100%4
+A
+%zz%4g%A
+2
+""
+round trip: é & ü = ?
+-- url.parse_query / build_query / parse
+[a: "1", b: "hello world", c: "/"]
+[]
+[a: "2"]
+[flag: "", b: "2"]
+[a: "", b: ""]
+[a: "b=c"]
+[a: "1"]
+[=: "eq", a b: "c d"]
+"q=a%20b&page=2&a%26b=x%3Dy"
+""
+"a=1&c=3"
+[k: "ü & é", e: ""]
+[path: "/users/42", query_string: "", query: []]
+[path: "/search", query_string: "q=gem&page=2", query: [q: "gem", page: "2"]]
+[path: "/p", query_string: "", query: []]
+[path: "/p", query_string: "q=1?x", query: [q: "1?x"]]
+[path: "/p", query_string: "q=1", query: [q: "1"]]
+[path: "/p", query_string: "", query: []]
+[path: "", query_string: "", query: []]
+-- url errors
+url.encode: s must be a string, got nil
+url.decode: s must be a string, got int
+url.parse_query: s must be a string, got nil
+url.build_query: tbl must be a table, got string
+url.parse: target must be a string, got nil
+-- mime
+text/html; charset=utf-8
+text/css; charset=utf-8
+image/png
+image/jpeg
+text/javascript; charset=utf-8
+application/gzip
+application/octet-stream
+application/octet-stream
+application/octet-stream
+application/octet-stream
+application/octet-stream
+application/octet-stream
+image/svg+xml
+".html"
+".html"
+".png"
+".json"
+".jpg"
+nil
+nil
+mime.lookup: path_or_ext must be a string, got nil
+mime.ext: content_type must be a string, got int
+map empty {} filter empty {}
+reduce empty 7
+find none nil any empty false all empty true
+count 2
+reverse [1] [3, 2, 1]
+index_of past nil 2 -1
+slice no length [2, 3, 4] [4]
+slice edges {} [1, 2] {}
+zip [[1, "a"]] {}
+concat [1] [1]
+copy record {a: 1, b: 2, c: 3} false copy empty {}
+copy array [1, 2, 3] 2
+flatten [1, [2], 3, {k: 1}]
+flat_map empty arrays dropped {}
+flat_map mixed [1, 1, 2, 2] [10, 20]
+unique by == [1, "1", 1.0, nil, true, false, -3, 0, "0"]
+unique tables by identity 3
+group_by {len1: ["a", "d"], len2: ["bb", "cc"]}
+group_by negative key raises: table.group_by: key -2 is a negative int, which can't be a table key; return a string
+sort default [1, 2, 3] sort cmp [3, 2, 1]
+sort float cmp [0.2, 0.5, 0.9]
+sort empty with bool cmp {}
+sort bool cmp raises: sort: the comparator must return a number (negative, zero or positive), got bool
+sort nil cmp result raises: sort: the comparator must return a number (negative, zero or positive), got nil
+sort 100k 1 100000
+map 100k 100000 200000 50000
+min/max 1 2 1 b
+min/max tie 2.0 2
+clamp 0 10 5
+clamp low > high raises: math.clamp: low (10) is greater than high (0)
+assert 0 is truthy nil
+assert false raises: assertion failed
+assert nil msg raises: assertion failed: rows
+epoch 1970-01-01T00:00:00Z 1970-01-01 Thu, 01 Jan 1970 00:00:00 GMT
+before epoch 1969-12-31T23:59:59Z 1969-12-31T23:59:59Z 1969-12-31T23:59:58Z
+day before 1969-12-30T23:59:59Z 1969-12-31
+ms dropped 1970-01-01T00:00:01Z 2026-04-28T14:30:00Z
+year 10000 10000-01-01T00:00:00Z
+leap day 2000-02-29 Tue, 29 Feb 2000 00:00:00 GMT
+format 14:30:00 118 []
+long format 1000
+format float ms raises: time.format: ms must be an int, got float
+format nil fmt raises: time.format: fmt must be a string, got nil
+now is an int int true
+set_level unknown raises: log.set_level: unknown level warning; use "debug", "info", "warn" or "error"
+set_level nil raises: log.set_level: unknown level nil; use "debug", "info", "warn" or "error"
+builtin error unaffected raises: plain
+async non-fn raises: task.async: expected a function, got int
+await nil raises: task.await: expected a task from task.async, got nil
+await record raises: task.await: expected a task from task.async, got table
+await_all nil raises: task.await_all: expected an array of tasks, got nil
+await_all empty {}
+await_all nil element raises: task.await_all: expected a task from task.async, got nil
+await timeout raises: task.await: timeout
+await_all timeout raises: task.await_all: timeout
+await killed raises: task.await: task exited: boom
+await raises task error raises: inner
+await twice raises: task.await: task was already awaited
+await_all values [nil, [1]]
+empty select {}
+insert 1 1
+select [{name: "a"}]
+bad sql raises: sqlite.exec: near "nonsense": syntax error
+param count raises: sqlite.query: statement has 1 parameter(s), got 2
+copy int keys {10: "ten", 20: "twenty"}
+copy mixed {0: 1, 1: 2, name: "x"}
+copy array [3, 4, 5] 3
+join record raises: string.join: arr must be an array, got a table with keys other than 0 .. n-1
+unique big 40000 40000
+unique mixed [1, 1.0, "1", -1, 0.0, nil, true, false, {}, {}]
+sort non-table raises: table.sort: arr must be an array, got string
+join int keys raises: string.join: arr must be an array, got a table with keys other than 0 .. n-1
+-- 1. calls to a dead server leave no DOWN behind
+0
+gen_server.call: server exited: boom
+gen_server.call: server exited: noproc
+gen_server.call: server exited: noproc
+gen_server.call: server exited: noproc
+DOWNs: 0
+gen_server.call: server exited: noproc
+gen_server.call: server exited: noproc
+DOWNs: 0
+supervisor.which_children: supervisor exited: shutdown
+supervisor.which_children: supervisor exited: noproc
+supervisor.which_children: supervisor exited: noproc
+DOWNs: 0
+dynamic_supervisor.which_children: supervisor exited: shutdown
+dynamic_supervisor.which_children: supervisor exited: noproc
+dynamic_supervisor.which_children: supervisor exited: noproc
+DOWNs: 0
+-- 2. an idle timeout cancelled by a callback does not fire
+0
+no timeout
+0
+armed timeout fired
+1
+-- 3. a supervisor's children go down with it
+inner links its children: 3 true
+
+[Runtime Error in process 6]: supervisor: max restart intensity reached
+  --> std/supervisor.gem:307
+     |
+ 307 |     error(res.error)
+     |
+Stack trace:
+  at supervisor.sup_main (std/supervisor.gem:307)
+  at anonymous fn (std/supervisor.gem:395)
+inner restarted: true
+old db dead: true
+new db: true 0
+outer, inner, children dead: true true true true nil
+one_for_all restarted inner: true true true
+
+[Runtime Error in process 22]: dynamic_supervisor: max restart intensity reached
+  --> std/dynamic_supervisor.gem:311
+     |
+ 311 |     error(res.error)
+     |
+Stack trace:
+  at dynamic_supervisor.dsup_main (std/dynamic_supervisor.gem:311)
+  at anonymous fn (std/dynamic_supervisor.gem:379)
+dsup and its children dead: true true
+ignores a normal exit signal: true
+dsup killed, child dead: true true
+true {}
+trapper gone, dsup alive: true true {}
+supervisor waited for its trapping child: true true
+-- 4. one_for_all restarts only what would be restarted
+q exited normally: -1
+started again: {} t: -1 q: -1 c restarted: true
+-- 5. a transient child killed with shutdown stays down
+-1
+oops restarted: true
+-- 6. handle_call returning both reply and noreply
+
+[Runtime Error in process 41]: gen_server: handle_call returned a table with keys ["reply", "noreply"], expected {reply: value, state: state} or {noreply: state}, not both
+  --> std/gen_server.gem:50
+    |
+ 50 |   error("gen_server: {callback} returned {describe(result)}, expected {expected}")
+    |
+Stack trace:
+  at gen_server.bad_result (std/gen_server.gem:50)
+  at gen_server.check_call_result (std/gen_server.gem:71)
+  at gen_server.loop (std/gen_server.gem:88)
+  at gen_server.serve (std/gen_server.gem:192)
+  at anonymous fn (std/gen_server.gem:150)
+gen_server.call: server exited: gen_server: handle_call returned a table with keys ["reply", "noreply"], expected {reply: value, state: state} or {noreply: state}, not both
+-- 7. init returning a table with a state field
+{state: "idle", count: 0}
+-- 8. cast to a dead server
+nil
+gen_server.cast: no process registered as "srv184"
+-- 9. process_info lists live monitors only
+{}
+1 true
+-- 10. timeouts
+0
+gen_server.call: timeout
+gen_server.call: timeout must be an int (milliseconds) or nil, got string
+gen_server.call: timeout must be an int (milliseconds) or nil, got float
+1
+supervisor.which_children: timeout must be an int (milliseconds) or nil, got bool
+true
+true
+dynamic_supervisor.start_child: timeout must be an int (milliseconds) or nil, got string
+dynamic_supervisor.which_children: timeout must be an int (milliseconds) or nil, got table
+gen_server.call: server exited: stopped
+dynamic_supervisor.start: expected a child template {start, restart, shutdown}, got nil
+dynamic_supervisor.start: the child template's start must be a fn, got nil
+dynamic_supervisor.start: unknown restart "sometimes"
+supervisor.start: unknown restart "always" for child "x"
+-- chunked request bodies
+HTTP/1.1 200 OK | Content-Length: 9 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | 7:abcdefg
+HTTP/1.1 200 OK | Content-Length: 26 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | 23:GET /hello HTTP/1.1 |  | 
+HTTP/1.1 400 Bad Request | Content-Length: 11 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | Bad Request
+HTTP/1.1 501 Not Implemented | Content-Length: 15 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | Not Implemented
+HTTP/1.1 400 Bad Request | Content-Length: 11 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | Bad Request
+HTTP/1.1 400 Bad Request | Content-Length: 11 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | Bad Request
+HTTP/1.1 400 Bad Request | Content-Length: 11 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | Bad Request
+HTTP/1.1 400 Bad Request | Content-Length: 11 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | Bad Request
+HTTP/1.1 400 Bad Request | Content-Length: 11 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | Bad Request
+-- invalid responses get a 500
+http: GET /inject: invalid response: header Location has a CR or LF in its value
+HTTP/1.1 500 Internal Server Error | Content-Length: 21 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | Internal Server Error
+http: GET /cookie_inject: http.set_cookie: invalid cookie value "1
+X-Evil: 1" (no ;, comma, whitespace or control bytes)
+Stack trace:
+  at anonymous fn (examples/185_http_hardening.gem:19)
+HTTP/1.1 500 Internal Server Error | Content-Length: 21 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | Internal Server Error
+http: GET /status/1000: invalid response: status 1000 is not from 200 to 999 (1xx responses are not supported)
+HTTP/1.1 500 Internal Server Error | Content-Length: 21 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | Internal Server Error
+http: GET /status/99: invalid response: status 99 is not from 200 to 999 (1xx responses are not supported)
+HTTP/1.1 500 Internal Server Error | Content-Length: 21 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | Internal Server Error
+http: GET /status_str: invalid response: status must be an int, got string 200
+HTTP/1.1 500 Internal Server Error | Content-Length: 21 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | Internal Server Error
+HTTP/1.1 999 Unknown | Content-Length: 1 | Connection: close |  | s
+-- framing headers belong to the server
+HTTP/1.1 200 OK | Content-Length: 5 | Connection: close |  | hello
+HTTP/1.1 200 OK | Content-Length: 3 | Connection: close |  | bye
+HTTP/1.1 200 OK | Content-Length: 3 | Connection: close | Set-Cookie: a=1; Path=/; HttpOnly; SameSite=Lax | Set-Cookie: b=2; Path=/; SameSite=Lax |  | two
+-- HEAD
+HTTP/1.1 200 OK | Content-Length: 5 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | 
+HTTP/1.1 404 Not Found | Content-Length: 9 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | 
+-- static directory
+HTTP/1.1 404 Not Found | Content-Length: 9 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | Not Found
+-- Connection handling
+HTTP/1.1 200 OK | Content-Length: 5 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | hello
+HTTP/1.1 200 OK | Content-Length: 5 | Connection: keep-alive | Content-Type: text/plain; charset=utf-8 |  | helloHTTP/1.1 200 OK | Content-Length: 5 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | hello
+HTTP/1.1 200 OK | Content-Length: 5 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | hello
+HTTP/1.1 200 OK | Content-Length: 5 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | hello
+-- Expect: 100-continue
+HTTP/1.1 100 Continue |  | HTTP/1.1 200 OK | Content-Length: 4 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | 2:hi
+-- limits
+HTTP/1.1 200 OK | Content-Length: 13 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | 10:0123456789
+HTTP/1.1 413 Content Too Large | Content-Length: 17 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | Content Too Large
+HTTP/1.1 413 Content Too Large | Content-Length: 17 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | Content Too Large
+HTTP/1.1 431 Request Header Fields Too Large | Content-Length: 31 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | Request Header Fields Too Large
+slow head: [] closed in time: true
+HTTP/1.1 200 OK | Content-Length: 5 | Connection: keep-alive | Content-Type: text/plain; charset=utf-8 |  | hello
+idle close in time: true
+-- a killed connection process
+[] closed at once: true
+-- http.stop
+HTTP/1.1 200 OK | Content-Length: 5 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | hello
+stop: nil
+idle connection after stop: ""
+stop again: nil
+connect after stop: false
+HTTP/1.1 200 OK | Content-Length: 5 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | hello
+stop by name: nil
+http.stop: no process registered as "web"
+http.stop: expected a server pid, {pid} handle or registered name, got nil
+killed: shutdown
+rebind after kill: true
+rings ok
+dag ok
+..]: at [49999].s, expected "x", got "y"
+wide ok
+test.assert_eq: expected {next: {next: {next: {next: {v: 1}}}}}, got {next: {next: {next: {v: 0}}}}: actual is missing key .next.next.next.next
+deep ok
+test.assert_eq: expected {a: {x: 1, y: [3]}, b: 3}, got {a: {x: 1, y: [2]}, b: 2}: at .a.y[0], expected 3, got 2
+test.assert_eq: expected {a: [1, 3], b: 6}, got {a: [1, 2], b: 5}: at .a[1], expected 3, got 2
+test.assert_eq: expected {a: {x: 1, y: 2}, b: 2}, got {a: {x: 1}, b: 1}: actual is missing key .a.y
+test.assert_eq: expected {a: {x: 1}}, got {a: {x: 1, z: 3}}: actual has extra key .a.z
+test.assert_eq: expected {a: [{p: 1}], b: {q: 2, r: 3}}, got {a: [{p: 1}], b: {q: 2}}: actual is missing key .b.r
+test.assert_eq: expected {a: {k: 1}, b: {k: 2}}, got {a: {k: 1}, b: {k: 1}}: at .b.k, expected 2, got 1
+ERR json.parse: number out of range at byte 0
+1e309: ERR json.parse: number out of range at byte 0
+-1e309: ERR json.parse: number out of range at byte 0
+[1e999]: ERR json.parse: number out of range at byte 1
+[1, 0.1e310]: ERR json.parse: number out of range at byte 4
+1.8e308: ERR json.parse: number out of range at byte 0
+1e99999999999999999999: ERR json.parse: number out of range at byte 0
+1.7976931348623157e308: ok float 1.7976931348623157e+308
+1e-400: ok float 0.0
+-1e-400: ok float -0.0
+0.0000001e-317: ok float 0.0
+4.9e-324: ok float 5e-324
+1e-320: ok float 1e-320
+100000000000000000000e-330: ok float 1e-310
+1e-99999999999999999999: ok float 0.0
+0e99999: ok float 0.0
+123456789012345678901234567890: ok float 1.2345678901234568e+29
+"\ude00": ERR json.parse: lone surrogate in unicode escape at byte 1
+"ab\udfff": ERR json.parse: lone surrogate in unicode escape at byte 3
+"\ud800": ERR json.parse: lone surrogate in unicode escape at byte 1
+"\ud800x": ERR json.parse: lone surrogate in unicode escape at byte 1
+"\ud800\u0041": ERR json.parse: lone surrogate in unicode escape at byte 1
+"\ud800\ud800": ERR json.parse: lone surrogate in unicode escape at byte 1
+"\ud83d\ude00": ok string 😀
+padded 1e399: json.parse: number out of range at byte 0
+padded 1e-400: 0.0
+-- kill(sup, reason) from a child
+supervisor alive: false, children alive: false false
+signal then exit: supervisor alive: false
+normal signal ignored: true true
+restarted after crash: true true
+dynamic: supervisor alive: false, children alive: false false
+-- terminate_child of a child that traps exits
+graceful: true alive after: false
+dynamic_supervisor.terminate_child: timeout
+killed after its budget: true, listed: 0
+again (unknown now): false alive after: false
+unknown: false
+children left: 0
+plain child: true alive after: false
+-- transient child gone before it is monitored
+job ran 1 time(s), pid -1
+dynamic job ran 1 time(s), children 0
+-- stop
+nil
+stopped: false false nil
+name free again: true
+nil
+stop a stopped supervisor: nil
+nil
+nil
+stopped: false false nil
+supervisor.stop: timeout must be an int (milliseconds) or nil, got string
+dynamic_supervisor.stop: no process registered as "nobody187"
+supervisor.stop: expected a pid, a {pid} handle or a registered name, got float
+-- argument checks
+supervisor.start: name must be a string, got int
+dynamic_supervisor.start: name must be a string, got int
+supervisor.start: start of child "x" must be a fn, got nil
+supervisor.start: start of child "x" must be a fn, got int
+supervisor.start: a child spec has no id
+supervisor.start: duplicate child id "x"
+supervisor.start: a child spec must be a table, got string
+supervisor.start: children must be an array of child specs, got string
+supervisor.start: max_restarts must be an int, got string
+supervisor.start: max_seconds must be an int (milliseconds), got float
+dynamic_supervisor.start: max_restarts must be an int, got float
+dynamic_supervisor.start: max_seconds must be an int (milliseconds), got string
+task.await: timeout must be an int (milliseconds) or nil, got string
+task.await: timeout must be an int (milliseconds) or nil, got float
+still awaitable: 1
+task.await_all: timeout must be an int (milliseconds) or nil, got string
+[2]
+0
+
+[Runtime Error in process 31]: gen_server: handle_call returned a timeout that is a string, expected an int (milliseconds) or nil
+  --> std/gen_server.gem:56
+    |
+ 56 |     error("gen_server: {callback} returned a timeout that is {describe(t)}, expected an int (milliseconds) or nil")
+    |
+Stack trace:
+  at gen_server.check_result_timeout (std/gen_server.gem:56)
+  at gen_server.check_call_result (std/gen_server.gem:77)
+  at gen_server.loop (std/gen_server.gem:88)
+  at gen_server.serve (std/gen_server.gem:192)
+  at anonymous fn (std/gen_server.gem:150)
+gen_server.call: server exited: gen_server: handle_call returned a timeout that is a string, expected an int (milliseconds) or nil
+gen_server: init raised at:
+  at gen_server.check_result_timeout (std/gen_server.gem:56)
+  at gen_server.check_state_result (std/gen_server.gem:64)
+  at gen_server.run_init (std/gen_server.gem:175)
+  at anonymous fn (std/gen_server.gem:180)
+gen_server.start: init failed: gen_server: init returned a timeout that is a float, expected an int (milliseconds) or nil
+-- control bytes in the request head
+ok: HTTP/1.1 200 OK
+bare LF in a header: HTTP/1.1 400 Bad Request
+bare CR in a header: HTTP/1.1 400 Bad Request
+bare LF in the request line: HTTP/1.1 400 Bad Request
+NUL in a value: HTTP/1.1 400 Bad Request
+ESC in a value: HTTP/1.1 400 Bad Request
+DEL in a value: HTTP/1.1 400 Bad Request
+control byte in the target: HTTP/1.1 400 Bad Request
+HTAB and obs-text: true
+HTTP/1.1 400 Bad Request | Content-Length: 11 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | Bad Request
+-- protocol corners
+HTTP/1.1 200 OK | Content-Length: 13 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | x path=/x a=1
+HTTP/1.1 200 OK | Content-Length: 4 | Connection: keep-alive | Content-Type: text/plain; charset=utf-8 |  | 2:abHTTP/1.1 200 OK | Content-Length: 13 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | x path=/x a=2
+HTTP/1.1 200 OK | Content-Length: 13 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | x path=/x a=3
+HTTP/1.9: HTTP/1.1 505 HTTP Version Not Supported
+HTTP/2.0: HTTP/1.1 505 HTTP Version Not Supported
+HTTP/1.x: HTTP/1.1 400 Bad Request
+FTTP/1.1: HTTP/1.1 400 Bad Request
+TE on HTTP/1.0: HTTP/1.1 400 Bad Request
+HTTP/1.1 200 OK | Content-Length: 5 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | 3:abc
+65-digit chunk size: HTTP/1.1 400 Bad Request
+16 significant hex digits: HTTP/1.1 400 Bad Request
+bare CR in a chunk extension: HTTP/1.1 400 Bad Request
+control byte in a trailer: HTTP/1.1 400 Bad Request
+HTTP/1.1 200 OK | Content-Length: 15 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | x path=/x a=abs
+HTTP/1.1 200 OK | Content-Length: 15 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | x path=/x a=nil
+absolute form without a path: HTTP/1.1 404 Not Found
+-- response checks
+http: GET /status/100: invalid response: status 100 is not from 200 to 999 (1xx responses are not supported)
+status 100: HTTP/1.1 500 Internal Server Error
+http: GET /status/101: invalid response: status 101 is not from 200 to 999 (1xx responses are not supported)
+status 101: HTTP/1.1 500 Internal Server Error
+http: GET /status/199: invalid response: status 199 is not from 200 to 999 (1xx responses are not supported)
+status 199: HTTP/1.1 500 Internal Server Error
+status 200: HTTP/1.1 200 OK
+status 999: HTTP/1.1 999 Unknown
+http: GET /name/space: invalid response: header name "X Y" is not an HTTP token
+header name space: HTTP/1.1 500 Internal Server Error
+http: GET /name/trailing: invalid response: header name "Transfer-Encoding " is not an HTTP token
+header name trailing: HTTP/1.1 500 Internal Server Error
+http: GET /name/colon: invalid response: header name "X:Y" is not an HTTP token
+header name colon: HTTP/1.1 500 Internal Server Error
+http: GET /name/empty: invalid response: header name "" is not an HTTP token
+header name empty: HTTP/1.1 500 Internal Server Error
+header name symbols: HTTP/1.1 200 OK
+-- cookies
+ok: sid=a1-b2_c.3~%20; Path=/; HttpOnly; SameSite=Lax
+http.set_cookie: invalid cookie value "x; Domain=evil.com" (no ;, comma, whitespace or control bytes)
+http.set_cookie: invalid cookie value "a,b" (no ;, comma, whitespace or control bytes)
+http.set_cookie: invalid cookie value "a	b" (no ;, comma, whitespace or control bytes)
+http.set_cookie: invalid cookie value "a
+X-Evil: 1" (no ;, comma, whitespace or control bytes)
+http.set_cookie: invalid cookie name "s id" (no ;, comma, whitespace or control bytes)
+http.set_cookie: invalid cookie name "a=b" (empty or contains =)
+http.set_cookie: invalid cookie name "" (empty or contains =)
+http.set_cookie: invalid cookie path "/; Domain=evil.com" (no ;, comma, whitespace or control bytes)
+http.set_cookie: invalid cookie same_site "Lax; Secure" (no ;, comma, whitespace or control bytes)
+http.set_cookie: max_age must be an int or nil, got string 0; Domain=x
+http.delete_cookie: invalid cookie path "/a b" (no ;, comma, whitespace or control bytes)
+ok: sid=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax
+-- std/request
+request.post: a Transfer-Encoding header is not supported (the body is sent with Content-Length)
+3:abc
+-- a handler that traps exits
+true
+kept-alive after stop: true
+HTTP/1.1 200 OK | Content-Length: 8 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | finished closed: true
+rebind: true
+-- the caller of serve is killed
+HTTP/1.1 200 OK | Content-Length: 18 | Connection: close | Content-Type: text/plain; charset=utf-8 |  | x path=/x a=served
+connect after the kill: false
+rebind: true
+route param +: [c+++]
+1 after stop: nil nil nil
+1 reports: ["inner.r:shutdown"]
+1 restart same name: int
+2 down: custom ["c:shutdown", "b:shutdown", "a:shutdown"]
+
+[Runtime Error in process 14]: boom
+  --> examples/189_otp_shutdown.gem:98
+    |
+ 98 |     error("boom")
+    |
+Stack trace:
+  at anonymous fn (examples/189_otp_shutdown.gem:98)
+
+[Runtime Error in process 15]: boom
+  --> examples/189_otp_shutdown.gem:98
+    |
+ 98 |     error("boom")
+    |
+Stack trace:
+  at anonymous fn (examples/189_otp_shutdown.gem:98)
+
+[Runtime Error in process 12]: supervisor: max restart intensity reached
+  --> std/supervisor.gem:307
+     |
+ 307 |     error(res.error)
+     |
+Stack trace:
+  at supervisor.sup_main (std/supervisor.gem:307)
+  at anonymous fn (std/supervisor.gem:395)
+3 down: supervisor: max restart intensity reached true ["t:shutdown"]
+
+[Runtime Error in process 20]: boom
+  --> examples/189_otp_shutdown.gem:113
+     |
+ 113 |     when "crash" then error("boom")
+     |
+Stack trace:
+  at anonymous fn (examples/189_otp_shutdown.gem:113)
+4 reports: ["inner.r:shutdown"]
+4 inner restarted: true true
+4 stopped: nil ["inner.r:shutdown"]
+5 terminate: true nil ["inner.r:shutdown"]
+6 reports: ["z:shutdown", "y:shutdown", "x:shutdown"]
+supervisor: exiting on an error raised at:
+  at bad_start (examples/189_otp_shutdown.gem:148)
+  at supervisor.start_child (std/supervisor.gem:48)
+  at anonymous fn (std/supervisor.gem:291)
+7 start: supervisor.start: child "bad" failed to start: start broke nil ["a:shutdown"]
+8 gen_server.start: expected a module table {init, handle_call, handle_cast, handle_info}, got nil
+8 gen_server.start: expected a module table {init, handle_call, handle_cast, handle_info}, got string
+8 gen_server.start: the module's handle_info must be a fn, got nil
+8 supervisor.start: expected a spec table {strategy, children, ...}, got string
+8 dynamic_supervisor.start: expected an options table {child, ...}, got nil
+8 dynamic_supervisor.start: expected an options table {child, ...}, got string
+8 supervisor.start: the name "taken" is already registered
+8 dynamic_supervisor.start: the name "taken" is already registered
+9 transient noproc pid: -1
+-- heads
+200 connection=[close] host=[t] x-empty=[] x-lower=[v] x-mixed-case=[padded value] x-upper=[h]
+200 a=[1, 2, 3] connection=[close] cookie=[x=1; y=2] host=[t]
+200 29998
+repeats fast: true
+431 Request Header Fields Too Large
+400 Bad Request
+400 Bad Request
+400 Bad Request
+400 Bad Request
+400 Bad Request
+505 HTTP Version Not Supported
+400 Bad Request
+400 Bad Request
+200 /q 1
+200 /q nil
+200 user 7 post x y
+200 me
+404 Not Found
+-- bodies
+200 300000:zzzzz / 200 3:abc / 200 me
+200 10:hello
+200 1000:abcde / 200 me
+-- static
+200 index
+200 index
+200 a file
+404 Not Found
+404 Not Found
+404 Not Found
+-- cookies
+expires string: error http.set_cookie: expires must be an int (epoch ms), got string
+expires float: error http.set_cookie: expires must be an int (epoch ms), got float
+n=v; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly; SameSite=Lax
+http: GET /expires: http.set_cookie: expires must be an int (epoch ms), got string
+Stack trace:
+  at anonymous fn (examples/190_http_parsing_pipelining.gem:35)
+500 Internal Server Error
+http: GET /json_fn: json.encode: cannot encode a fn
+Stack trace:
+  at anonymous fn (examples/190_http_parsing_pipelining.gem:38)
+500 Internal Server Error
+-- start / stop
+start nil: error http.start: expected a router from http.router(), got nil
+start string: error http.start: expected a router from http.router(), got string
+start table: error http.start: expected a router from http.router(), got table
+serve nil: error http.serve: expected a router from http.router(), got nil
+serve bad opt: error http.serve: max_body must be an int >= 0, got -1
+port in use: error http.start: tcp_listen: bind failed on port PORT: Address already in use
+bad host: error http.start: tcp_listen: cannot resolve 'nowhere'
+stop timeout: error http.stop: timeout_ms must be an int (milliseconds) or nil, got string
+stop nil timeout: ok nil
+-- request
+POST /p HTTP/1.1|Host: 127.0.0.1:PORT|Connection: close|Content-Length: 0||
+PUT /p HTTP/1.1|Host: 127.0.0.1:PORT|Connection: close|Content-Length: 0||
+PATCH /p HTTP/1.1|Host: 127.0.0.1:PORT|Connection: close|Content-Length: 0||
+POST /p HTTP/1.1|Host: 127.0.0.1:PORT|Connection: close|content-length: 0||
+GET /p HTTP/1.1|Host: 127.0.0.1:PORT|Connection: close||
+DELETE /p HTTP/1.1|Host: 127.0.0.1:PORT|Connection: close||
+POST /p HTTP/1.1|Host: 127.0.0.1:PORT|Connection: close|Content-Length: 3||abc
+name with space: error request.get: invalid character (byte 32) in header name
+name with colon: error request.get: invalid header name "X-A:b" (must be an HTTP token: letters, digits and !#$%&'*+-.^_`|~)
+empty name: error request.get: invalid header name "" (must be an HTTP token: letters, digits and !#$%&'*+-.^_`|~)
+name with CRLF: error request.get: invalid character (byte 13) in header name
+int name: error request.get: invalid header name "5" (must be an HTTP token: letters, digits and !#$%&'*+-.^_`|~)
+nil value: error request.post: header X-N has a nil value
+-- 1. monitor and demonitor
+true false true false
+DOWNs after demonitor: 0
+dead: false true noproc
+request pattern leaves: 0
+demonitor: expected pid (int) argument
+-- 2. gen_server.call leaves no monitor or DOWN behind
+after 20 restarts: mailbox_len 0
+monitors after a call: 0 0
+own: true 0 1
+own monitor: bye extra: 0
+gen_server.call: server exited: died
+own monitor: died extra: 0
+gen_server.call: server exited: noproc left: 0
+-- 3. init must return {state}
+gen_server: init raised at:
+  at gen_server.bad_result (std/gen_server.gem:50)
+  at gen_server.check_state_result (std/gen_server.gem:62)
+  at gen_server.run_init (std/gen_server.gem:175)
+  at anonymous fn (std/gen_server.gem:180)
+gen_server.start: init failed: gen_server: init returned an int, expected {state: state}
+got timeout
+-- 4. http: Host and bare LF
+Host: HTTP/1.1 200 OK
+no Host: HTTP/1.1 400 Bad Request
+two Hosts: HTTP/1.1 400 Bad Request
+HTTP/1.0 without Host: HTTP/1.1 200 OK
+bare LF head: HTTP/1.1 400 Bad Request fast: true
+bare LF, split: HTTP/1.1 400 Bad Request fast: true
+CRLF, split: HTTP/1.1 200 OK fast: true
+-- 5. request: Transfer-Encoding, trailers, Set-Cookie
+xchunked: 200 transfer-encoding=[xchunked] body=[3|abc|0||]
+gzip, chunked: 200 transfer-encoding=[gzip, Chunked] body=[abc]
+chunked, gzip: 200 transfer-encoding=[chunked, gzip] body=[3|abc|0||]
+trailers: 200 transfer-encoding=[chunked] x-a=[1] body=[abc]
+set-cookie: 200 content-length=[0] set-cookie=[a=1; Expires=Wed, 21 Oct 2026 07:28:00 GMT\nb=2] x-b=[1, 2] body=[]
+-- 6. format_time
++0000 UTC 0 %z %s
+1969-12-31T23:59:58+0000 -2
+1700000000
+format_time: output is over 256 KB
+131072 0
+-- 7. sqlite params bind by key
+[{a: "first", b: "second"}]
+[{b: 20, a: 10}]
+sqlite_query: parameter 1 is positional (?); bind it with a params array, or name it (:name)
+sqlite_query: params must be an array (keys 0..1), got key 5
+sqlite_query: statement has 1 parameter(s), got 0
+-- 8. nil means no timeout
+tcp_read 0 / negative: nil nil fast: true
+tcp_read nil: x waited: true
+tcp_read: timeout_ms must be an int (milliseconds) or nil, got string
+no limits: HTTP/1.1 200 OK
+http.stop nil: nil
+http.start: idle_timeout_ms must be an int > 0 (milliseconds) or nil, got 0
+http.start: request_timeout_ms must be an int > 0 (milliseconds) or nil, got string
+-- 9. main's slot is not reused after main ends
+main ends
+1200 processes exited after main ended
+-- kill --
+alive after shutdown and killed: true
+kill returns: true
+DOWN: killed
+kill of a dead pid: nil
+self kill: killed
+pool wait: killed true
+-- links --
+mid DOWN: killed
+trapper EXIT: killed
+trapper alive: true
+trapper DOWN: killed
+-- one_for_all --
+
+[Runtime Error in process 9]: boom
+  --> examples/192_untrappable_kill.gem:45
+    |
+ 45 |     when {tag: "crash"} then error("boom")
+    |
+Stack trace:
+  at anonymous fn (examples/192_untrappable_kill.gem:45)
+restarted both: true true
+old stubborn child gone: true
+stopped; new stubborn child gone: true
+-- shutdown budgets --
+cleaned: a shutdown
+b: killed
+took 150..1000 ms: true
+handle budget under 1000 ms: true
+supervisor handle: true nil
+-- nil budgets --
+cleaned: ["nested", "spec nil", "template nil"]
+spec nil child: normal
+nested supervisor: shutdown
+template nil child: normal
+-- transient --
+killed transient restarted: true
+-- dynamic_supervisor --
+terminate_child: true
+p1: killed
+children left: 1
+terminate again: false
+dynamic_supervisor.terminate_child: timeout
+p2 gone: true 0
+stop killed p3: true
+object handle supervised: true
+object handle stopped: true
+dynamic object handle: true 1
+dynamic object handle stopped: true
+-- checks --
+supervisor.start: shutdown of child "x" must be an int (milliseconds) or nil, got string
+dynamic_supervisor.start: the child template's shutdown must be an int (milliseconds) or nil, got float
+-- main --
+
+[Runtime Error]: main process killed by process 39: killed
+  --> examples/192_untrappable_kill.gem:274
+     |
+ 274 | receive
+     |
+Stack trace:
+  at main (examples/192_untrappable_kill.gem:274)
+-- sort --
+nested: [[1, 3], [5, 4], [8, 9]]
+concurrent: [true, true]
+stable: [0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 1, 3, 5, 7, 9, 11, 13, 15, 17, 19]
+error: type error in -: got int and string [3, 1, "x", 2]
+sort: the comparator changed the length of the table being sorted
+small: {} [1] [1, 2]
+-- keys --
+2 1 2 nil nil
+3 3 false true
+2 nil 2 3
+2 1 2
+copied: 2 2
+many keys: true
+-- division --
+-9223372036854775808 0 -7 0
+-9223372036854775808 0
+-3 -1 -3 1
+-- after --
+receive: after expects an int (milliseconds), got nil
+receive: after expects an int (milliseconds), got bool
+receive: after expects an int (milliseconds), got float
+receive: after expects an int (milliseconds), got string
+huge after: waited for the message
+huge send_after: pending
+huge sleep: sleeping
+negative after: no wait
+-- sqlite --
+{} {}
+sqlite_query: statement has 0 parameter(s), got 1
+sqlite_exec: statement 2 has parameters; use sqlite_query to bind them
+[{n: 1}]
+sqlite_query: expected one SQL statement, got several (sqlite_exec runs several, without parameters)
+[{n: 1}]
+3 true
+sqlite_exec: no such table: nope
+-- append --
+type error in +: got string and int
+x0x1x2
+-- print --
+3 ["a\0b"]
+{"a\0b": 1, ok: "x\0y"}
+8 true
+-- renumber --
+nil nil [9, 3, 1]
+nil nil [1, 2]
+1 {a: 1, 1: 7, 2: 2}
+sort: expected an array (keys 0 .. n-1), got a table with other keys
+-9223372036854775808 9223372036854775807 -2 -9223372036854775808 -9223372036854775808
+1 {v: 2} 3
+[1, 2, 3]
+3 false [1, 2, 3, 4]
+false right [false, nil, "right"]
+arg
+v
+{key: "val"} ["callee", "arg", "k", "key", "val"]
+1-2-3 [1, 2, 3]
+3 0
+0 a    b!
+mine
+v:[1]
+S
+nil nil nil 9
+[1, 5, 7, 6] 5
+done own body
+a
+b c
+d
+
+[Runtime Error]: reported at line 106
+  --> examples/194_compiler_corner_cases.gem:98
+    |
+ 98 | error("reported at line 106")
+    |
+Stack trace:
+  at main (examples/194_compiler_corner_cases.gem:98)
+1: partial: true, took about 200 ms: true
+1: zero and negative don't wait: true true true
+1: tcp_write: timeout_ms must be an int (milliseconds) or nil, got string
+2: wrote 3 and 3
+2: peer got abcdef
+http: closing a connection: the client took no bytes of a 33554542-byte response for 200 ms
+3: closed early: true, got only part: true
+3: http.start: write_timeout_ms must be an int > 0 (milliseconds) or nil, got 0
+4: request.post: timed out after 300 ms waiting for http://127.0.0.1:PORT/up
+4: within the deadline: true
+5: wrote all: true
+5: peer got all: true
+sid=v; HttpOnly
+sid=; Max-Age=0; HttpOnly; SameSite=Lax
+7: read after a matched receive: data
+7: read after a timed-out receive: late
+8: slow reader got the whole body: true, took longer than the timeout: true
+http.start: port must be an int from 0 to 65535, got nil
+http.start: host must be a string (an IP address), got nil
+request.get: headers must be a table, got nil
+request.get: body must be a string, got nil
+[{id: 1}]
+[{text: "there"}]
+[{text: "none"}]
+3
+[{text: "there"}]
+sqlite.query: parameter 2 is positional (?); bind it with a params array, or name it (:name)
+sqlite.query: parameter 1 is positional (?); bind it with a params array, or name it (:name)
+sqlite.query: params key "b" matches no parameter of the statement
+sqlite.query: no value for parameter :b (params has no key "b")
+sqlite.query: parameter :a is a table; expected nil, bool, int, float or string
+sqlite.query: params must be an array or a record of names, not both
+sqlite.query: params must be an array, got a float key
+sqlite.query: params key "a" matches no parameter of the statement
+["accept", false, "tcp_accept: socket is closed"]
+fd reused: true same socket: false
+["accept on reused fd", false, "tcp_accept: socket is closed"]
+new listener still accepts: socket
+["read", false, "tcp_read: socket is closed"]
+["read with timeout", false, "tcp_read: socket is closed"]
+["write", false, "tcp_write: socket is closed"]
+["accept, closed from C", false, "tcp_accept: accept failed: Bad file descriptor"]
+done
+preabc
+
+16
+false type error in +: got buffer and string pre
+buffer pre
+false type error in +: got string and int
+[000102][101112][202122]
+rows: 0 1 2 3 4 5
+["string", "string"] ab
+{1: "b"} 1
+{2: "z", 1: "y"} 2 z true false
+{0: 10, 1: 20, 2: 30, 5: 70, 3: 40} 5 nil false true
+{2: 3, 1: 2, 3: "y"}
+["zero", "one"] one
+sort: expected an array (keys 0 .. n-1), got a table with other keys
+[1, 2, 3, 9]
+[1, 5]
+200000 200000 199999 nil false true
+3 0 true false
+1 2 2
+4 row int 0
+xyyy x
+hello b true table
+2 1 1 1 1 1
+nil true false true
+1 call by name: 1
+2 second saw first: true
+3 nested child: 1
+3 nested child gone: nil
+4 children: 0
+supervisor: exiting on an error raised at:
+  at boom (examples/201_supervisor_start_waits.gem:29)
+  at supervisor.start_child (std/supervisor.gem:48)
+  at anonymous fn (std/supervisor.gem:291)
+5 supervisor.start: child "bad" failed to start: boom
+5 name free: nil
+5 restarted under the same name: true
+supervisor: exiting on an error raised at:
+  at supervisor.target_pid (std/supervisor.gem:24)
+  at supervisor.start_child (std/supervisor.gem:49)
+  at anonymous fn (std/supervisor.gem:291)
+6 supervisor.start: child "ghost" failed to start: supervisor: start of child "ghost": no process registered as "nobody201"
+supervisor: exiting on an error raised at:
+  at boom (examples/201_supervisor_start_waits.gem:29)
+  at supervisor.start_child (std/supervisor.gem:48)
+  at anonymous fn (std/supervisor.gem:291)
+supervisor: exiting on an error raised at:
+  at supervisor.start (std/supervisor.gem:419)
+  at anonymous fn (examples/201_supervisor_start_waits.gem:98)
+  at supervisor.start_child (std/supervisor.gem:48)
+  at anonymous fn (std/supervisor.gem:291)
+7 supervisor.start: child "inner" failed to start: supervisor.start: child "bad" failed to start: boom
+8 supervisor.start: supervisor exited: killed
+9 leftovers: {}
+1 registered by init: true
+gen_server: init raised at:
+  at anonymous fn (examples/202_gen_server_start_waits_init.gem:65)
+  at gen_server.run_init (std/gen_server.gem:174)
+  at anonymous fn (std/gen_server.gem:180)
+2 gen_server.start: init failed: two init 1 failed
+3 gen_server.start: server exited: gone
+4 after setup: ready
+gen_server: init raised at:
+  at anonymous fn (examples/202_gen_server_start_waits_init.gem:65)
+  at gen_server.run_init (std/gen_server.gem:174)
+  at anonymous fn (std/gen_server.gem:180)
+supervisor: restart of child "five" failed: gen_server.start: init failed: five init 2 failed
+  at gen_server.start (std/gen_server.gem:166)
+  at start_flaky (examples/202_gen_server_start_waits_init.gem:76)
+  at anonymous fn (examples/202_gen_server_start_waits_init.gem:153)
+  at supervisor.start_child (std/supervisor.gem:48)
+  at anonymous fn (std/supervisor.gem:187)
+5 pending: -1
+5 running again: true init 3
+5 inits: ["five1", "five2", "five3"]
+gen_server: init raised at:
+  at anonymous fn (examples/202_gen_server_start_waits_init.gem:65)
+  at gen_server.run_init (std/gen_server.gem:174)
+  at anonymous fn (std/gen_server.gem:180)
+supervisor: restart of child "six" failed: gen_server.start: init failed: six init 2 failed
+  at gen_server.start (std/gen_server.gem:166)
+  at start_flaky (examples/202_gen_server_start_waits_init.gem:76)
+  at anonymous fn (examples/202_gen_server_start_waits_init.gem:165)
+  at supervisor.start_child (std/supervisor.gem:48)
+  at anonymous fn (std/supervisor.gem:187)
+gen_server: init raised at:
+  at anonymous fn (examples/202_gen_server_start_waits_init.gem:65)
+  at gen_server.run_init (std/gen_server.gem:174)
+  at anonymous fn (std/gen_server.gem:180)
+supervisor: restart of child "six" failed: gen_server.start: init failed: six init 3 failed
+  at gen_server.start (std/gen_server.gem:166)
+  at start_flaky (examples/202_gen_server_start_waits_init.gem:76)
+  at anonymous fn (examples/202_gen_server_start_waits_init.gem:165)
+  at supervisor.start_child (std/supervisor.gem:48)
+  at anonymous fn (std/supervisor.gem:187)
+gen_server: init raised at:
+  at anonymous fn (examples/202_gen_server_start_waits_init.gem:65)
+  at gen_server.run_init (std/gen_server.gem:174)
+  at anonymous fn (std/gen_server.gem:180)
+supervisor: restart of child "six" failed: gen_server.start: init failed: six init 4 failed
+  at gen_server.start (std/gen_server.gem:166)
+  at start_flaky (examples/202_gen_server_start_waits_init.gem:76)
+  at anonymous fn (examples/202_gen_server_start_waits_init.gem:165)
+  at supervisor.start_child (std/supervisor.gem:48)
+  at anonymous fn (std/supervisor.gem:187)
+
+[Runtime Error in process 10]: supervisor: max restart intensity reached
+  --> std/supervisor.gem:307
+     |
+ 307 |     error(res.error)
+     |
+Stack trace:
+  at supervisor.sup_main (std/supervisor.gem:307)
+  at anonymous fn (std/supervisor.gem:395)
+6 down: supervisor: max restart intensity reached
+6 inits: ["six1", "six2", "six3", "six4"]
+gen_server: init raised at:
+  at anonymous fn (examples/202_gen_server_start_waits_init.gem:65)
+  at gen_server.run_init (std/gen_server.gem:174)
+  at anonymous fn (std/gen_server.gem:180)
+supervisor: restart of child "b" failed: gen_server.start: init failed: b init 2 failed
+  at gen_server.start (std/gen_server.gem:166)
+  at start_flaky (examples/202_gen_server_start_waits_init.gem:76)
+  at anonymous fn (examples/202_gen_server_start_waits_init.gem:173)
+  at supervisor.start_child (std/supervisor.gem:48)
+  at anonymous fn (std/supervisor.gem:187)
+7 children: ["a:true", "b:true", "c:true"] inits: ["a2", "b2", "b3", "c2"]
+gen_server: init raised at:
+  at anonymous fn (examples/202_gen_server_start_waits_init.gem:65)
+  at gen_server.run_init (std/gen_server.gem:174)
+  at anonymous fn (std/gen_server.gem:180)
+8 dynamic_supervisor.start_child: gen_server.start: init failed: eight_bad init 1 failed
+gen_server: init raised at:
+  at anonymous fn (examples/202_gen_server_start_waits_init.gem:65)
+  at gen_server.run_init (std/gen_server.gem:174)
+  at anonymous fn (std/gen_server.gem:180)
+dynamic_supervisor: restart of a child failed: gen_server.start: init failed: eight init 2 failed
+  at gen_server.start (std/gen_server.gem:166)
+  at start_flaky (examples/202_gen_server_start_waits_init.gem:76)
+  at anonymous fn (examples/202_gen_server_start_waits_init.gem:187)
+  at dynamic_supervisor.start_from_template (std/dynamic_supervisor.gem:64)
+  at anonymous fn (std/dynamic_supervisor.gem:224)
+8 pending: 0
+8 children: 1 restarted: true init 3
+8 inits: ["eight_bad1", "eight1", "eight2", "eight3"]
+gen_server: init raised at:
+  at anonymous fn (examples/202_gen_server_start_waits_init.gem:202)
+  at gen_server.run_init (std/gen_server.gem:174)
+  at anonymous fn (std/gen_server.gem:180)
+9 gen_server.start: init failed: trapped then failed
+10 still there: true
+10 down: boom child gone: nil
+11 gen_server.reply: expected the {pid, ref} from that handle_call got, got nil
+12 leftovers: {}
+alive 5001
+sum 24995000 true
+poked 1000 timed out 1000
+ring done
+culled 1000 normal 4000
+alive 1
+records 30000 4286 2999 85471498 id2995
+grow 20000 20000
+buffers 128890 <0><1><2><3> <19999>
+boxes v19999 20000 v0 v19999
+nested 16000 0:0 39:399
+registry 500 19500 19999 nnnn
+messages 20000 199990000 item-19999
+tco 1000 19000 19999
+churn 50000 g49999-49
+spawner 10 10000
+backlog 49 0 50
+index_churn 0 true 1483
+pcalls 30 0
+levels true d30-199
+bigs 27 8100762
+count 2584 node 18 node 17
+build 16000 item 1.0 item 800.19 item 401.0
+stores 601 13 name 600 name 0 note 0
+mailbox 7 msg 0
+buffer 2395 <500><499> last 0
+same true
+wrap true 404 400
+closure counter 42
+pcall false bottom
+after error 377
+sorted 1 5 9
+mutual true 301
+walk 6300
+mutual tco 600 ping
+spawned 987 node 16
+solo 987
+closure recursion 987 leaf 3193
+value recursion 987
+tree body 987
+grown 12 k0=0 k1=1 k2=2 k3=3 k4=4 k5=5 k6=6 k7=7 k8=8 k9=9 k10=10 k11=11
+shrunk 2 k11=11 k10=10
+lookups 10 11 nil false true false
+re-added 3 k11=11 k10=10 k3=back
+small get 0 40 nil nil
+small has_key true true false false
+small in true true false false
+small delete 0 nil nil 4
+small after delete 40 true 10
+small pop 30 3 true
+small set again 4
+small keys 4 4
+edge get 0 70 nil nil
+edge has_key true true false false
+edge in true true false false
+edge delete 0 nil nil 7
+edge after delete 70 true 10
+edge pop 60 6 true
+edge set again 7
+edge keys 7 7
+over get 0 80 nil nil
+over has_key true true false false
+over in true true false false
+over delete 0 nil nil 8
+over after delete 80 true 10
+over pop 70 7 true
+over set again 8
+over keys 8 8
+large get 0 390 nil nil
+large has_key true true false false
+large in true true false false
+large delete 0 nil nil 39
+large after delete 390 true 10
+large pop 380 38 true
+large set again 39
+large keys 39 39
+mixed 11 m 81 true true
+mixed extra 1 m m nil 1
+array+tag 4 t 3 true true
+int-keyed in false true
+emptied in true false
+tricky 1 2 3 4 5 6 nil nil
+tricky big 12 1 2 3 4 5 6 nil nil
+cache r0 r11 r29 174
+cache shifting 3,3,3 3 2
+sorted record sort: expected an array (keys 0 .. n-1), got a table with other keys 3 1
+sorted big sort: expected an array (keys 0 .. n-1), got a table with other keys 12 12
+insert 4 15 30 true
+remove_at 3 15 false
+echo 1 11 nil yes yes 3 21 19 true 2
+spawned sees 1 9 10
+4 3
+false len: expected string, table, or buffer, got int
+  at size 5
+  at outer 10
+  at anonymous fn 21
+101
+false index 9 past 3
+  at checked 25
+  at anonymous fn 30
+ord: index out of bounds
+ord: index out of bounds
+ord: index must be an integer
+ord: expected string|buffer argument, got int
+ord: empty string
+len: expected string, table, or buffer, got nil
+len: expected string, table, or buffer, got float
+3 99 97 65 66
+buffer int nil string table fn
+6 0 a=1; 0=h;1=i; 
+false for: expected a table or string to iterate, got int
+  at sum 45
+  at anonymous fn 58
+called x mine q
+false len: expected string, table, or buffer, got nil
+  at spin 78
+  at anonymous fn 85
+false len: expected string, table, or buffer, got nil
+  at spin 78
+  at anonymous fn 83
+false from a default
+  at fail_default 91
+  at with_default 93
+  at anonymous fn 99
+false from a default
+  at fail_default 91
+  at arith_default 96
+  at anonymous fn 100
+3 3
+
+[Runtime Error]: len: expected string, table, or buffer, got nil
+  --> examples/207_leaf_builtins.gem:5
+   |
+ 5 |   let n = len(x)
+   |
+Stack trace:
+  at size (examples/207_leaf_builtins.gem:5)
+  at outer (examples/207_leaf_builtins.gem:10)
+  at main (examples/207_leaf_builtins.gem:104)
+== pow
+4052555153018976267 1 -9223372036854775808 0 -9223372036854775808
+0.5 8.0 -9223372036854775808
+== float to int
+to_int: 1e+300 is out of the int range
+floor: nan is out of the int range
+ceil: -inf is out of the int range
+round: 1e+300 is out of the int range
+-2 2 -3 0
+== table keys
+table key is NaN
+table key is nil
+1 float key
+== substr and chr
+bc b
+chr: expected 0..255, got 256
+chr: expected 0..255, got -1
+255 0
+== sort
+sort: comparator must be a fn, got int
+sort: expected an array (keys 0 .. n-1), got a table with other keys
+[1, 3] {}
+["a", "b", "c"]
+== in
+in: right operand must be a table, got string
+== field names in errors
+field access on non-table: got int (reading .b)
+attempt to call nil value (field missing)
+== tcp
+tcp_listen: port must be from 0 to 65535, got 70000
+tcp_connect: port must be from 0 to 65535, got -1
+child sees its stdin: true
+child sees the socket: false
+== files and sqlite
+read_file: cannot open '/no/such/file': No such file or directory
+list_dir: cannot open directory '/no/such/dir': No such file or directory
+write_file: cannot open '/no/such/dir/x' for writing: No such file or directory
+sqlite_exec: the SQL contains a NUL byte
+sqlite_query: the SQL contains a NUL byte
+[{n: 0}]
+== errors name the function
+http.html_escape: s must be a string, got int
+http.parse_form: body must be a string, got nil
+time.date: ms must be an int, got nil
+time.format: fmt must be a string, got nil
+sqlite.last_id: expected a database handle, got int
+request.post: opts must be a table, got string
+math.min: expected numbers or strings, got table and nil
+math.clamp: expected numbers or strings, got string and int
+http.start: opts must be a table, got nil
+http.start: port must be an int from 0 to 65535, got 70000
+test.assert_throws: body must be a fn, got int
+sqlite.query: UNIQUE constraint failed: t.name
+== arrays
+a,b
+string.join: arr must be an array, got a table with keys other than 0 .. n-1
+table.sort: arr must be an array, got a table with keys other than 0 .. n-1
+["a", "b"]
+== json
+json.encode: cannot encode inf: JSON has no infinite or NaN numbers
+json.encode: cannot encode nan: JSON has no infinite or NaN numbers
+[1.5,-0.0]
+== responses
+http.set_cookie: cookie value must be a string or a number, got nil
+http: GET /nil: invalid response: header X-Nil must be a string, number, bool or array of them, got nil
+http: GET /table: invalid response: header X-T must be a string, number, bool or array of them, got a table with keys other than 0 .. n-1
+500 500
+a, 2
+200 spaced
+404
+== an early answer
+413
+false len: expected string, table, or buffer, got int
+  at needs_len 15
+  at anonymous fn 18
+false no label for 1
+  at label 22
+  at countdown 26
+  at anonymous fn 32
+done
+true
+4 255 1
+1
+900
+100000
+total 0
+joined 
+counted 0
+a! 2 2 a!
+ outer 0 0
+-- for with one variable needs an array or a string
+for: one loop variable needs an array or a string, got a table with the key "a"; use two (`for k, v in ...`) for its entries, or iterate `values(...)`
+for: one loop variable needs an array or a string, got a table with the key 5; use two (`for k, v in ...`) for its entries, or iterate `values(...)`
+for: one loop variable needs an array or a string, got a table with the key "name"; use two (`for k, v in ...`) for its entries, or iterate `values(...)`
+a
+b
+c
+-- sort comparators return numbers
+sort: the comparator must return a number (negative, zero or positive), got bool
+sort: the comparator must return a number (negative, zero or positive), got nil
+[1, 2, 3]
+-- error with a non-string value
+{code: 1}
+42
+error
+-- tcp_listen resolves host names
+socket
+-- json: {} stays an object
+{} [] {} {"a":{},"b":[]}
+{} []
+-- int, float and ref keys are indexed
+10000 0 zero 10 ref false
+-- a captured let assigned inside an if in a loop, after another loop
+[true, false]
+-- let
+big small
+A B nil
+point 1,2 pair 3 4 zero other
+-- no branch taken (else nil), or a branch ending in a statement: nil
+nil nil 6
+-- the block reads the outer variable it shadows
+1 5
+-- module-level let
+few
+-- assignments
+105 five [1, 2]
+-- destructuring let
+1 2 10 20
+-- return: a call at a branch's end is a tail call
+1000000
+2000000
+nil 1
+-- nested blocks
+nested
+-- receive
+14 -1
+-- in a loop, each iteration gets its own value
+["even", "odd", "even", "odd"]
+-- return, break and continue in a branch
+early late
+[0, 1, 3]
+-- closures as branch values
+12
+-- brace block body
+small 1
+big 2
+-- an error in a branch reports its own line
+165
+174
+5
+mine 1
+2 mine
+7
+1 mine mine
+2 mine mine
+mine 2
+mine my len
+mine ["a", "b"]
+false _anon_1
+1 2 1
+== positions ==
+yes
+11
+-2 false
+[0, 1, 2]
+1 three
+n is odd
+20
+7
+m
+42
+2
+inner false
+padded
+3
+== evaluation order ==
+a b c
+args a,b,c
+6
+binop 1,2,3
+index assign k,v
+v
+old 1
+new 1
+2 10
+1 1
+1 1
+old 1
+old 1
+6
+compound rhs
+== and / or ==
+false
+needed
+or needed
+1
+short-circuit needed,or needed
+== conditions and loops ==
+if cond
+elif not reached 
+[1, 3, 4, 5]
+for range 1,2,3
+for in p,q
+match target
+== branches that leave ==
+early
+late
+end
+[0, 1, 3]
+== tail calls ==
+500000
+== receive ==
+got 42
+2
+== fn literal in a default ==
+truthy falsy
+== errors ==
+false attempt to call nil value (field nope)
+false type error in +: got nil and int
+listening socket: nil
+client sees: 127.0.0.1 true
+server sees: 127.0.0.1 int true
+["in session", "127.0.0.1", true]
+read after peer close: true
+after clean close: 127.0.0.1
+after writing to it: nil
+read after reset: true
+after reset: nil
+tcp_peer: socket is closed
+tcp_peer: expected a socket, got string
+tcp_peer: expected a socket, got nil
+== values
+socket sqlite
+true true true
+true false true true
+a copy is equal: true
+client server false
+type error in <: got socket and socket
+json.encode: cannot encode a socket
+to_int: cannot convert socket to int
+type error in +: got socket and int
+copied to a process and back: true true
+== wrong values
+tcp_read: expected a socket, got int
+tcp_write: expected a socket, got string
+tcp_accept: expected a socket, got nil
+tcp_close: expected a socket, got int
+tcp_peer: expected a socket, got nil
+tcp_fd: expected a socket, got int
+tcp_read: expected a socket, got sqlite
+sqlite_query: expected a database handle, got socket
+sqlite_close: expected a database handle, got int
+claim: expected a socket or a database handle, got int
+claim: expected a socket or a database handle, got nil
+== tcp_fd
+int true true
+== closed
+ping
+nil nil
+tcp_read: socket is closed
+tcp_write: socket is closed
+tcp_accept: socket is closed
+tcp_peer: socket is closed
+tcp_fd: socket is closed
+claim: socket is closed
+peer sees the close: true
+nil nil
+sqlite_query: not an open database handle
+claim: database is closed
+== tcp_from_fd
+socket true true
+true
+true
+true
+true
+tcp_from_fd: fd -1 is not open
+tcp_from_fd: expected an int fd, got string
+== unclaimed: closed when the opener dies abnormally
+
+[Runtime Error in process 1]: session crashed
+  --> examples/218_resource_ownership.gem:49
+    |
+ 49 | let p = pair(fn(c) error("session crashed") end)
+    |
+Stack trace:
+  at anonymous fn (examples/218_resource_ownership.gem:49)
+  at anonymous fn (examples/218_resource_ownership.gem:16)
+crash: true
+kill shutdown: true
+kill kill: true
+
+[Runtime Error in process 5]: linked crash
+  --> examples/218_resource_ownership.gem:59
+    |
+ 59 |   spawn_link(fn() error("linked crash") end)
+    |
+Stack trace:
+  at anonymous fn (examples/218_resource_ownership.gem:59)
+link exit: true
+== unclaimed: open when the opener returns
+still usable: 2 hi
+== claimed: closed on any exit
+normal return: true
+
+[Runtime Error in process 8]: claimed crash
+  --> examples/218_resource_ownership.gem:77
+    |
+ 77 |   error("claimed crash")
+    |
+Stack trace:
+  at anonymous fn (examples/218_resource_ownership.gem:77)
+  at anonymous fn (examples/218_resource_ownership.gem:16)
+crash: true
+kill: true
+orderly shutdown: true
+== claim moves a socket main opened
+session owns: 1 main owns one less: true
+closed with the session: true
+== helpers that only use a socket leave it open
+
+[Runtime Error in process 12]: helper crashed
+  --> examples/218_resource_ownership.gem:117
+     |
+ 117 |   error("helper crashed")
+     |
+Stack trace:
+  at anonymous fn (examples/218_resource_ownership.gem:117)
+after a crash, a kill and a return: from helper!
+== a task that opens a socket hands over a live one
+alive
+== any process may close; waiters raise
+waiter: tcp_read: socket is closed
+watchdog closed it: true
+== a closed socket's owner count drops
+true
+true
+["s2 took s1's fd number", true, "but is another socket", true]
+["reader of s1 got", false, nil, "tcp_read: socket is closed"]
+new socket on the same number: true
+still open
+file on the same number: true
+file still open: true
+done
+
+[Runtime Error in process 1]: opener crashed
+  --> examples/220_sqlite_ownership.gem:34
+    |
+ 34 | print("crash:", check(opened_by(fn(db) error("opener crashed") end)))
+    |
+Stack trace:
+  at anonymous fn (examples/220_sqlite_ownership.gem:34)
+  at anonymous fn (examples/220_sqlite_ownership.gem:20)
+crash: sqlite_query: not an open database handle
+normal return: open
+claimed, normal return: sqlite_query: not an open database handle
+killed: sqlite_query: not an open database handle
+claimed by the borrower: sqlite_query: not an open database handle
+only used by it: open
+1
+open while the call runs: true
+closed once it returns: true true
+unaffected
+claimed while parked: kept
+== extern fn
+5 hello
+gem_example_sock_write: arg 0 expected Socket, got int
+gem_example_sock_write: arg 0 expected Socket, got nil
+gem_example_sock_write: arg 0 expected Socket, got sqlite
+gem_example_sock_write: arg 0: socket is closed
+== closed while a blocking call uses it
+closed for Gem code: tcp_read: socket is closed
+the call still writes: late
+call returned 4
+then the fd closes: true
+== the caller is killed and the owner closes it
+the call still writes: after the kill
+then the fd closes: true
+== a socket the call uses, owned by its killed caller
+still open while parked: 1 x
+the call still writes: own
+then the fd closes: true
+== killed with "kill"
+HTTP/1.1 200 OK
+port free: true
+== the caller killed while the server starts
+server still serves: HTTP/1.1 200 OK
+== stop while a handler is in a blocking call
+closed at once: true true
+["full_resets", "max_procs", "memory", "proc_hwm", "procs", "reset_copied", "reset_freed", "reset_max_ms", "reset_ms", "resets", "resets_over_100ms", "resets_over_10ms", "resets_over_1ms", "resources_open", "resources_ownerless", "return_resets", "spawn_refused"]
+types: int float int
+loop reset: true freed: true
+timed: true true
+slow ones counted by duration: true true true
+full and return resets are among all of them: true true
+slow resets: true true
+holder holds over 1 MB: true
+total covers it: true
+procs: 2 hwm at least that: true of true
+after it died: 1 true
+resources: 3 ownerless: 1
+closed: true
+refused spawns: 0
+claimer: normal, rows 1
+killed openers: rows 21, failed reads 0
+== tcp_local_port ==
+bound a free port: int true
+client's local port is the server's peer port: true
+accepted socket has the listening port: true
+tcp_local_port: socket is closed
+tcp_local_port: expected a socket, got int
+tcp_local_port: expected a socket, got nil
+== http.start on port 0 ==
+handle keys: int int true
+201 application/json; charset=utf-8 {"id":7}
+200 [1,2]
+two servers, two ports: true
+false
+false
+== gen_server.stop ==
+stop: nil
+handled before the stop: 2
+normal
+gen_server.call: server exited: noproc
+again: nil nil
+linked process: shutdown
+trapper: done
+own monitor: normal
+nil
+gen_server.stop: no process registered as "counter226"
+gen_server.stop: the server did not stop within 50 ms
+later: normal
+gen_server.stop: reason must be a string, got int
+gen_server.stop: timeout must be an int (milliseconds) or nil, got string
+gen_server.stop: expected a {pid} handle, a pid or a registered name, got table
+still up: 0
+leftover messages: none
+== req.peer
+127.0.0.1 int
+  open 127.0.0.1
+  request 127.0.0.1 200 GET /peer out=112 ms_ok=true host=t
+  close 127.0.0.1 done requests=1 in=50 ms_ok=true
+== a response that closes
+HTTP/1.1 200 OK
+  open 127.0.0.1
+  request 127.0.0.1 200 GET /hello out=103 ms_ok=true host=t
+  close 127.0.0.1 done requests=1 in=51 ms_ok=true
+== keep-alive, then the client closes
+  open 127.0.0.1
+  request 127.0.0.1 200 GET /hello out=108 ms_ok=true host=t
+  request 127.0.0.1 404 GET /nope out=119 ms_ok=true host=t
+  close 127.0.0.1 closed requests=2 in=63 ms_ok=true
+== handler error
+http: GET /fail: handler broke
+Stack trace:
+  at anonymous fn (examples/227_http_events.gem:15)
+HTTP/1.1 500 Internal Server Error
+  open 127.0.0.1
+  request 127.0.0.1 500 GET /fail out=139 ms_ok=true host=t error=handler broke
+  close 127.0.0.1 done requests=1 in=50 ms_ok=true
+== malformed request line
+HTTP/1.1 400 Bad Request
+  open 127.0.0.1
+  request 127.0.0.1 400 nil nil out=119 ms_ok=true raw=12:BAD|Host: t
+  close 127.0.0.1 rejected requests=1 in=16 ms_ok=true
+== head over 64 KB
+HTTP/1.1 431 Request Header Fields Too Large
+  open 127.0.0.1
+  request 127.0.0.1 431 nil nil out=159 ms_ok=true raw=4096:GET / HTTP/1.1|X-Bi
+  close 127.0.0.1 rejected requests=1 in=70027 ms_ok=true
+== body over max_body
+HTTP/1.1 413 Content Too Large
+  open 127.0.0.1
+  request 127.0.0.1 413 POST /hello out=131 ms_ok=true host=t raw=58:POST /hello HTTP/1.1
+  close 127.0.0.1 rejected requests=1 in=62 ms_ok=true
+== idle connection
+[]
+  open 127.0.0.1
+  close 127.0.0.1 idle requests=0 in=0 ms_ok=true
+== request not finished in time
+[]
+  open 127.0.0.1
+  close 127.0.0.1 timeout requests=0 in=23 ms_ok=true
+== an error in std/http itself (a router whose match raises)
+http: internal error: router broke
+HTTP/1.1 500 Internal Server Error
+  open 127.0.0.1
+  crash 127.0.0.1 router broke stack=true raw=GET /x HTTP/1.1|Host: t|Connection: close
+  request 127.0.0.1 500 GET /x out=139 ms_ok=true host=t raw=43:GET /x HTTP/1.1|Hos
+  close 127.0.0.1 error requests=1 in=47 ms_ok=true
+== max_per_ip: 2
+HTTP/1.1 503 Service Unavailable
+  open 127.0.0.1
+  open 127.0.0.1
+  refused 127.0.0.1 max_per_ip
+  close 127.0.0.1 closed requests=0 in=0 ms_ok=true
+HTTP/1.1 200 OK
+  open 127.0.0.1
+  request 127.0.0.1 200 GET /hello out=103 ms_ok=true host=t
+  close 127.0.0.1 done requests=1 in=51 ms_ok=true
+  close 127.0.0.1 closed requests=0 in=0 ms_ok=true
+== max_connections: 1
+HTTP/1.1 503 Service Unavailable
+  open 127.0.0.1
+  refused 127.0.0.1 max_connections
+  close 127.0.0.1 closed requests=0 in=0 ms_ok=true
+HTTP/1.1 200 OK
+  open 127.0.0.1
+  request 127.0.0.1 200 GET /hello out=103 ms_ok=true host=t
+  close 127.0.0.1 done requests=1 in=51 ms_ok=true
+== caps without on_event
+HTTP/1.1 503 Service Unavailable
+HTTP/1.1 200 OK
+== options
+http.start: max_connections must be an int >= 1, got 0
+http.start: max_per_ip must be an int >= 1, got 2
+http.start: on_event must be a fn or nil, got string
+== on_event that raises
+http: on_event: observer broke
+http: on_event: observer broke
+http: on_event: observer broke
+HTTP/1.1 200 OK
+http: on_event: observer broke
+http: on_event: observer broke
+http: on_event: observer broke
+HTTP/1.1 200 OK
+within the timeout: hi
+nil timeout: socket
+tcp_connect: timeout_ms must be an int (milliseconds) or nil, got string
+tcp_connect: connect failed: Connection refused
+max 2: he
+nil: llo
+tcp_read: max_bytes must be an int > 0 or nil, got 0
+tcp_read: max_bytes must be an int > 0 or nil, got -1
+tcp_read: max_bytes must be an int > 0 or nil, got string
+ok missing
+false no match for 500
+false no match for "x"
+false no match for nil
+false no match for [1, "two"]
+false no match for {tag: "t"}
+false no match for 1.5
+kind 5
+216 ...
+pair 1 2 tagged a
+{ok: false, error: "no match for 3", stack: [{name: "shape", file: "examples/230_match_no_arm.gem", line: 30}, {name: "anonymous fn", file: "examples/230_match_no_arm.gem", line: 37}]}
+one nil
+got want
+left: other
+
+[Runtime Error in process 1]: no match for 418
+  --> examples/230_match_no_arm.gem:5
+   |
+ 5 |   match code
+   |
+Stack trace:
+  at kind (examples/230_match_no_arm.gem:5)
+  at anonymous fn (examples/230_match_no_arm.gem:60)
+DOWN no match for 418
+a {2: "c", 1: "b"} nil true
+a ["b", "c"]
+nil ["b", "c"]
+1 {b: 2}
+true 0
+3 [out
+] [err
+]
+HELLO
+0
+y
+y
+
+50000
+200000
+-1
+3456 [] 89 []
+read_file: negative offset
+read_file: expected 1 or 3 arguments (path, offset, count), got 2
+false
+10 file int int dir nil
+true false 0123456789
+false
+v1 v1
+nil
+setenv: the name must be non-empty, without '=' or a NUL byte
+b=c 0 nil nil
+unset true
+from a process
+
+4 ["a", "bb", "", "ccc"] true nil ["a", "bb", "", "ccc"]
+0 {} true nil {}
+1 [""] true nil [""]
+1 ["no newline"] true nil ["no newline"]
+30002 358894 100000
+row 0 row 1
+false true
+io.lines: path must be a string, got int
+[65535, 1]
+[200000] 200000
+30000 450015000
+one two nil
+abc
+true
+10 text false false false {} nil o ["a"]
+5 json true true true ["foo", "bar"] 0.5 o ["a", "-", "-n"]
+7 text false false true {} nil o ["b"]
+error: unknown option '--verbos' (did you mean '--verbose'?)
+error: --format must be one of text, json, got 'jsn' (did you mean 'json'?)
+error: -n expects an integer, got 'x'
+error: --ratio expects a number, got 'abc'
+error: -n needs a value
+error: expected an argument
+error: expected at most 3 arguments, got 4
+error: missing --out
+error: --verbose takes no value
+error: unknown option '-z'
+help asked
+help asked
+error: argument 0 must be a string, got int
+usage: demo [options] <file>...
+
+Count lines in files.
+
+options:
+  -n, --top TOP          rows to show (default: 10)
+      --format FORMAT    output format (one of: text, json) (default: text)
+  -v, --verbose          say more
+  -q, --quiet
+      --dry-run          change nothing
+  -x, --exclude EXCLUDE  skip files matching this
+      --ratio R
+      --out OUT
+  -h, --help             show this help
+args: unknown key `shrt` in option `x` (did you mean `short`?)
+args: unknown key `option` in the spec (did you mean `options`?)
+args: option `x` has type `bool`; the types are string, int, float and flag
+args: option `x`: short must be one letter, got xy
+["q", "r"]
+true false ["a"] ["x", "y"] {}
+true true ["b", "c"] ["x", "y"] [2]
+--color takes no value
+args: option `x` is a flag; its default must be true or false, got string
+true false true
+bob@example 5 16 ["bob", "example"]
+nil [nil, "b"]
+["1", "22", "333"]
+4 4
+a#b# host at bob a<1>b<22>
+-a-b-c- f0o a\\b
+["a", "b", "c"] [""] ["", "a", ""] ["ab"]
+1\+1=2\? false true
+regex: bad pattern 'a(b': parentheses not balanced nil
+regex: bad pattern '\bfoo': word boundaries (\b, \B, \<, \>) aren't supported
+nil 2
+3 nil
+true false true false
+2
+q
+regex.test: pattern must be a string, got int regex.replace: repl must be a string or a fn, got int
+true [a][]
+200
+["\t "] ["a", "]"] ["-", "z"] ["^"]
+["]", "x", "[", "^", "-"] ["\\", "."] ["a", "b"] ["!", "/", "."]
+regex: bad pattern '[\q]': inside [...] the escapes are \d \w \s \t \n \r and a backslash before punctuation regex: bad pattern '[a-\]]': an escaped ']', '[', '^' or '-' inside [...] can't start or end a range ["!", "^"]
+["aa", "a", ""] ["", "", ""] ["xy", "xay"]
+regex: bad pattern '(a)\1': back-references (\1 .. \9) aren't supported regex: bad pattern 'a+?': a quantifier can't follow another (there are no lazy quantifiers) regex: bad pattern 'a{': '{' starts a bound such as {2}, {1,3}, {2,} or {,3}; write \{ for the character
+true true false true true
+true true true true false
+regex: bad pattern '\q': unknown escape: a letter or digit after a backslash must be one of d D w W s S t n r regex: bad pattern 'a\0': unknown escape: a letter or digit after a backslash must be one of d D w W s S t n r regex: bad pattern '\A': unknown escape: a letter or digit after a backslash must be one of d D w W s S t n r regex: bad pattern '\<': word boundaries (\b, \B, \<, \>) aren't supported
+aGVsbG8=  YQ== YWI= YWJj
+hello hello hi nil nil nil hi
+-_8 true
+true true true
+68690a JK nil nil
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad
+248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1
+cdc76e5c9914fb9281a1c7e284d73e67f1809a48a497200e046d39ccc7112cd0
+f7bc83f430538424b13298e6aa6fb143ef4d59a14946175997479dbc2d1a3cd8
+60e431591ee0b67f0d8a26aacbf5b77f8e0bc6213728c5140546040f0ee37f54
+32 true false false
+5 6 ["a", "ñ", "b"] [233, 8364, 128512] € hi
+éll bc   ñ
+STRAßE Ÿ S ÀÉÎ ΩΜΈΓΑ Σ Ϊ ПРИВЕТ ЁЖ ǆ àéî ωμέγα привет ёж ÿ āă ĺ
+I S İ i ı ſ i
+true false false [97, 65533, 98] 2
+€bña utf8.char: 55296 is not a Unicode scalar value utf8.len: s must be a string, got int
+[["name", "age"], ["ann", "31"]]
+[["name", "age"], ["ann", "31"], ["bob", ""]]
+[{name: "ann", age: "31"}, {name: "bob", age: "40"}]
+{} [[""]] [["a"]] [["a", ""]] [["", "", ""]]
+[["a,b", "say \"hi\"", "line\nbreak"], ["x", ""]]
+[["q"]] [["a", "b"], ["1", "2"]]
+csv.parse: line 2: a quote inside an unquoted field
+csv.parse: line 1: text after a closing quote
+csv.parse: line 2: a quoted field is never closed
+csv.parse: line 2: 2 fields, but the header has 1
+csv.parse: line 4: 3 fields, but the header has 2
+csv.parse: sep must be one byte other than a quote or a line break, got ,,
+a,"b,c"
+1,
+"say ""hi"""," pad","x
+y"
+
+[["a", "b,c"], ["1", ""], ["say \"hi\"", " pad", "x\ny"]]
+n,v
+a,1
+b,
+
+a;2.5;true
+0.0.0.0:1 1000
+serve: unknown option "prot" (did you mean "port"?)
+serve: unknown option "timeout" (did you mean "timeout_ms"?)
+serve: unknown option "verbose"
+serve: unknown option "0"
+anonymous fn: unknown option "y" (did you mean "x"?)
+3 {color: "red"}
+ping nil
+supervisor.start: unknown option "stratgy" (did you mean "strategy"?)
+supervisor.start: unknown strategy "one_for_al" (did you mean "one_for_all"?)
+supervisor.start: unknown key "restrat" in child "a" (did you mean "restart"?)
+supervisor.start: unknown restart "permanant" for child "a" (did you mean "permanent"?)
+dynamic_supervisor.start: unknown option "max_restart" (did you mean "max_restarts"?)
+dynamic_supervisor.start: unknown key "shutdwn" in the child template (did you mean "shutdown"?)
+dynamic_supervisor.start: unknown restart "transiant" (did you mean "transient"?)
+http.start: unknown option "prot" (did you mean "port"?)
+request.get: unknown option "timeout" (did you mean "timeout_ms"?)
+log.set_level: unknown level wrn (did you mean "warn"?); use "debug", "info", "warn" or "error"
+process_flag: unknown flag "trap_exits" (the one flag is "trap_exit")
+length nil
+{"name":"gem","tags":["a","b"],"empty":{},"list":[],"nested":{"x":[1,{"y":null}]}}
+{
+  "name": "gem",
+  "tags": [
+    "a",
+    "b"
+  ],
+  "empty": {},
+  "list": [],
+  "nested": {
+    "x": [
+      1,
+      {
+        "y": null
+      }
+    ]
+  }
+}
+[
+	1,
+	2
+]
+{} [] 3
+[
+1
+]
+1
+json.encode: indent must be 0 to 16 spaces, got -1 json.encode: indent must be an int or a string, got bool json.encode: unknown option "indnt" (did you mean "indent"?)
+text/javascript; charset=utf-8
+audio/wav
+text/markdown; charset=utf-8
+application/yaml; charset=utf-8
+application/json; charset=utf-8
+audio/ogg
+application/octet-stream
+.js .js .ogg .yaml .yaml nil
+[2026-04-28T14:30:00.123Z] 1777386600123 2026-04-28T14:30:00.123Z
+[2026-04-28T16:30:00+02:00] 1777386600000 2026-04-28T14:30:00.000Z
+[2026-04-28T09:30:00-0500] 1777386600000 2026-04-28T14:30:00.000Z
+[2026-04-28T14:30Z] 1777386600000 2026-04-28T14:30:00.000Z
+[2026-04-28 14:30:00] 1777386600000 2026-04-28T14:30:00.000Z
+[2026-04-28] 1777334400000 2026-04-28T00:00:00.000Z
+[1970-01-01T00:00:00Z] 0 1970-01-01T00:00:00.000Z
+[1969-12-31T23:59:59.999Z] -1 1969-12-31T23:59:59.999Z
+[2000-02-29] 951782400000 2000-02-29T00:00:00.000Z
+[2026-02-29] nil 
+[2026-02-30] nil 
+[2026-13-01] nil 
+[2026-04-28T24:00:00Z] nil 
+[2026-04-28T14:30:00.1Z] 1777386600100 2026-04-28T14:30:00.100Z
+[2026-04-28T14:30:00.123456Z] 1777386600123 2026-04-28T14:30:00.123Z
+[2026-04-28x] nil 
+[2026-04-28T14:30:00+0] nil 
+[Tue, 28 Apr 2026 14:30:00 GMT] 1777386600000 2026-04-28T14:30:00.000Z
+[Sunday, 06-Nov-94 08:49:37 GMT] 784111777000 1994-11-06T08:49:37.000Z
+[Sun Nov  6 08:49:37 1994] 784111777000 1994-11-06T08:49:37.000Z
+[Sun, 06 Nov 1994 08:49:37 GMT] 784111777000 1994-11-06T08:49:37.000Z
+[  2026-04-28  ] 1777334400000 2026-04-28T00:00:00.000Z
+[] nil 
+[garbage] nil 
+[Tue, 28 Foo 2026 14:30:00 GMT] nil 
+[0001-01-01] -62135596800000 0001-01-01T00:00:00.000Z
+[9999-12-31T23:59:59Z] 253402300799000 9999-12-31T23:59:59.000Z
+14:30:00.123 %L 999
+time.parse: s must be a string, got int
+1 true true
+gen_server.start: the name "counter" is already registered
+gen_server.start: name must be a string, got int
+gen_server.start: unknown option "nme" (did you mean "name"?)
+nil
+gen_server: init raised at:
+  at anonymous fn (examples/237_json_indent_time_parse.gem:44)
+  at gen_server.run_init (std/gen_server.gem:174)
+  at anonymous fn (std/gen_server.gem:180)
+false nil
+{ok: true, value: 6}
+false boom 1
+boom 2
+boom 3
+10
+60
+done
+garbage: sorted true, grew under 8 MB true
+kept: sorted true, true entries, intact true
+kept: true true
+nested: sorted true
+raise: ok=false unchanged true error starts true
+bad result: sort: the comparator must return a number (negative, zero or positive), got string
+spawning: sorted true

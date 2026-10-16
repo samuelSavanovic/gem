@@ -1,0 +1,519 @@
+# scope passes over the lowered AST: shadowing lets, module namespaces, and the let collectors codegen uses
+
+load "./cgutil" (set_add, set_contains, is_node)
+
+# env value for params not bound yet while walking a default (its own and later ones)
+let PENDING_PARAM = "\0pending param"
+
+
+fn collect_block_lets(stmt, result)
+  if is_node(stmt, "block")
+    for j = 0, len(stmt.stmts)
+      if is_node(stmt.stmts[j], "let")
+        set_add(result, stmt.stmts[j].name)
+      end
+    end
+  end
+end
+
+fn collect_top_let_names(stmts, result)
+  for i = 0, len(stmts)
+    let s = stmts[i]
+    if is_node(s, "let")
+      set_add(result, s.name)
+    end
+    collect_block_lets(s, result)
+  end
+end
+
+# Shadowing lets. Later passes key by name, and C rejects `GemVal gem_v_n = gem_v_n - 1` (it reads the new var).
+# So a let whose name is visible already (param, outer let, module binding, fn, builtin) becomes `__sh<N>_<name>`,
+# along with the uses it scopes, and so does a param named like a fn.
+# A let at module scope or directly in a top-level block (a lowered `for`, a destructuring let) is a module slot,
+# and a second one rebinds that slot.
+#
+# Scope is strict: shadow_check_use reports a use after the block or before the let (codegen's locals are fn-wide).
+# `env` maps visible names to what they compile to; `mode` is "module", "block" (nested top-level) or "fn".
+# ctx.ended/later/outer_later are per body: one per named fn, one shared by all top-level code.
+
+fn copy_scope_env(env)
+  let r = {}
+  for k, v in env
+    r[k] = v
+  end
+  r
+end
+
+let shadow_node = nil
+let shadow_stmt = nil
+let shadow_stmts = nil
+let shadow_children = nil
+
+# {line, file} for the out-of-scope hint; pattern bindings have no line, and one walk spans every module's code
+fn shadow_decl_site(let_node)
+  let line = let_node.line
+  if line == 0
+    line = nil
+  end
+  {line: line, file: let_node.file}
+end
+
+fn shadow_bind(let_node, env, mode, ctx)
+  let name = let_node.name
+  if name == nil
+    return nil
+  end
+  if mode != "module" and (has_key(env, name) or set_contains(ctx.globals, name) or set_contains(ctx.fns, name) or set_contains(ctx.externs, name) or has_key(ctx.builtins, name))
+    ctx.n = ctx.n + 1
+    let fresh = "__sh{ctx.n}_{name}"
+    let_node.name = fresh
+    env[name] = fresh
+  else
+    env[name] = name
+  end
+  ctx.lines[env[name]] = shadow_decl_site(let_node)
+end
+
+# records where the block's names came from, for a later use's error (block_kw: the branch's "if"/"match"/"receive")
+fn shadow_end_scope(inner, outer, ctx, block_kw = nil)
+  for k, v in inner
+    if not has_key(outer, k) or outer[k] != v
+      let d = ctx.lines[v]
+      ctx.ended[k] = if d != nil then {line: d.line, file: d.file, block_kw: block_kw} end
+    end
+  end
+end
+
+# A read or assignment of a name with no visible binding (never-declared names are codegen's to report).
+# ctx.later holds this body's lets (a `while` condition reading a let from the loop body); ctx.outer_later holds
+# enclosing bodies' lets: a closure using one made after it is an error, since its env is built at creation.
+fn shadow_check_use(node, name, env, ctx)
+  if has_key(env, name)
+    if env[name] == PENDING_PARAM
+      ctx.report(node, name, "param_later", nil)
+    end
+    return nil
+  end
+  if set_contains(ctx.globals, name) or set_contains(ctx.fns, name) or set_contains(ctx.externs, name) or has_key(ctx.builtins, name)
+    return nil
+  end
+  if has_key(ctx.ended, name)
+    ctx.report(node, name, "ended", ctx.ended[name])
+  elif has_key(ctx.later, name)
+    ctx.report(node, name, "later", ctx.later[name])
+  elif has_key(ctx.outer_later, name)
+    ctx.report(node, name, "later_closure", ctx.outer_later[name])
+  end
+end
+
+# name -> decl site for every let under node, not descending into fns
+let shadow_collect_lets = nil
+shadow_collect_lets = fn(node, out)
+  if node == nil or type(node) != "table"
+    return nil
+  end
+  if node.tag == "anon_fn" or node.tag == "fn_def"
+    return nil
+  end
+  if node.tag == "let" and node.name != nil and not has_key(out, node.name)
+    out[node.name] = shadow_decl_site(node)
+  end
+  for k, v in node
+    if k != "tag" and type(v) == "table"
+      shadow_collect_lets(v, out)
+    end
+  end
+end
+
+fn shadow_named_fn(node, ctx)
+  let saved = {ended: ctx.ended, later: ctx.later, outer_later: ctx.outer_later, depth: ctx.closure_depth}
+  ctx.ended = {}
+  ctx.later = {}
+  ctx.outer_later = {}
+  shadow_collect_lets(node.body, ctx.later)
+  ctx.closure_depth = 0
+  shadow_fn(node, {}, ctx)
+  ctx.ended = saved.ended
+  ctx.later = saved.later
+  ctx.outer_later = saved.outer_later
+  ctx.closure_depth = saved.depth
+end
+
+fn shadow_child_mode(mode)
+  if mode == "module"
+    return "block"
+  end
+  mode
+end
+
+# codegen resolves a fn's name to the fn wherever it isn't a local of the fn being compiled (say, in a
+# closure capturing the param), so a param with such a name gets renamed
+fn shadow_param_name(p, ctx)
+  if set_contains(ctx.fns, p) or set_contains(ctx.externs, p)
+    ctx.n = ctx.n + 1
+    return "__sh{ctx.n}_{p}"
+  end
+  p
+end
+
+# a default sees only earlier params; naming its own or a later one is reported (in C it isn't set yet)
+fn shadow_fn(node, env, ctx)
+  let inner = copy_scope_env(env)
+  let originals = []
+  if node.params != nil
+    originals = node.params
+    let params = []
+    for p in node.params
+      let c = shadow_param_name(p, ctx)
+      inner[p] = c
+      push(params, c)
+    end
+    node.params = params
+  end
+  let rest_original = node.rest_param
+  if node.rest_param != nil
+    let c = shadow_param_name(node.rest_param, ctx)
+    inner[node.rest_param] = c
+    node.rest_param = c
+  end
+  if node.defaults != nil
+    for i = 0, len(node.defaults)
+      let d = node.defaults[i]
+      if d != nil
+        let at = copy_scope_env(inner)
+        for j = i, len(originals)
+          at[originals[j]] = PENDING_PARAM
+        end
+        if rest_original != nil
+          at[rest_original] = PENDING_PARAM
+        end
+        shadow_node(d, at, "fn", ctx)
+      end
+    end
+  end
+  shadow_stmts(node.body, inner, "fn", ctx)
+end
+
+shadow_stmts = fn(stmts, env, mode, ctx, block_kw = nil)
+  if stmts == nil
+    return nil
+  end
+  let scope = copy_scope_env(env)
+  for s in stmts
+    shadow_stmt(s, scope, mode, ctx)
+  end
+  shadow_end_scope(scope, env, ctx, block_kw)
+end
+
+# lets bind into env. A `block` is transparent: its lets belong to the enclosing list.
+shadow_stmt = fn(s, env, mode, ctx)
+  if is_node(s, "let")
+    shadow_node(s.value, env, mode, ctx)
+    shadow_bind(s, env, mode, ctx)
+  elif is_node(s, "block")
+    for c in s.stmts
+      shadow_stmt(c, env, mode, ctx)
+    end
+  else
+    shadow_node(s, env, mode, ctx)
+  end
+end
+
+# pattern bindings are lets scoped to the arm
+fn shadow_arm(cond, bindings, body, env, mode, ctx, block_kw)
+  let arm = copy_scope_env(env)
+  let cm = shadow_child_mode(mode)
+  shadow_node(cond, arm, mode, ctx)
+  if bindings != nil
+    for b in bindings
+      if is_node(b, "let")
+        shadow_node(b.value, arm, mode, ctx)
+        shadow_bind(b, arm, cm, ctx)
+      end
+    end
+  end
+  shadow_stmts(body, arm, cm, ctx, block_kw)
+  shadow_end_scope(arm, env, ctx, block_kw)
+end
+
+shadow_node = fn(node, env, mode, ctx)
+  if node == nil or type(node) != "table" or node.tag == nil
+    return nil
+  end
+  let tag = node.tag
+  let cm = shadow_child_mode(mode)
+  if tag == "var"
+    shadow_check_use(node, node.name, env, ctx)
+    if has_key(env, node.name) and env[node.name] != PENDING_PARAM
+      node.name = env[node.name]
+    end
+  elif tag == "assign"
+    shadow_node(node.value, env, mode, ctx)
+    shadow_check_use(node, node.name, env, ctx)
+    if has_key(env, node.name) and env[node.name] != PENDING_PARAM
+      node.name = env[node.name]
+    end
+  elif tag == "let" or tag == "block"
+    shadow_stmt(node, env, mode, ctx)
+  elif tag == "fn_def"
+    shadow_named_fn(node, ctx)
+  elif tag == "anon_fn"
+    let saved_later = ctx.later
+    let saved_outer = ctx.outer_later
+    let outer = copy_scope_env(saved_outer)
+    for k, v in saved_later
+      outer[k] = v
+    end
+    ctx.outer_later = outer
+    ctx.later = {}
+    shadow_collect_lets(node.body, ctx.later)
+    ctx.closure_depth = ctx.closure_depth + 1
+    shadow_fn(node, env, ctx)
+    ctx.closure_depth = ctx.closure_depth - 1
+    ctx.later = saved_later
+    ctx.outer_later = saved_outer
+  elif tag == "if"
+    shadow_node(node.cond, env, mode, ctx)
+    shadow_stmts(node.then, env, cm, ctx, "if")
+    if node.elifs != nil
+      for ei in node.elifs
+        shadow_node(ei.cond, env, mode, ctx)
+        shadow_stmts(ei.body, env, cm, ctx, "if")
+      end
+    end
+    shadow_stmts(node.else, env, cm, ctx, "if")
+  elif tag == "while"
+    shadow_node(node.cond, env, mode, ctx)
+    shadow_stmts(node.body, env, cm, ctx)
+  elif tag == "match"
+    shadow_node(node.target, env, mode, ctx)
+    if node.whens != nil
+      for w in node.whens
+        shadow_arm(w.value, w.bindings, w.body, env, mode, ctx, "match")
+      end
+    end
+    shadow_stmts(node.else, env, cm, ctx, "match")
+  elif tag == "receive_match"
+    if node.arms != nil
+      for a in node.arms
+        let cond = nil
+        let bindings = nil
+        if a.pattern != nil
+          cond = a.pattern.condition
+          bindings = a.pattern.bindings
+        end
+        shadow_arm(cond, bindings, a.body, env, mode, ctx, "receive")
+      end
+    end
+    shadow_node(node.after_ms, env, mode, ctx)
+    shadow_stmts(node.after_body, env, cm, ctx, "receive")
+  else
+    for k, v in node
+      if k != "tag" and type(v) == "table"
+        shadow_children(v, env, mode, ctx)
+      end
+    end
+  end
+  nil
+end
+
+# v is a node or a tagless container (arg list, table entries)
+shadow_children = fn(v, env, mode, ctx)
+  if v.tag != nil
+    shadow_node(v, env, mode, ctx)
+    return nil
+  end
+  for _, c in v
+    if type(c) == "table"
+      shadow_children(c, env, mode, ctx)
+    end
+  end
+end
+
+# report(node, name, kind, decl): kind is "ended", "later", "later_closure" or "param_later";
+# decl is {line, file} (plus block_kw for "ended"), nil for "param_later"
+fn scope_shadowing_lets(fn_defs, top_stmts, builtins, externs, report)
+  let globals = {}
+  collect_top_let_names(top_stmts, globals)
+  let fns = {}
+  for fd in fn_defs
+    set_add(fns, fd.name)
+  end
+  let ctx = {globals: globals, fns: fns, builtins: builtins, n: 0,
+             externs: {}, lines: {}, ended: {}, later: {}, outer_later: {}, closure_depth: 0,
+             report: report}
+  for e in externs
+    set_add(ctx.externs, e)
+  end
+  for s in top_stmts
+    shadow_collect_lets(s, ctx.later)
+  end
+  let env = {}
+  for s in top_stmts
+    shadow_stmt(s, env, "module", ctx)
+  end
+  for fd in fn_defs
+    shadow_named_fn(fd, ctx)
+  end
+end
+
+# out[m] = {export: "__mod_<mangle>_<export>"} for each whole-module `let m = {...}` never rebound, so codegen
+# compiles `m.export` straight to the module's slot. `assigned`: names assigned anywhere.
+fn collect_module_namespaces(top_stmts, assigned, out)
+  let rebound = assigned
+  for s in top_stmts
+    if is_node(s, "let")
+      if is_node(s.value, "table") and s.value.frozen == true
+        let fields = {}
+        for e in s.value.entries
+          if type(e.key) == "string" and is_node(e.value, "var")
+            fields[e.key] = e.value.name
+          end
+        end
+        let prev = out[s.name]
+        if prev != nil
+          # same module loaded twice under one name is fine
+          let same = len(keys(prev)) == len(keys(fields))
+          for k, v in fields
+            if prev[k] != v
+              same = false
+            end
+          end
+          if not same
+            set_add(rebound, s.name)
+          end
+        end
+        out[s.name] = fields
+      else
+        set_add(rebound, s.name)
+      end
+    end
+  end
+  # lets directly in a top-level block write module slots too
+  for s in top_stmts
+    if is_node(s, "block")
+      for b in s.stmts
+        if is_node(b, "let")
+          set_add(rebound, b.name)
+        end
+      end
+    end
+  end
+  for name, _ in rebound
+    delete(out, name)
+  end
+end
+
+# every name bound anywhere in a fn body (not nested fns): over-approximates locals hiding a module slot
+let collect_shadow_lets_in_node = nil
+let collect_shadow_lets_in_stmts = nil
+
+collect_shadow_lets_in_stmts = fn(stmts, result)
+  if stmts == nil
+    return nil
+  end
+  for i = 0, len(stmts)
+    collect_shadow_lets_in_node(stmts[i], result)
+  end
+end
+
+collect_shadow_lets_in_node = fn(node, result)
+  if node == nil
+    return nil
+  end
+  if type(node) != "table"
+    return nil
+  end
+  if node.tag == nil
+    return nil
+  end
+  if node.tag == "anon_fn" or node.tag == "fn_def"
+    return nil
+  end
+  if node.tag == "let"
+    set_add(result, node.name)
+    return nil
+  end
+  if node.tag == "block"
+    collect_shadow_lets_in_stmts(node.stmts, result)
+    return nil
+  end
+  if node.tag == "if"
+    collect_shadow_lets_in_stmts(node.then, result)
+    if node.elifs != nil
+      for ei in node.elifs
+        collect_shadow_lets_in_stmts(ei.body, result)
+      end
+    end
+    collect_shadow_lets_in_stmts(node.else, result)
+    return nil
+  end
+  if node.tag == "while"
+    collect_shadow_lets_in_stmts(node.body, result)
+    return nil
+  end
+  if node.tag == "for" or node.tag == "for_kv" or node.tag == "for_range"
+    if node.var != nil
+      set_add(result, node.var)
+    end
+    if node.kvar != nil
+      set_add(result, node.kvar)
+    end
+    if node.vvar != nil
+      set_add(result, node.vvar)
+    end
+    if node.name != nil and (node.tag == "for" or node.tag == "for_range")
+      set_add(result, node.name)
+    end
+    collect_shadow_lets_in_stmts(node.body, result)
+    return nil
+  end
+  if node.tag == "match"
+    if node.target_var != nil
+      set_add(result, node.target_var)
+    end
+    if node.whens != nil
+      for w in node.whens
+        if w.bindings != nil
+          for b in w.bindings
+            if type(b) == "table" and b.name != nil and (b.tag == "let" or b.tag == "var")
+              set_add(result, b.name)
+            end
+          end
+        end
+        collect_shadow_lets_in_stmts(w.body, result)
+      end
+    end
+    collect_shadow_lets_in_stmts(node.else, result)
+    return nil
+  end
+  if node.tag == "receive_match"
+    if node.recv_var != nil
+      set_add(result, node.recv_var)
+    end
+    if node.arms != nil
+      for a in node.arms
+        if a.pattern != nil and a.pattern.bindings != nil
+          for b in a.pattern.bindings
+            if type(b) == "table" and b.name != nil and (b.tag == "let" or b.tag == "var")
+              set_add(result, b.name)
+            end
+          end
+        end
+        collect_shadow_lets_in_stmts(a.body, result)
+      end
+    end
+    if node.after_body != nil
+      collect_shadow_lets_in_stmts(node.after_body, result)
+    end
+    return nil
+  end
+  nil
+end
+
+let collect_shadow_lets_in_fn = nil
+collect_shadow_lets_in_fn = fn(stmts, result)
+  collect_shadow_lets_in_stmts(stmts, result)
+end
+
+export collect_block_lets, collect_top_let_names, scope_shadowing_lets, collect_module_namespaces, collect_shadow_lets_in_fn

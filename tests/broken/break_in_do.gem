@@ -1,0 +1,51 @@
+# `break` / `continue` inside a `do` block, outside any loop in the block.
+# A `do` block is a closure (a separate C function), so they can't reach a
+# loop in the caller, not even when the block itself sits inside a loop.
+# Expect exactly 4 errors: lines 16, 23, 32 and 37. The loops inside the
+# blocks (lines 41-50) and the lowered `match` / `for` loops are fine.
+
+fn each(xs, f)
+  for x in xs
+    f(x)
+  end
+end
+
+# Top level.
+each([1, 2, 3]) do |x|
+  if x == 2
+    break
+  end
+end
+
+# Inside a function.
+fn skip_all(items)
+  each(items) do |x|
+    continue
+  end
+end
+
+# Inside a `do` block that is itself inside loops.
+let i = 0
+while i < 3
+  i += 1
+  each([1, 2]) do |x|
+    break
+  end
+end
+for y in [1, 2]
+  each([y]) do |x|
+    continue
+  end
+end
+
+# OK: the loop is inside the block.
+each([[1, 2], [3]]) do |xs|
+  for x in xs
+    match x
+      when 1
+        continue
+      when other
+        break
+    end
+  end
+end

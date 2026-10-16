@@ -1,0 +1,135 @@
+# Load paths and install/project roots, shared by the compiler and the LSP.
+
+load "std/string"
+
+# normalize_path (realpath) gives a missing path back as typed (`././mods/nope.gem`), so normalize the
+# longest prefix that exists; a missing module then shows and keys like a present one.
+fn normalize_load_path(p)
+  if file_exists(p) or is_dir(p)
+    return normalize_path(p)
+  end
+  let d = dirname(p)
+  if d == p or d == "" or len(d) >= len(p)
+    return p
+  end
+  path_join(normalize_load_path(d), substr(p, len(d) + 1, len(p) - len(d) - 1))
+end
+
+# "std/X" from the stdlib, "./X" and "../X" from the loading file's dir, bare "X" from the project root (or base_dir)
+fn resolve_load_path(raw_path, base_dir, project_root, stdlib_root)
+  let path = raw_path
+  if not string.ends_with(path, ".gem")
+    path = path + ".gem"
+  end
+
+  if string.starts_with(raw_path, "std/")
+    if stdlib_root == nil
+      error("gem: cannot resolve load \"" + raw_path + "\": stdlib root not found (set $GEM_STDLIB)")
+    end
+    return normalize_load_path(path_join(stdlib_root, path))
+  end
+
+  if string.starts_with(raw_path, "./") or string.starts_with(raw_path, "../")
+    return normalize_load_path(path_join(base_dir, path))
+  end
+
+  let root = project_root
+  if root == nil
+    root = base_dir
+  end
+  return normalize_load_path(path_join(root, path))
+end
+
+# {msg, hint} for a load target that's missing or a directory, else nil
+fn load_target_problem(raw_path, full_path, show_path)
+  if is_dir(full_path)
+    return {msg: "cannot load `{raw_path}`: {show_path(full_path)} is a directory", hint: "load a module file inside it"}
+  end
+  if file_exists(full_path)
+    return nil
+  end
+  let msg = "cannot find module `{raw_path}` (no file {show_path(full_path)})"
+  let hint = nil
+  if string.ends_with(full_path, ".gem")
+    let bare = substr(full_path, 0, len(full_path) - 4)
+    if is_dir(bare)
+      hint = "{show_path(bare)} is a directory; load a module inside it, e.g. `load \"{raw_path}/<name>\"`"
+    end
+  end
+  {msg: msg, hint: hint}
+end
+
+fn find_project_root(start_dir)
+  let dir = start_dir
+  if dir == "" then dir = "." end
+  # make it absolute first so "." can walk up
+  dir = normalize_path(dir)
+  while true
+    if file_exists(path_join(dir, "gem.toml"))
+      return dir
+    end
+    let parent = dirname(dir)
+    if parent == dir or parent == ""
+      return nil
+    end
+    dir = parent
+  end
+end
+
+# a runtime helper rather than a builtin, so an older compiler can still build this one
+extern fn gem_exe_path() -> String
+
+# <root>/build/gem -> <root>, through symlinks
+fn find_install_root()
+  dirname(dirname(gem_exe_path()))
+end
+
+fn compute_stdlib_root(install_root, project_root)
+  let env_root = getenv("GEM_STDLIB")
+  if env_root != nil and env_root != ""
+    return env_root
+  end
+  if project_root != nil and is_dir(path_join(project_root, "std"))
+    return project_root
+  end
+  if is_dir(path_join(install_root, "std"))
+    return install_root
+  end
+  install_root
+end
+
+# The path shown in errors, notes, `#line` and frames: project-root-relative with a gem.toml (so stage0.c
+# is the same everywhere), else under the entry file's dir as typed. Files outside the root keep their path.
+fn make_show_path(entry_path, project_root)
+  let root = project_root
+  let prefix = nil
+  if root == nil and entry_path != nil
+    root = normalize_path(dirname(entry_path))
+    let d = dirname(entry_path)
+    if d != "." and d != ""
+      prefix = d
+    end
+  end
+  let cache = {}
+  fn(p)
+    if root == nil or p == nil
+      return p
+    end
+    if has_key(cache, p)
+      return cache[p]
+    end
+    let shown = p
+    let full = normalize_path(p)
+    let rlen = len(root)
+    if len(full) > rlen and substr(full, 0, rlen) == root and full[rlen] == "/"
+      shown = substr(full, rlen + 1, len(full) - rlen - 1)
+      if prefix != nil
+        shown = path_join(prefix, shown)
+      end
+    end
+    cache[p] = shown
+    shown
+  end
+end
+
+export resolve_load_path, load_target_problem, find_project_root, find_install_root, compute_stdlib_root, make_show_path, normalize_load_path

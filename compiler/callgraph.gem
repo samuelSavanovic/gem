@@ -1,0 +1,577 @@
+# call graph over the lowered program; callers are fn_defs (`fn:<name>`), closure and spawn bodies, and `<top>`
+
+load "./cgutil" (set_add, set_contains, is_node)
+
+let spawn_callees = {}
+set_add(spawn_callees, "spawn")
+set_add(spawn_callees, "spawn_link")
+set_add(spawn_callees, "spawn_monitor")
+
+# builtins that call back into a fn value (`pcall <expr>` wraps its operand in a closure)
+let callback_builtins = {}
+for cb_name in ["pcall", "sort", "build_string"]
+  set_add(callback_builtins, cb_name)
+end
+
+let mutating_builtins = {}
+for mb_name in ["push", "pop", "insert", "delete", "remove_at", "sort"]
+  set_add(mutating_builtins, mb_name)
+end
+
+# Returns {caller_records, anon_parent, anon_nodes, name_to_fn, value_fns}:
+#   anon_parent[aid]: the caller the closure is created in
+#   anon_nodes[aid]:  {fn, spawn (the spawn call or nil), spawn_via}
+#   value_fns:        fn_def names used as values, so an indirect call may reach them
+# A call is indirect unless its callee is a fn_def, a builtin or an extern; callback builtins count as indirect.
+fn build_call_graph(fn_defs, top_stmts, builtin_names = {}, extern_names = [])
+  let caller_records = {}
+  let name_to_fn = {}
+  for fd in fn_defs
+    name_to_fn[fd.name] = fd
+  end
+
+  # loads leave `let foo = __mod_x_foo` or `let mod = {f: __mod_x_f, ...}` at the top level; map both back
+  # to the fn_def so `foo()` and `mod.f()` still count as direct calls
+  let alias_to_fn = {}
+  let module_dot_to_fn = {}
+  for s in top_stmts
+    if is_node(s, "let") and s.value != nil
+      if is_node(s.value, "var")
+        if name_to_fn[s.value.name] != nil
+          alias_to_fn[s.name] = s.value.name
+        end
+      elif is_node(s.value, "table") and s.value.entries != nil
+        let mod_map = {}
+        let any = false
+        for e in s.value.entries
+          if e.value != nil and is_node(e.value, "var") and name_to_fn[e.value.name] != nil
+            # key is a raw string when main.gem built the table, a string node when parsed
+            let key_str = if type(e.key) == "string"
+              e.key
+            elif e.key != nil and is_node(e.key, "string")
+              e.key.value
+            end
+            if key_str != nil
+              mod_map[key_str] = e.value.name
+              any = true
+            end
+          end
+        end
+        if any
+          module_dot_to_fn[s.name] = mod_map
+        end
+      end
+    end
+  end
+
+  let resolve_callee = fn(name)
+    if name_to_fn[name] != nil
+      return name
+    end
+    let aliased = alias_to_fn[name]
+    if aliased != nil
+      return aliased
+    end
+    nil
+  end
+
+  let resolve_dot_callee = fn(mod_name, field_name)
+    let m = module_dot_to_fn[mod_name]
+    if m == nil
+      return nil
+    end
+    let f = m[field_name]
+    if f == nil
+      return nil
+    end
+    f
+  end
+
+  let extern_set = {}
+  for en in extern_names
+    set_add(extern_set, en)
+  end
+  let value_fns = {}
+
+  let anon_id_counter = 0
+  let next_anon_id = fn()
+    let id = "anon:" + to_string(anon_id_counter)
+    anon_id_counter += 1
+    id
+  end
+
+  let new_caller_record = fn(caller_id, is_seed)
+    caller_records[caller_id] = {tail_callees: {}, non_tail_callees: {}, indirect: false, is_seed: is_seed, writes: [], bound: {}}
+  end
+
+  # names a caller (or a closure's enclosing callers) binds: a call through one is indirect even if named like a builtin
+  let bind_names = nil
+  bind_names = fn(node, out)
+    if type(node) != "table" or node.tag == "anon_fn" or node.tag == "fn_def"
+      return nil
+    end
+    if node.tag == "let" and type(node.name) == "string"
+      set_add(out, node.name)
+    end
+    for k, v in node
+      if k != "tag" and type(v) == "table"
+        let vks = keys(v)
+        if len(vks) > 0 and type(vks[0]) == "int"
+          for item in v
+            bind_names(item, out)
+          end
+        else
+          bind_names(v, out)
+        end
+      end
+    end
+  end
+  let set_bound = fn(caller_id, fn_node, parent_id)
+    let out = {}
+    if parent_id != nil and caller_records[parent_id] != nil
+      for n, _ in caller_records[parent_id].bound
+        set_add(out, n)
+      end
+    end
+    if fn_node.params != nil
+      for pn in fn_node.params
+        set_add(out, pn)
+      end
+    end
+    if fn_node.rest_param != nil
+      set_add(out, fn_node.rest_param)
+    end
+    for st in fn_node.body
+      bind_names(st, out)
+    end
+    caller_records[caller_id].bound = out
+  end
+
+  # writes to a variable or its value (`x = `, `x.f = `, `push(x, ...)`) for note_spawn_global_writes;
+  # `via` is the mutating builtin's name, which a local of that name would shadow
+  let record_write = fn(caller_id, name, node, via = nil)
+    push(caller_records[caller_id].writes, {name: name, node: node, via: via})
+  end
+
+  let anon_parent = {}
+  let anon_nodes = {}
+
+  # `f(); return nil` (or any constant) reads nothing from the frame after the call, so it's a tail call
+  let is_trivial_return = fn(s)
+    if not is_node(s, "return")
+      return false
+    end
+    if s.value == nil
+      return true
+    end
+    if is_node(s.value, "nil")
+      return true
+    end
+    if is_node(s.value, "int")
+      return true
+    end
+    if is_node(s.value, "float")
+      return true
+    end
+    if is_node(s.value, "bool")
+      return true
+    end
+    if is_node(s.value, "string")
+      return true
+    end
+    false
+  end
+
+  let collect_calls = nil
+  let collect_calls_in_body = nil
+
+  collect_calls = fn(node, is_tail_pos, caller_id)
+    if node == nil
+      return nil
+    end
+    if type(node) != "table"
+      return nil
+    end
+    if node.tag == nil
+      return nil
+    end
+
+    if node.tag == "call"
+      # spawn(fn ... end): the body is a process root
+      if is_node(node.func, "var") and set_contains(spawn_callees, node.func.name)
+        if node.args != nil and len(node.args) > 0 and is_node(node.args[0], "anon_fn")
+          let aid = next_anon_id()
+          new_caller_record(aid, true)
+          set_bound(aid, node.args[0], caller_id)
+          anon_parent[aid] = caller_id
+          # `spawn` might be a local here; note_spawn_global_writes checks
+          anon_nodes[aid] = {fn: node.args[0], spawn: node, spawn_via: node.func.name}
+          collect_calls_in_body(node.args[0].body, true, aid)
+          if node.args[0].defaults != nil
+            for d in node.args[0].defaults
+              if d != nil
+                collect_calls(d, false, aid)
+              end
+            end
+          end
+          let i = 1
+          while i < len(node.args)
+            collect_calls(node.args[i], false, caller_id)
+            i += 1
+          end
+          return nil
+        end
+      end
+
+      if is_node(node.func, "var") and set_contains(mutating_builtins, node.func.name) and node.args != nil and len(node.args) > 0 and is_node(node.args[0], "var")
+        record_write(caller_id, node.args[0].name, node, node.func.name)
+      end
+
+      let resolved_callee = if is_node(node.func, "var")
+        resolve_callee(node.func.name)
+      elif is_node(node.func, "dot") and node.func.object != nil and is_node(node.func.object, "var")
+        resolve_dot_callee(node.func.object.name, node.func.field)
+      end
+      if resolved_callee != nil
+        if is_tail_pos
+          set_add(caller_records[caller_id].tail_callees, resolved_callee)
+        else
+          set_add(caller_records[caller_id].non_tail_callees, resolved_callee)
+        end
+      else
+        let direct = if is_node(node.func, "var")
+          let cn = node.func.name
+          let shadowed = set_contains(caller_records[caller_id].bound, cn)
+          not shadowed and ((has_key(builtin_names, cn) and not set_contains(callback_builtins, cn)) or set_contains(extern_set, cn))
+        else
+          false
+        end
+        if not direct
+          caller_records[caller_id].indirect = true
+        end
+        collect_calls(node.func, false, caller_id)
+      end
+      if node.args != nil
+        for a in node.args
+          collect_calls(a, false, caller_id)
+        end
+      end
+      return nil
+    end
+
+    if node.tag == "anon_fn"
+      # closure not passed to spawn: a non-seed caller
+      let aid = next_anon_id()
+      new_caller_record(aid, false)
+      set_bound(aid, node, caller_id)
+      anon_parent[aid] = caller_id
+      anon_nodes[aid] = {fn: node, spawn: nil}
+      collect_calls_in_body(node.body, true, aid)
+      if node.defaults != nil
+        for d in node.defaults
+          if d != nil
+            collect_calls(d, false, aid)
+          end
+        end
+      end
+      return nil
+    end
+
+    if node.tag == "if"
+      collect_calls(node.cond, false, caller_id)
+      collect_calls_in_body(node.then, is_tail_pos, caller_id)
+      if node.else != nil
+        collect_calls_in_body(node.else, is_tail_pos, caller_id)
+      end
+      return nil
+    end
+
+    if node.tag == "while"
+      collect_calls(node.cond, false, caller_id)
+      collect_calls_in_body(node.body, false, caller_id)
+      return nil
+    end
+
+    if node.tag == "match"
+      collect_calls(node.target, false, caller_id)
+      for w in node.whens
+        collect_calls_in_body(w.body, is_tail_pos, caller_id)
+      end
+      if node.else != nil
+        collect_calls_in_body(node.else, is_tail_pos, caller_id)
+      end
+      return nil
+    end
+
+    if node.tag == "receive_match"
+      for arm in node.arms
+        collect_calls_in_body(arm.body, is_tail_pos, caller_id)
+      end
+      if node.after_body != nil
+        collect_calls_in_body(node.after_body, is_tail_pos, caller_id)
+      end
+      return nil
+    end
+
+    if node.tag == "return"
+      if node.value != nil
+        collect_calls(node.value, true, caller_id)
+      end
+      return nil
+    end
+
+    if node.tag == "block"
+      collect_calls_in_body(node.stmts, is_tail_pos, caller_id)
+      return nil
+    end
+
+    if node.tag == "let" or node.tag == "assign"
+      if node.tag == "assign"
+        record_write(caller_id, node.name, node)
+      end
+      if node.value != nil
+        collect_calls(node.value, false, caller_id)
+      end
+      return nil
+    end
+
+    if node.tag == "dot_assign"
+      if is_node(node.object, "var")
+        record_write(caller_id, node.object.name, node)
+      end
+      collect_calls(node.object, false, caller_id)
+      collect_calls(node.value, false, caller_id)
+      return nil
+    end
+
+    if node.tag == "index_assign"
+      if is_node(node.object, "var")
+        record_write(caller_id, node.object.name, node)
+      end
+      collect_calls(node.object, false, caller_id)
+      collect_calls(node.key, false, caller_id)
+      collect_calls(node.value, false, caller_id)
+      return nil
+    end
+
+    if node.tag == "binop"
+      collect_calls(node.left, false, caller_id)
+      collect_calls(node.right, false, caller_id)
+      return nil
+    end
+
+    if node.tag == "unop"
+      collect_calls(node.expr, false, caller_id)
+      return nil
+    end
+
+    if node.tag == "dot"
+      # `mod.f` as a value: only `f` escapes, not the whole namespace.
+      if is_node(node.object, "var") and module_dot_to_fn[node.object.name] != nil
+        let df = resolve_dot_callee(node.object.name, node.field)
+        if df != nil
+          set_add(value_fns, df)
+        end
+        return nil
+      end
+      collect_calls(node.object, false, caller_id)
+      return nil
+    end
+
+    if node.tag == "var"
+      let vf = resolve_callee(node.name)
+      if vf != nil
+        set_add(value_fns, vf)
+      end
+      let ns = module_dot_to_fn[node.name]
+      if ns != nil
+        for _, nf in ns
+          set_add(value_fns, nf)
+        end
+      end
+      return nil
+    end
+
+    if node.tag == "index"
+      collect_calls(node.object, false, caller_id)
+      collect_calls(node.key, false, caller_id)
+      return nil
+    end
+
+    if node.tag == "table"
+      if node.entries != nil
+        for e in node.entries
+          collect_calls(e.key, false, caller_id)
+          collect_calls(e.value, false, caller_id)
+        end
+      end
+      return nil
+    end
+
+    if node.tag == "array"
+      if node.elements != nil
+        for el in node.elements
+          collect_calls(el, false, caller_id)
+        end
+      end
+      return nil
+    end
+
+    if node.tag == "interp"
+      if node.parts != nil
+        for p in node.parts
+          collect_calls(p, false, caller_id)
+        end
+      end
+      return nil
+    end
+
+    nil
+  end
+
+  collect_calls_in_body = fn(stmts, is_tail_pos, caller_id)
+    let n = len(stmts)
+    let i = 0
+    while i < n
+      let stmt_is_tail = if i == n - 1
+        is_tail_pos
+      elif i + 1 < n and is_trivial_return(stmts[i + 1])
+        true
+      else
+        false
+      end
+      collect_calls(stmts[i], stmt_is_tail, caller_id)
+      i += 1
+    end
+  end
+
+  for fd in fn_defs
+    let cid = "fn:" + fd.name
+    new_caller_record(cid, false)
+    set_bound(cid, fd, nil)
+    collect_calls_in_body(fd.body, true, cid)
+    if fd.defaults != nil
+      for d in fd.defaults
+        if d != nil
+          collect_calls(d, false, cid)
+        end
+      end
+    end
+  end
+
+  # <top> is a process root. The load alias/namespace lets aren't uses of the fns as values, so skip them.
+  new_caller_record("<top>", true)
+  let top_walked = []
+  for s in top_stmts
+    let binds_fns = is_node(s, "let") and (alias_to_fn[s.name] != nil or module_dot_to_fn[s.name] != nil)
+    if not binds_fns
+      push(top_walked, s)
+    end
+  end
+  collect_calls_in_body(top_walked, true, "<top>")
+  {caller_records: caller_records, anon_parent: anon_parent, anon_nodes: anon_nodes, name_to_fn: name_to_fn, value_fns: value_fns}
+end
+
+# Sets `may_recurse` on every fn_def and anon_fn on a call-graph cycle. An indirect call may reach any
+# closure or value_fns entry. Spawn bodies run on their own stack, so they're never call targets.
+fn mark_recursive_fns(graph)
+  let records = graph.caller_records
+  let succs = {}
+  let targets = []
+  for aid, info in graph.anon_nodes
+    if info.spawn == nil
+      push(targets, aid)
+    end
+  end
+  for name, _ in graph.value_fns
+    push(targets, "fn:" + name)
+  end
+  succs["<indirect>"] = targets
+  for cid, r in records
+    let out = []
+    for callee, _ in r.tail_callees
+      push(out, "fn:" + callee)
+    end
+    for callee, _ in r.non_tail_callees
+      push(out, "fn:" + callee)
+    end
+    if r.indirect
+      push(out, "<indirect>")
+    end
+    succs[cid] = out
+  end
+
+  let index = {}
+  let low = {}
+  let on_stack = {}
+  let stack = []
+  let next_index = 0
+  let in_cycle = {}
+  for root, _ in succs
+    if index[root] == nil
+      let work = [{v: root, i: 0}]
+      index[root] = next_index
+      low[root] = next_index
+      next_index += 1
+      push(stack, root)
+      set_add(on_stack, root)
+      while len(work) > 0
+        let top = work[len(work) - 1]
+        let v = top.v
+        let vs = succs[v]
+        if vs != nil and top.i < len(vs)
+          let w = vs[top.i]
+          top.i = top.i + 1
+          if w == v
+            set_add(in_cycle, v)
+          end
+          if index[w] == nil
+            index[w] = next_index
+            low[w] = next_index
+            next_index += 1
+            push(stack, w)
+            set_add(on_stack, w)
+            push(work, {v: w, i: 0})
+          elif set_contains(on_stack, w) and index[w] < low[v]
+            low[v] = index[w]
+          end
+        else
+          pop(work)
+          if len(work) > 0
+            let parent = work[len(work) - 1].v
+            if low[v] < low[parent]
+              low[parent] = low[v]
+            end
+          end
+          if low[v] == index[v]
+            let comp = []
+            let w = nil
+            while w != v
+              w = pop(stack)
+              delete(on_stack, w)
+              push(comp, w)
+            end
+            if len(comp) > 1
+              for c in comp
+                set_add(in_cycle, c)
+              end
+            end
+          end
+        end
+      end
+    end
+  end
+
+  for name, fd in graph.name_to_fn
+    if set_contains(in_cycle, "fn:" + name)
+      fd.may_recurse = true
+    end
+  end
+  for aid, info in graph.anon_nodes
+    if set_contains(in_cycle, aid)
+      info.fn.may_recurse = true
+    end
+  end
+end
+
+export build_call_graph, mark_recursive_fns

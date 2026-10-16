@@ -1,0 +1,175 @@
+# textDocument/definition: the name under the cursor, looked up here or through imports. One Location or null.
+
+load "./rpc"
+load "./doc"
+load "./workspace"
+load "./position"
+
+fn file_uri(path)
+  "file://" + path
+end
+
+# with several vars of one name, the last one declared at or above the cursor
+fn find_var_for_cursor(vars, name, cursor_line)
+  let best = nil
+  for v in vars
+    if v.name == name
+      if v.line == nil
+        if best == nil then best = v end
+      elif v.line <= cursor_line
+        if best == nil or best.line == nil or v.line >= best.line
+          best = v
+        end
+      end
+    end
+  end
+  best
+end
+
+fn find_first_by_name(list, name)
+  for entry in list
+    if entry.name == name
+      return entry
+    end
+  end
+  nil
+end
+
+# start of a 1-based line; symbols don't carry reliable columns
+fn location_for(path, line)
+  let lsp_line = if line != nil and line > 0 then line - 1 else 0 end
+  let pos = rpc.make_position(lsp_line, 0)
+  rpc.make_location(file_uri(path), rpc.make_range(pos, pos))
+end
+
+# {path, line} or nil, within one module (no following imports)
+fn resolve_local(symbols, name, cursor_line)
+  let v = find_var_for_cursor(symbols.vars, name, cursor_line)
+  if v != nil
+    return {path: v.file, line: v.line}
+  end
+  let f = find_first_by_name(symbols.functions, name)
+  if f != nil
+    return {path: f.file, line: f.line}
+  end
+  nil
+end
+
+# the open doc's symbols if it's open (fresh), else the workspace cache
+fn symbols_for_path(path)
+  let uri = file_uri(path)
+  let cache = doc.get_cache(uri)
+  if cache != nil
+    return cache.symbols
+  end
+  let entry = workspace.lookup(path)
+  if entry == nil
+    return nil
+  end
+  entry.symbols
+end
+
+fn prev_significant(tokens, i)
+  let j = i - 1
+  while j >= 0
+    let t = tokens[j]
+    if t.type != "NEWLINE" and t.type != "INTERP_START"
+      return j
+    end
+    j -= 1
+  end
+  -1
+end
+
+# recv.field: only a module import gives a field a definition to jump to
+fn resolve_field(symbols, recv, field, cursor_line)
+  let imp = find_first_by_name(symbols.imports, recv)
+  if imp == nil
+    return nil
+  end
+  if imp.resolved_path == nil
+    return nil
+  end
+  let mod_syms = symbols_for_path(imp.resolved_path)
+  if mod_syms == nil
+    return nil
+  end
+  resolve_local(mod_syms, field, 999999999)
+end
+
+# vars, then fns, then imports; a selective import resolves in its module, a module name to its file's top
+fn resolve_identifier(symbols, name, cursor_line)
+  let local = resolve_local(symbols, name, cursor_line)
+  if local != nil
+    return local
+  end
+  let imp = find_first_by_name(symbols.imports, name)
+  if imp == nil
+    return nil
+  end
+  if imp.kind == "selective" and imp.resolved_path != nil
+    let mod_syms = symbols_for_path(imp.resolved_path)
+    if mod_syms == nil
+      return nil
+    end
+    return resolve_local(mod_syms, imp.imported_name, 999999999)
+  end
+  if imp.kind == "module" and imp.resolved_path != nil
+    return {path: imp.resolved_path, line: 1}
+  end
+  nil
+end
+
+fn handle(params)
+  let uri = params.textDocument.uri
+  let pos = params.position
+  let cache = doc.get_cache(uri)
+  if cache == nil
+    return nil
+  end
+  let lsp_line = pos.line
+  let lsp_char = pos.character
+  let line_text = ""
+  let blen = len(cache.text)
+  let line = 0
+  let line_start = 0
+  let i = 0
+  while i < blen and line < lsp_line
+    if ord(cache.text, i) == 10
+      line += 1
+      line_start = i + 1
+    end
+    i += 1
+  end
+  let line_end = line_start
+  while line_end < blen and ord(cache.text, line_end) != 10
+    line_end += 1
+  end
+  line_text = substr(cache.text, line_start, line_end - line_start)
+  let byte_col = rpc.utf16_col_to_byte_col(line_text, lsp_char)
+  let idx = position.identifier_at(cache.tokens, lsp_line + 1, byte_col + 1)
+  if idx < 0
+    return nil
+  end
+  let tok = cache.tokens[idx]
+  # NAME . <cursor>: field access
+  let prev_idx = prev_significant(cache.tokens, idx)
+  if prev_idx >= 0 and cache.tokens[prev_idx].type == "."
+    let recv_idx = prev_significant(cache.tokens, prev_idx)
+    if recv_idx >= 0 and cache.tokens[recv_idx].type == "NAME"
+      let recv = cache.tokens[recv_idx].value
+      let field_target = resolve_field(cache.symbols, recv, tok.value, lsp_line + 1)
+      if field_target == nil
+        return nil
+      end
+      return location_for(field_target.path, field_target.line)
+    end
+  end
+  let target = resolve_identifier(cache.symbols, tok.value, lsp_line + 1)
+  if target == nil
+    return nil
+  end
+  location_for(target.path, target.line)
+end
+
+export handle

@@ -1,0 +1,56 @@
+## math: min, max and clamp (numbers or strings), and assert. `floor`, `sqrt` etc. are builtins.
+
+fn check_ordered(caller, a, b)
+  let ta = type(a)
+  let tb = type(b)
+  let numbers = (ta == "int" or ta == "float") and (tb == "int" or tb == "float")
+  if not numbers and not (ta == "string" and tb == "string")
+    error("math.{caller}: expected numbers or strings, got {ta} and {tb}")
+  end
+end
+
+## The smaller of `a` and `b`, or `b` when they tie.
+fn min(a, b)
+  check_ordered("min", a, b)
+  if a < b
+    return a
+  end
+  b
+end
+
+## The larger of `a` and `b`, or `b` when they tie.
+fn max(a, b)
+  check_ordered("max", a, b)
+  if a > b
+    return a
+  end
+  b
+end
+
+## `val` limited to `low`..`high` inclusive (the crossed bound itself, so the type can change); raises if low > high.
+fn clamp(val, low, high)
+  check_ordered("clamp", low, high)
+  check_ordered("clamp", val, low)
+  if high < low
+    error("math.clamp: low ({low}) is greater than high ({high})")
+  end
+  if val < low
+    return low
+  end
+  if val > high
+    return high
+  end
+  val
+end
+
+## Raises "assertion failed" (plus ": <msg>") unless `cond` is truthy.
+fn assert(cond, msg = nil)
+  if not cond
+    if msg == nil
+      error("assertion failed")
+    end
+    error("assertion failed: {msg}")
+  end
+end
+
+export min, max, clamp, assert

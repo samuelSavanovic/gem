@@ -1,0 +1,1550 @@
+/* deep copy (spawn, send), pinned capture boxes, region resets and lazy module slots, all on GemCopyMap */
+
+#include <stdlib.h>
+#include <string.h>
+
+#include "gem.h"
+#include "stb_ds.h"
+
+extern uint32_t gem_shape_counter;
+
+#define GEM_COPY_MAP_INLINE 16
+
+typedef struct {
+    void *old_ptr;
+    void *new_ptr;
+} GemCopyEntry;
+
+
+/* what a reset is about to free: sorted ranges, since blocks are separate mmaps */
+typedef struct {
+    const char *lo;
+    const char *hi;
+} GemRange;
+
+typedef struct {
+    GemRange *ranges;
+    int n;
+} GemRegion;
+
+static int gem_range_cmp(const void *a, const void *b) {
+    const GemRange *x = (const GemRange *)a, *y = (const GemRange *)b;
+    return (x->lo > y->lo) - (x->lo < y->lo);
+}
+
+static int gem_region_contains(const GemRegion *rg, const void *ptr) {
+    const char *p = (const char *)ptr;
+    int lo = 0, hi = rg->n - 1;
+    while (lo <= hi) {
+        int mid = (lo + hi) / 2;
+        if (p < rg->ranges[mid].lo) hi = mid - 1;
+        else if (p >= rg->ranges[mid].hi) lo = mid + 1;
+        else return 1;
+    }
+    return 0;
+}
+
+/* [first_lo, first_hi) is a partial first block, may be empty */
+static void gem_region_build(GemRegion *rg, const char *first_lo, const char *first_hi,
+                             GemArenaBlock *blocks) {
+    int n = 1;
+    for (GemArenaBlock *b = blocks; b; b = b->next) n++;
+    rg->ranges = (GemRange *)malloc(sizeof(GemRange) * (size_t)n);
+    rg->n = 0;
+    if (first_lo && first_hi > first_lo) {
+        rg->ranges[rg->n].lo = first_lo;
+        rg->ranges[rg->n].hi = first_hi;
+        rg->n++;
+    }
+    for (GemArenaBlock *b = blocks; b; b = b->next) {
+        rg->ranges[rg->n].lo = b->data;
+        rg->ranges[rg->n].hi = b->data + b->cap;
+        rg->n++;
+    }
+    qsort(rg->ranges, (size_t)rg->n, sizeof(GemRange), gem_range_cmp);
+}
+
+/* deferred fill of an already allocated table/env copy, so a very deep list can't blow the C stack */
+typedef struct {
+    void *src;
+    void *dst;
+    int is_env;
+} GemCopyTask;
+
+#define GEM_COPY_TASKS_INLINE 32
+/* fill inline up to this nesting, deeper goes on the worklist */
+#define GEM_COPY_INLINE_DEPTH 16
+
+typedef struct {
+    GemCopyEntry inline_buf[GEM_COPY_MAP_INLINE];
+    GemCopyEntry *table;   /* NULL while len <= GEM_COPY_MAP_INLINE */
+    GemCopyTask task_buf[GEM_COPY_TASKS_INLINE];
+    GemCopyTask *tasks;
+    size_t ntasks, taskcap;
+    int depth;
+    size_t tcap;
+    int len;
+    int use_malloc;
+    /* resets: copy only what's inside region, keep every outside pointer as is */
+    int preserve_external;
+    const GemRegion *region;
+    /* source process, for its pin-set; -1 for e.g. a timer's malloc'd message */
+    int src_pid;
+    /* building a snapshot unit: stamp source tables with the gen, and note anything that can change without
+       a table write (buffers, pinned boxes), which makes the unit single-use */
+    uint32_t stamp_gen;
+    GemProcess *snap_src;
+    int saw_mutable;
+    /* faulting in from a unit: share its strings, the unit outlives our use */
+    int share_strings;
+    /* spawned closure env: collect the snapshot gens it reaches so those slots get copied with the same map */
+    int probe;
+    uint32_t *probe_gens;
+    int probe_n, probe_cap;
+} GemCopyMap;
+
+static void gem_copy_map_init(GemCopyMap *map, int use_malloc) {
+    map->table = NULL;
+    map->tcap = 0;
+    map->len = 0;
+    map->tasks = map->task_buf;
+    map->ntasks = 0;
+    map->taskcap = GEM_COPY_TASKS_INLINE;
+    map->depth = 0;
+    map->use_malloc = use_malloc;
+    map->preserve_external = 0;
+    map->region = NULL;
+    map->src_pid = -1;
+    map->stamp_gen = 0;
+    map->snap_src = NULL;
+    map->saw_mutable = 0;
+    map->share_strings = 0;
+    map->probe = 0;
+    map->probe_gens = NULL;
+    map->probe_n = map->probe_cap = 0;
+}
+
+static int gem_copy_is_external(GemCopyMap *map, const void *ptr) {
+    if (!map->preserve_external) return 0;
+    return !gem_region_contains(map->region, ptr);
+}
+
+static void gem_copy_map_cleanup(GemCopyMap *map) {
+    free(map->probe_gens);
+    free(map->table);
+    if (map->tasks != map->task_buf) free(map->tasks);
+}
+
+static void gem_copy_push_task(GemCopyMap *map, void *src, void *dst, int is_env) {
+    if (map->ntasks == map->taskcap) {
+        size_t ncap = map->taskcap * 2;
+        GemCopyTask *nt = (GemCopyTask *)malloc(sizeof(GemCopyTask) * ncap);
+        if (!nt) { fprintf(stderr, "gem: out of memory (copy worklist)\n"); exit(1); }
+        memcpy(nt, map->tasks, sizeof(GemCopyTask) * map->ntasks);
+        if (map->tasks != map->task_buf) free(map->tasks);
+        map->tasks = nt;
+        map->taskcap = ncap;
+    }
+    map->tasks[map->ntasks].src = src;
+    map->tasks[map->ntasks].dst = dst;
+    map->tasks[map->ntasks].is_env = is_env;
+    map->ntasks++;
+}
+
+static inline size_t gem_copy_hash(const void *p, size_t mask) {
+    uint64_t x = (uint64_t)(uintptr_t)p >> 4;
+    x *= 0x9E3779B97F4A7C15ull;
+    return (size_t)(x >> 32) & mask;
+}
+
+static void gem_copy_table_insert(GemCopyMap *map, void *old, void *new_ptr) {
+    size_t mask = map->tcap - 1;
+    size_t i = gem_copy_hash(old, mask);
+    while (map->table[i].old_ptr) i = (i + 1) & mask;
+    map->table[i].old_ptr = old;
+    map->table[i].new_ptr = new_ptr;
+}
+
+static void gem_copy_table_grow(GemCopyMap *map) {
+    GemCopyEntry *old = map->table;
+    size_t old_cap = map->tcap;
+    map->tcap = old_cap ? old_cap * 2 : 64;
+    map->table = (GemCopyEntry *)calloc(map->tcap, sizeof(GemCopyEntry));
+    if (!map->table) { fprintf(stderr, "gem: out of memory (copy map)\n"); exit(1); }
+    if (old) {
+        for (size_t i = 0; i < old_cap; i++)
+            if (old[i].old_ptr) gem_copy_table_insert(map, old[i].old_ptr, old[i].new_ptr);
+        free(old);
+    } else {
+        for (int i = 0; i < map->len; i++)
+            gem_copy_table_insert(map, map->inline_buf[i].old_ptr, map->inline_buf[i].new_ptr);
+    }
+}
+
+static void *gem_copy_map_find(GemCopyMap *map, void *old) {
+    if (map->table) {
+        size_t mask = map->tcap - 1;
+        size_t i = gem_copy_hash(old, mask);
+        while (map->table[i].old_ptr) {
+            if (map->table[i].old_ptr == old) return map->table[i].new_ptr;
+            i = (i + 1) & mask;
+        }
+        return NULL;
+    }
+    for (int i = 0; i < map->len; i++) {
+        if (map->inline_buf[i].old_ptr == old) return map->inline_buf[i].new_ptr;
+    }
+    return NULL;
+}
+
+static void gem_copy_map_add(GemCopyMap *map, void *old, void *new_ptr) {
+    if (!map->table && map->len < GEM_COPY_MAP_INLINE) {
+        map->inline_buf[map->len].old_ptr = old;
+        map->inline_buf[map->len].new_ptr = new_ptr;
+        map->len++;
+        return;
+    }
+    if (!map->table || (size_t)(map->len + 1) * 2 > map->tcap) gem_copy_table_grow(map);
+    gem_copy_table_insert(map, old, new_ptr);
+    map->len++;
+}
+
+static void *gem_copy_alloc(GemCopyMap *map, size_t size) {
+    if (map->use_malloc) return calloc(1, size);
+    return gem_arena_alloc(gem_current_arena(), size);
+}
+
+static char *gem_copy_strdup(GemCopyMap *map, const char *s, int slen) {
+    char *copy = (char *)gem_copy_alloc(map, (size_t)slen + 1);
+    memcpy(copy, s, (size_t)slen);
+    copy[slen] = '\0';
+    return copy;
+}
+
+/* gem_copy_shallow allocates a table/env shell and records it in the map (keeps aliasing and cycles), then
+   fills it inline or via the worklist, which gem_deep_copy_internal drains. */
+
+static void gem_copy_fill_table(GemTable *t, GemTable *nt, GemCopyMap *map);
+static void gem_copy_fill_env(void *env, void *new_env, GemCopyMap *map);
+
+static inline void gem_copy_fill(void *src, void *dst, int is_env, GemCopyMap *map) {
+    if (map->depth < GEM_COPY_INLINE_DEPTH) {
+        map->depth++;
+        if (is_env) gem_copy_fill_env(src, dst, map);
+        else gem_copy_fill_table((GemTable *)src, (GemTable *)dst, map);
+        map->depth--;
+    } else {
+        gem_copy_push_task(map, src, dst, is_env);
+    }
+}
+
+static GemVal gem_copy_shallow(GemVal val, GemCopyMap *map) {
+    switch (val.type) {
+        case VAL_NIL:
+        case VAL_BOOL:
+        case VAL_INT:
+        case VAL_FLOAT:
+        case VAL_REF:
+        case VAL_RESOURCE:
+        case VAL_LAZY:
+            return val;
+        case VAL_STRING: {
+            if (map->share_strings) return val;
+            if (gem_copy_is_external(map, val.sval)) return val;
+            void *existing = gem_copy_map_find(map, val.sval);
+            if (existing) { GemVal r; r.type = VAL_STRING; r.magic = GEM_MAGIC; r.sval = (char *)existing; r.slen = val.slen; return r; }
+            GemVal r;
+            r.type = VAL_STRING;
+            r.magic = GEM_MAGIC;
+            r.sval = gem_copy_strdup(map, val.sval, val.slen);
+            r.slen = val.slen;
+            gem_copy_map_add(map, val.sval, r.sval);
+            return r;
+        }
+        case VAL_TABLE: {
+            GemTable *t = val.table;
+            if (gem_copy_is_external(map, t)) return val;
+            if (map->stamp_gen) t->snap_gen = map->stamp_gen;
+            if (map->probe && t->snap_gen) {
+                int seen = 0;
+                for (int k = 0; k < map->probe_n; k++) if (map->probe_gens[k] == t->snap_gen) { seen = 1; break; }
+                if (!seen) {
+                    if (map->probe_n == map->probe_cap) {
+                        map->probe_cap = map->probe_cap ? map->probe_cap * 2 : 8;
+                        map->probe_gens = (uint32_t *)realloc(map->probe_gens, sizeof(uint32_t) * (size_t)map->probe_cap);
+                        if (!map->probe_gens) { fprintf(stderr, "gem: out of memory (spawn)\n"); exit(1); }
+                    }
+                    map->probe_gens[map->probe_n++] = t->snap_gen;
+                }
+            }
+            void *existing = gem_copy_map_find(map, t);
+            if (existing) { GemVal r; r.type = VAL_TABLE; r.magic = GEM_MAGIC; r.table = (GemTable *)existing; return r; }
+            GemTable *nt = (GemTable *)gem_copy_alloc(map, sizeof(GemTable));
+            gem_copy_map_add(map, t, nt);
+            nt->len = t->len;
+            nt->cap = t->cap;
+            nt->keys = (GemVal *)gem_copy_alloc(map, sizeof(GemVal) * t->cap);
+            nt->vals = (GemVal *)gem_copy_alloc(map, sizeof(GemVal) * t->cap);
+            nt->str_index = NULL;
+            nt->nstr = t->nstr;
+            nt->shape_id = gem_shape_counter++;
+            nt->immutable = t->immutable;
+            nt->is_array = t->is_array;
+            nt->braces = t->braces;
+            /* a reset move keeps the table in its snapshot unit */
+            if (map->preserve_external) nt->snap_gen = t->snap_gen;
+            nt->arena_next = NULL;
+            /* rebuild the index lazily, most copies never get a key lookup */
+            nt->index_stale = (t->str_index != NULL || t->index_stale);
+            if (!map->use_malloc) {
+                GemArena *a = gem_current_arena();
+                nt->arena_next = a->table_list;
+                a->table_list = nt;
+                nt->mut_seq = gem_mut_clock;
+            }
+            if (t->len > 0) gem_copy_fill(t, nt, 0, map);
+            GemVal r; r.type = VAL_TABLE; r.magic = GEM_MAGIC; r.table = nt; return r;
+        }
+        case VAL_BUFFER: {
+            if (gem_copy_is_external(map, val.buffer)) return val;
+            map->saw_mutable = 1;
+            void *bex = gem_copy_map_find(map, val.buffer);
+            if (bex) { GemVal r; r.type = VAL_BUFFER; r.magic = GEM_MAGIC; r.buffer = (GemBuffer *)bex; return r; }
+            GemBuffer *ob = val.buffer;
+            GemBuffer *nb = (GemBuffer *)gem_copy_alloc(map, sizeof(GemBuffer));
+            gem_copy_map_add(map, ob, nb);
+            nb->arena_next = NULL;
+            if (!map->use_malloc) {
+                GemArena *a = gem_current_arena();
+                nb->arena_next = a->buffer_list;
+                a->buffer_list = nb;
+            }
+            nb->len = ob->len;
+            nb->cap = ob->cap;
+            nb->data = (char *)gem_copy_alloc(map, ob->cap);
+            memcpy(nb->data, ob->data, ob->len);
+            GemVal r; r.type = VAL_BUFFER; r.magic = GEM_MAGIC; r.buffer = nb; return r;
+        }
+        case VAL_FN: {
+            if (!val.env) return val;
+            /* envs are write-once, so an env older than the region only points older */
+            if (gem_copy_is_external(map, val.env)) return val;
+            void *existing = gem_copy_map_find(map, val.env);
+            if (existing) return (GemVal){.type = VAL_FN, .magic = GEM_MAGIC, .fn = val.fn, .env = existing};
+            intptr_t n = *(intptr_t *)val.env;
+            size_t env_size = sizeof(intptr_t) + sizeof(GemVal *) * n;
+            void *new_env = gem_copy_alloc(map, env_size);
+            gem_copy_map_add(map, val.env, new_env);
+            *(intptr_t *)new_env = n;
+            if (n > 0) gem_copy_fill(val.env, new_env, 1, map);
+            return (GemVal){.type = VAL_FN, .magic = GEM_MAGIC, .fn = val.fn, .env = new_env};
+        }
+    }
+    return val;
+}
+
+/* pinned boxes inside malloc'd copies (timer messages, snapshot units), in no process's pin-set */
+static GemPinEntry *gem_malloc_pinned = NULL;
+
+static int gem_copy_box_is_pinned(GemCopyMap *map, GemVal *box) {
+    if (map->src_pid >= 0) {
+        GemProcess *sp = &gem_proc_table[map->src_pid];
+        if (sp->pinned_boxes && hmgeti(sp->pinned_boxes, (void *)box) >= 0) return 1;
+    }
+    return gem_malloc_pinned && hmgeti(gem_malloc_pinned, (void *)box) >= 0;
+}
+
+/* A pinned box must copy to a pinned box: closures keep writing it, and only the pin-set gets walked by
+   the receiver's resets. Arena boxes are write-once, so a plain arena box will do for those. */
+static GemVal *gem_copy_new_box(GemCopyMap *map, GemVal *old) {
+    if (!map->preserve_external && gem_copy_box_is_pinned(map, old)) {
+        if (map->use_malloc) {
+            GemVal *b = (GemVal *)calloc(1, sizeof(GemVal));
+            GemPinEntry e = { .key = b, .value = 0, .seq = 0 };
+            hmputs(gem_malloc_pinned, e);
+            return b;
+        }
+        return gem_box_alloc();  /* registers in the destination's pin-set */
+    }
+    return (GemVal *)gem_copy_alloc(map, sizeof(GemVal));
+}
+
+static void gem_copy_fill_env(void *env, void *new_env, GemCopyMap *map) {
+    intptr_t n = *(intptr_t *)env;
+    GemVal **old = (GemVal **)((char *)env + sizeof(intptr_t));
+    GemVal **new_fields = (GemVal **)((char *)new_env + sizeof(intptr_t));
+    for (intptr_t i = 0; i < n; i++) {
+        /* box outside the region (pinned, or an older arena box): keep the pointer. The first env to reach a
+           pinned box this reset copies its contents in place. */
+        if (gem_copy_is_external(map, old[i])) {
+            new_fields[i] = old[i];
+            if (gem_current_pid >= 0) {
+                GemProcess *proc = &gem_proc_table[gem_current_pid];
+                if (gem_pin_mark_walked(proc, old[i])) {
+                    *old[i] = gem_copy_shallow(*old[i], map);
+                }
+            }
+            continue;
+        }
+        GemVal *existing = (GemVal *)gem_copy_map_find(map, old[i]);
+        if (existing) {
+            new_fields[i] = existing;
+            continue;
+        }
+        if (map->snap_src && map->snap_src->pinned_boxes &&
+            hmgeti(map->snap_src->pinned_boxes, (void *)old[i]) >= 0)
+            map->saw_mutable = 1;
+        GemVal *box = gem_copy_new_box(map, old[i]);
+        gem_copy_map_add(map, old[i], box);
+        *box = gem_copy_shallow(*old[i], map);
+        new_fields[i] = box;
+    }
+}
+
+static void gem_copy_fill_table(GemTable *t, GemTable *nt, GemCopyMap *map) {
+    for (int i = 0; i < t->len; i++) {
+        nt->keys[i] = gem_copy_shallow(t->keys[i], map);
+        nt->vals[i] = gem_copy_shallow(t->vals[i], map);
+    }
+}
+
+static void gem_copy_drain(GemCopyMap *map) {
+    while (map->ntasks > 0) {
+        GemCopyTask task = map->tasks[--map->ntasks];
+        /* depth is 0 here: a task starts a fresh inline budget */
+        if (task.is_env) gem_copy_fill_env(task.src, task.dst, map);
+        else gem_copy_fill_table((GemTable *)task.src, (GemTable *)task.dst, map);
+    }
+}
+
+static GemVal gem_deep_copy_internal(GemVal val, GemCopyMap *map) {
+    GemVal r = gem_copy_shallow(val, map);
+    gem_copy_drain(map);
+    return r;
+}
+
+GemVal gem_deep_copy(GemVal val, int src_pid) {
+    GemCopyMap map;
+    gem_copy_map_init(&map, 0);
+    map.src_pid = src_pid;
+    GemVal result = gem_deep_copy_internal(val, &map);
+    gem_copy_map_cleanup(&map);
+    return result;
+}
+
+GemVal gem_deep_copy_malloc(GemVal val) {
+    GemCopyMap map;
+    gem_copy_map_init(&map, 1);
+    map.src_pid = gem_current_pid;
+    GemVal result = gem_deep_copy_internal(val, &map);
+    gem_copy_map_cleanup(&map);
+    return result;
+}
+
+/* frees a gem_deep_copy_malloc value; iterative, aliased parts freed once */
+void gem_deep_free(GemVal val) {
+    gem_deep_free_n(&val, 1);
+}
+
+void gem_deep_free_n(const GemVal *vals, int nvals) {
+    GemCopyMap visited;
+    gem_copy_map_init(&visited, 1);
+    GemVal *stack = NULL;
+    size_t n = 0, cap = 0;
+#define GEM_FREE_PUSH(v) do { \
+        if (n == cap) { cap = cap ? cap * 2 : 64; stack = (GemVal *)realloc(stack, sizeof(GemVal) * cap); \
+                        if (!stack) { fprintf(stderr, "gem: out of memory (free)\n"); exit(1); } } \
+        stack[n++] = (v); } while (0)
+    for (int vi = 0; vi < nvals; vi++) GEM_FREE_PUSH(vals[vi]);
+    while (n > 0) {
+        GemVal v = stack[--n];
+        switch (v.type) {
+            case VAL_STRING:
+                if (gem_copy_map_find(&visited, v.sval)) break;
+                gem_copy_map_add(&visited, v.sval, (void *)1);
+                free(v.sval);
+                break;
+            case VAL_TABLE: {
+                GemTable *t = v.table;
+                if (gem_copy_map_find(&visited, t)) break;
+                gem_copy_map_add(&visited, t, (void *)1);
+                for (int i = 0; i < t->len; i++) {
+                    GEM_FREE_PUSH(t->keys[i]);
+                    GEM_FREE_PUSH(t->vals[i]);
+                }
+                gem_str_index_free(&t->str_index);
+                free(t->keys);
+                free(t->vals);
+                free(t);
+                break;
+            }
+            case VAL_BUFFER: {
+                GemBuffer *b = v.buffer;
+                if (gem_copy_map_find(&visited, b)) break;
+                gem_copy_map_add(&visited, b, (void *)1);
+                free(b->data);
+                free(b);
+                break;
+            }
+            case VAL_FN: {
+                if (!v.env) break;
+                if (gem_copy_map_find(&visited, v.env)) break;
+                gem_copy_map_add(&visited, v.env, (void *)1);
+                intptr_t nf = *(intptr_t *)v.env;
+                GemVal **fields = (GemVal **)((char *)v.env + sizeof(intptr_t));
+                for (intptr_t i = 0; i < nf; i++) {
+                    if (gem_copy_map_find(&visited, fields[i])) continue;
+                    gem_copy_map_add(&visited, fields[i], (void *)1);
+                    GEM_FREE_PUSH(*fields[i]);
+                    if (gem_malloc_pinned) (void)hmdel(gem_malloc_pinned, (void *)fields[i]);
+                    free(fields[i]);
+                }
+                free(v.env);
+                break;
+            }
+            default:
+                break;
+        }
+    }
+#undef GEM_FREE_PUSH
+    free(stack);
+    gem_copy_map_cleanup(&visited);
+}
+
+/* Pinned boxes: captures a closure assigns, malloc'd so resets never move them and listed in the process's
+   pin-set. A reset walks the ones codegen passes as pinned_roots plus any an env reaches (marked so each is
+   walked once), always walks boxes older than its point (callers may hold them), and frees newer unreached ones. */
+
+GemVal *gem_box_alloc(void) {
+    GemVal *p = (GemVal *)calloc(1, sizeof(GemVal));
+    if (gem_current_pid >= 0) {
+        GemProcess *proc = &gem_proc_table[gem_current_pid];
+        GemPinEntry e = { .key = p, .value = 0, .seq = proc->arena.pin_seq++ };
+        hmputs(proc->pinned_boxes, e);
+    }
+    return p;
+}
+
+int gem_pin_mark_walked(GemProcess *proc, void *p) {
+    if (!proc || !proc->pinned_boxes) return 0;
+    ptrdiff_t idx = hmgeti(proc->pinned_boxes, p);
+    if (idx < 0) return 0;
+    if (proc->pinned_boxes[idx].value) return 0;
+    proc->pinned_boxes[idx].value = 1;
+    return 1;
+}
+
+/* frees unmarked boxes with seq >= min_seq, clears the marks */
+static void gem_pin_sweep_from(GemProcess *proc, uint64_t min_seq) {
+    if (!proc || !proc->pinned_boxes) return;
+    /* collect first: hmdel moves entries around */
+    void **to_free = NULL;
+    size_t n = hmlenu(proc->pinned_boxes);
+    for (size_t i = 0; i < n; i++) {
+        if (proc->pinned_boxes[i].value == 0 && proc->pinned_boxes[i].seq >= min_seq) {
+            arrpush(to_free, proc->pinned_boxes[i].key);
+        } else {
+            proc->pinned_boxes[i].value = 0;
+        }
+    }
+    for (size_t i = 0; i < arrlenu(to_free); i++) {
+        hmdel(proc->pinned_boxes, to_free[i]);
+        free(to_free[i]);
+    }
+    arrfree(to_free);
+}
+
+void gem_pin_sweep(GemProcess *proc) {
+    gem_pin_sweep_from(proc, 0);
+}
+
+void gem_pin_free_all(GemProcess *proc) {
+    if (!proc || !proc->pinned_boxes) return;
+    size_t n = hmlenu(proc->pinned_boxes);
+    for (size_t i = 0; i < n; i++) {
+        free(proc->pinned_boxes[i].key);
+    }
+    hmfree(proc->pinned_boxes);
+    proc->pinned_boxes = NULL;
+}
+
+/* Region resets.
+
+   A loop takes a mark when it starts. At its back-edge gem_arena_reset_region copies what the roots reach
+   out of the region (everything allocated since one of the mark's points) and frees the rest. Memory older
+   than the point is never moved or freed. That's what makes it safe: callers' frames (Gem or runtime, e.g.
+   pcall or sort calling back into Gem) were suspended before the mark, so they only hold older values.
+
+   A mark has two points: base (loop start) and young (end of what earlier resets kept). A normal reset frees
+   from young and then moves young past its copies, so kept data is copied once, generational style. A full
+   reset frees from base: the mark's first reset, and whenever the bytes kept since the last full reset pass
+   2x what it kept (4x if it kept over half its region) plus gem_reset_threshold.
+
+   Where a pointer into the region can be, and what covers it:
+   - the resetting frame's locals: codegen roots everything live at the back-edge.
+   - callers: a newer value only reaches them by return (after the loop) or by a store into an older object.
+   - older tables, buffers, pinned boxes, mailbox nodes: found via the write barrier's remembered log
+     (gem_table_written), the arena's buffer list, the pin-set and the mailbox, and fixed up in place.
+     Arena envs and capture boxes are write-once and strings immutable, so older ones can't point in.
+   - module slots, the mailbox, read_buf: walked here.
+   - other processes: never. spawn and send deep-copy, and a copied-in pinned box becomes ours (gem_copy_new_box).
+   Enclosing loops' marks are all older than ours, so nesting is fine.
+
+   Return resets (gem_arena_reset_return): a fn that can recurse resets at its returns from its entry point,
+   with the return value as the only root. Same argument, reading "the call" for "the loop". gem_arena_point
+   bumps gem_mut_clock, so the first write during the call to an older table gets logged. A non-escaping
+   closure (mark_non_escaping) writes its creator's C locals, which a return reset wouldn't root, so it gets
+   no return point; nor does a mutual-TCO body (its return carries the next args in gem_tail_args), whose
+   trampoline resets instead. A longjmp out skips it.
+
+   Hysteresis: the next reset fires after max(threshold, 2*copied + scanned/2) more bytes after a young
+   reset, max(threshold, scanned/2) after a full one, so the work stays paid for by allocation. */
+
+/* Always counted; runtime_stats() reads them. GEM_DIAG=1 prints a summary at exit, GEM_DIAG=2 a line per
+   slow reset. Only the log-walk timing depends on GEM_DIAG. */
+static GemResetStats gem_rstats;
+static double gem_diag_t_walk;
+#include <time.h>
+static double gem_diag_now(void) { struct timespec ts; clock_gettime(CLOCK_MONOTONIC, &ts); return ts.tv_sec + ts.tv_nsec * 1e-9; }
+static int gem_diag_state = -1;   /* -1 until read, then the GEM_DIAG level: 0, 1 or 2 */
+#define GEM_DIAG_SLOW_S 0.001
+static size_t gem_diag_last_copied, gem_diag_last_scanned, gem_diag_last_region;
+static int gem_diag_last_full;
+static double gem_diag_last_walk;
+
+static void gem_diag_reset_report(void) {
+    fprintf(stderr, "gem_diag: arena_resets=%llu copied=%llu scanned=%llu freed=%llu time=%.3fs walk=%.3fs full=%llu ret_resets=%llu ret_copied=%llu max=%.3fs\n",
+            (unsigned long long)gem_rstats.resets, (unsigned long long)gem_rstats.copied,
+            (unsigned long long)gem_rstats.scanned, (unsigned long long)gem_rstats.freed,
+            gem_rstats.t_total, gem_diag_t_walk, (unsigned long long)gem_rstats.full,
+            (unsigned long long)gem_rstats.ret, (unsigned long long)gem_rstats.ret_copied, gem_rstats.t_max);
+}
+
+void gem_reset_stats_get(GemResetStats *out) {
+    *out = gem_rstats;
+}
+
+static void gem_diag_init(void) {
+    if (gem_diag_state >= 0) return;
+    const char *e = getenv("GEM_DIAG");
+    gem_diag_state = (e && (e[0] == '1' || e[0] == '2')) ? e[0] - '0' : 0;
+    if (gem_diag_state) atexit(gem_diag_reset_report);
+}
+
+static void gem_diag_note_reset(size_t copied, size_t scanned, size_t freed, int full) {
+    gem_diag_last_copied = copied;
+    gem_diag_last_scanned = scanned;
+    gem_diag_last_region = freed;
+    gem_diag_last_full = full;
+    gem_rstats.resets++;
+    gem_rstats.full += full;
+    gem_rstats.copied += copied;
+    gem_rstats.scanned += scanned;
+    gem_rstats.freed += freed;
+}
+
+static void gem_diag_note_time(double dt) {
+    gem_rstats.t_total += dt;
+    if (dt > gem_rstats.t_max) gem_rstats.t_max = dt;
+    if (dt >= 0.001) {
+        gem_rstats.over_1ms++;
+        if (dt >= 0.01) gem_rstats.over_10ms++;
+        if (dt >= 0.1) gem_rstats.over_100ms++;
+    }
+}
+
+static int gem_val_in_region(GemCopyMap *map, GemVal v) {
+    switch (v.type) {
+        case VAL_STRING: return gem_region_contains(map->region, v.sval);
+        case VAL_TABLE:  return gem_region_contains(map->region, v.table);
+        case VAL_BUFFER: return gem_region_contains(map->region, v.buffer);
+        case VAL_FN:     return v.env != NULL && gem_region_contains(map->region, v.env);
+        default:         return 0;
+    }
+}
+
+/* a logged table's string keys moved: repoint its index at the copies (the old bytes are still mapped) */
+static void gem_rekey_index(GemTable *t, const int *moved, int n_moved) {
+    if (!t->str_index || t->index_stale) return;
+    for (int k = 0; k < n_moved; k++) {
+        int i = moved[k];
+        gem_str_index_put(&t->str_index, t->keys[i].sval, t->keys[i].slen, i);
+    }
+}
+
+#ifdef GEM_DEBUG
+/* Debug heap check after a reset. Walks what the argument above says must be intact (roots, pinned boxes,
+   module slots, mailbox, logged tables, older buffers): pointers stay out of the freed region and below their
+   block's used mark, every value has a known type, newer strings keep their NUL at slen. Older objects only
+   get their pointers checked, except logged tables, checked whole. That can cost far more than the reset, so
+   checks come out of a budget: resets add the bytes they freed and copied, a check spends 64 per value, and
+   a check is skipped while in debt. */
+typedef struct { const char *lo, *hi; } GemDbgBlock;
+typedef struct {
+    GemProcess *proc;
+    const GemRegion *freed;
+    GemRegion kept;
+    GemDbgBlock *blocks;
+    int nblocks;
+    struct { void *key; char value; } *seen;
+    GemVal *stack;
+    const char *where;
+    size_t visits;
+} GemDbgCheck;
+
+static long long gem_dbg_budget = 0;
+
+static int gem_dbg_block_cmp(const void *a, const void *b) {
+    const GemDbgBlock *x = (const GemDbgBlock *)a, *y = (const GemDbgBlock *)b;
+    return (x->lo > y->lo) - (x->lo < y->lo);
+}
+
+__attribute__((noreturn, cold))
+static void gem_dbg_fail(GemDbgCheck *c, const char *what, const void *p) {
+    char buf[256];
+    snprintf(buf, sizeof(buf), "heap check after a reset: %s (%p, reached from %s)", what, p, c->where);
+    gem_assert_fail("gem_debug_check_reset", buf, __FILE__, __LINE__);
+}
+
+static void gem_dbg_ptr(GemDbgCheck *c, const void *p, size_t n) {
+    if (!p) return;
+    const char *q = (const char *)p;
+    if (gem_region_contains(c->freed, q)) gem_dbg_fail(c, "a pointer into the freed region", p);
+    int lo = 0, hi = c->nblocks - 1;
+    while (lo <= hi) {
+        int mid = (lo + hi) / 2;
+        if (q < c->blocks[mid].lo) hi = mid - 1;
+        else if (q >= c->blocks[mid].hi) lo = mid + 1;
+        else {
+            if (q + n > c->blocks[mid].hi) gem_dbg_fail(c, "a pointer past the used part of an arena block", p);
+            return;
+        }
+    }
+}
+
+static int gem_dbg_first_visit(GemDbgCheck *c, void *p) {
+    if (!gem_region_contains(&c->kept, p)) return 0;
+    if (hmgeti(c->seen, p) >= 0) return 0;
+    hmput(c->seen, p, 1);
+    return 1;
+}
+
+static void gem_dbg_val(GemDbgCheck *c, GemVal v) {
+    c->visits++;
+    if ((unsigned)v.type > VAL_LAZY) gem_dbg_fail(c, "a value with no known type (freed or never written memory)", NULL);
+    arrput(c->stack, v);
+}
+
+static void gem_dbg_drain(GemDbgCheck *c) {
+    while (arrlen(c->stack) > 0) {
+        GemVal v = arrpop(c->stack);
+        switch (v.type) {
+            case VAL_STRING:
+                gem_dbg_ptr(c, v.sval, (size_t)v.slen + 1);
+                if (v.slen < 0) gem_dbg_fail(c, "a string with a negative length", v.sval);
+                if (gem_region_contains(&c->kept, v.sval) && v.sval[v.slen] != '\0')
+                    gem_dbg_fail(c, "a string with no NUL at slen", v.sval);
+                break;
+            case VAL_TABLE: {
+                GemTable *t = v.table;
+                gem_dbg_ptr(c, t, sizeof(GemTable));
+                if (!gem_dbg_first_visit(c, t)) break;
+                if (t->len < 0 || t->len > t->cap) gem_dbg_fail(c, "a table with len outside 0..cap", t);
+                gem_dbg_ptr(c, t->keys, sizeof(GemVal) * (size_t)t->len);
+                gem_dbg_ptr(c, t->vals, sizeof(GemVal) * (size_t)t->len);
+                for (int i = 0; i < t->len; i++) { gem_dbg_val(c, t->keys[i]); gem_dbg_val(c, t->vals[i]); }
+                break;
+            }
+            case VAL_BUFFER: {
+                GemBuffer *b = v.buffer;
+                gem_dbg_ptr(c, b, sizeof(GemBuffer));
+                if (!gem_dbg_first_visit(c, b)) break;
+                if (b->len < 0 || b->len > b->cap) gem_dbg_fail(c, "a buffer with len outside 0..cap", b);
+                gem_dbg_ptr(c, b->data, (size_t)b->len);
+                break;
+            }
+            case VAL_FN: {
+                if (!v.env) break;
+                gem_dbg_ptr(c, v.env, sizeof(intptr_t));
+                if (!gem_dbg_first_visit(c, v.env)) break;
+                intptr_t n = *(intptr_t *)v.env;
+                if (n < 0 || n > 1 << 20) gem_dbg_fail(c, "a closure env with a bad field count", v.env);
+                gem_dbg_ptr(c, v.env, sizeof(intptr_t) + sizeof(GemVal *) * (size_t)n);
+                GemVal **boxes = (GemVal **)((char *)v.env + sizeof(intptr_t));
+                for (intptr_t i = 0; i < n; i++) {
+                    gem_dbg_ptr(c, boxes[i], sizeof(GemVal));
+                    if (boxes[i] && gem_dbg_first_visit(c, boxes[i])) gem_dbg_val(c, *boxes[i]);
+                    else if (boxes[i] && !gem_region_contains(&c->kept, boxes[i])) {
+                        /* an older box: only its contents' pointer */
+                        GemVal bv = *boxes[i];
+                        if ((unsigned)bv.type > VAL_LAZY) gem_dbg_fail(c, "a capture box with no known type", boxes[i]);
+                    }
+                }
+                break;
+            }
+            default:
+                break;
+        }
+    }
+}
+
+static void gem_debug_check_reset(GemProcess *proc, const GemArenaMark *mark, const GemRegion *freed,
+                                  GemVal **roots, int n_roots, GemVal **pinned_roots, int n_pinned,
+                                  size_t reset_bytes) {
+    gem_dbg_budget += (long long)reset_bytes;
+    if (gem_dbg_budget < 0) return;
+    GemArena *arena = &proc->arena;
+    GemDbgCheck c = {0};
+    c.proc = proc;
+    c.freed = freed;
+    for (GemArenaBlock *b = arena->head; b; b = b->next) c.nblocks++;
+    c.blocks = (GemDbgBlock *)malloc(sizeof(GemDbgBlock) * (size_t)(c.nblocks ? c.nblocks : 1));
+    int i = 0;
+    for (GemArenaBlock *b = arena->head; b; b = b->next, i++) {
+        GEM_ASSERT(b->used <= b->cap, "an arena block used past its capacity");
+        c.blocks[i].lo = b->data;
+        c.blocks[i].hi = b->data + b->used;
+    }
+    qsort(c.blocks, (size_t)c.nblocks, sizeof(GemDbgBlock), gem_dbg_block_cmp);
+    GemArenaBlock *bb = mark->base.block;
+    gem_region_build(&c.kept, bb->data + mark->base.used, bb->data + bb->used, bb->next);
+
+    c.where = "a root of the reset";
+    for (int k = 0; k < n_roots; k++) gem_dbg_val(&c, *roots[k]);
+    gem_dbg_drain(&c);
+    c.where = "a pinned root";
+    for (int k = 0; k < n_pinned; k++) gem_dbg_val(&c, *pinned_roots[k]);
+    gem_dbg_drain(&c);
+    c.where = "a module slot";
+    if (proc->globals) for (int k = 0; k < gem_n_globals; k++) gem_dbg_val(&c, proc->globals[k]);
+    gem_dbg_drain(&c);
+    c.where = "a pinned box";
+    if (proc->pinned_boxes) {
+        for (size_t k = 0; k < hmlenu(proc->pinned_boxes); k++)
+            gem_dbg_val(&c, *(GemVal *)proc->pinned_boxes[k].key);
+    }
+    gem_dbg_drain(&c);
+    c.where = "the mailbox";
+    for (GemMsgNode *n = proc->mailbox.head; n; n = n->next) {
+        gem_dbg_ptr(&c, n, sizeof(GemMsgNode));
+        gem_dbg_val(&c, n->value);
+    }
+    gem_dbg_drain(&c);
+    c.where = "a table in the remembered log";
+    for (size_t k = 0; k < arena->rem_len; k++) {
+        GemTable *t = arena->rem[k].t;
+        gem_dbg_ptr(&c, t, sizeof(GemTable));
+        gem_dbg_val(&c, (GemVal){ .type = VAL_TABLE, .magic = GEM_MAGIC, .table = t });
+        if (!gem_region_contains(&c.kept, t)) {
+            /* older table: check its entries here, the walk skips it */
+            gem_dbg_ptr(&c, t->keys, sizeof(GemVal) * (size_t)t->len);
+            gem_dbg_ptr(&c, t->vals, sizeof(GemVal) * (size_t)t->len);
+            for (int j = 0; j < t->len; j++) { gem_dbg_val(&c, t->keys[j]); gem_dbg_val(&c, t->vals[j]); }
+        }
+    }
+    gem_dbg_drain(&c);
+    c.where = "an arena buffer";
+    for (GemBuffer *b = arena->buffer_list; b; b = b->arena_next) {   /* all: few in practice */
+        gem_dbg_ptr(&c, b, sizeof(GemBuffer));
+        gem_dbg_ptr(&c, b->data, (size_t)b->len);
+    }
+    c.where = "the arena's table list";
+    for (GemTable *t = arena->table_list; t && t != mark->base.tables; t = t->arena_next)
+        gem_dbg_ptr(&c, t, sizeof(GemTable));
+
+    gem_dbg_budget -= 64 * (long long)(c.visits + (size_t)c.nblocks);
+    hmfree(c.seen);
+    arrfree(c.stack);
+    free(c.blocks);
+    free(c.kept.ranges);
+}
+#endif
+
+/* *copied_out, *scanned_out, *region_out: bytes copied, scanned, in the region */
+static void gem_region_reset_impl(GemArenaMark *mark, GemVal **roots, int n_roots,
+                                  GemVal **pinned_roots, int n_pinned,
+                                  size_t *copied_out, size_t *scanned_out, size_t *region_out) {
+    GemProcess *proc = &gem_proc_table[gem_current_pid];
+    GemArena *arena = &proc->arena;
+    GEM_ASSERT(mark->base.arena == arena && mark->young.arena == arena,
+               "a reset of a mark taken in another process's arena");
+
+    /* full before the first promotion, or once kept memory passes old_limit */
+    int full = mark->young.clock == mark->base.clock || mark->old_bytes > mark->old_limit;
+    GemArenaPoint *pt = full ? &mark->base : &mark->young;
+    GemArenaBlock *mb = pt->block;
+
+    /* region: mb's tail past the point, plus every later block */
+    GemArenaBlock *post_blocks = mb->next;
+    GemRegion region;
+    gem_region_build(&region, mb->data + pt->used, mb->data + mb->used, post_blocks);
+
+    size_t region_used = mb->used - pt->used;
+    for (GemArenaBlock *b = post_blocks; b; b = b->next) region_used += b->used;
+
+    /* copy into mb's tail if nothing was allocated there since the point (as after a reset), else a new block */
+    int tail_free = mb->used == pt->used;
+    mb->next = NULL;
+    if (tail_free) arena->current = mb;
+    else gem_arena_append_block(arena, mb, 0);
+
+    GemTable *post_tables = arena->table_list;
+    arena->table_list = pt->tables;
+    GemBuffer *post_buffers = arena->buffer_list;
+    arena->buffer_list = pt->buffers;
+    size_t bytes_before = arena->bytes_allocated;
+    size_t scanned = 0;
+
+    GemCopyMap map;
+    gem_copy_map_init(&map, 0);
+    map.preserve_external = 1;
+    map.region = &region;
+
+    for (int i = 0; i < n_pinned; i++) {
+        GemVal *box = pinned_roots[i];
+        if (gem_pin_mark_walked(proc, box)) *box = gem_deep_copy_internal(*box, &map);
+    }
+    for (int i = 0; i < n_roots; i++) {
+        *roots[i] = gem_deep_copy_internal(*roots[i], &map);
+    }
+    if (proc->globals) {
+        for (int i = 0; i < gem_n_globals; i++) {
+            proc->globals[i] = gem_deep_copy_internal(proc->globals[i], &map);
+        }
+    }
+    /* older pinned boxes: callers or earlier kept data may hold them */
+    if (proc->pinned_boxes) {
+        size_t n = hmlenu(proc->pinned_boxes);
+        scanned += n * sizeof(GemPinEntry);
+        for (size_t i = 0; i < n; i++) {
+            if (proc->pinned_boxes[i].seq < pt->pin_seq && !proc->pinned_boxes[i].value) {
+                proc->pinned_boxes[i].value = 1;
+                GemVal *box = (GemVal *)proc->pinned_boxes[i].key;
+                *box = gem_deep_copy_internal(*box, &map);
+            }
+        }
+    }
+    /* older tables written since the point: the log suffix from pt->clock (region tables in it are dead or copied) */
+    double tw0 = gem_diag_state > 0 ? gem_diag_now() : 0;
+    size_t lo = 0, hi = arena->rem_len;
+    while (lo < hi) {
+        size_t mid = lo + (hi - lo) / 2;
+        if (arena->rem[mid].epoch < pt->clock) lo = mid + 1; else hi = mid;
+    }
+    size_t rem_start = lo;
+    int *moved = NULL;
+    int moved_cap = 0;
+    for (size_t ri = rem_start; ri < arena->rem_len; ri++) {
+        GemTable *t = arena->rem[ri].t;
+        scanned += sizeof(GemRemEntry);
+        if (gem_region_contains(&region, t) || t->rem_flag) continue;
+        t->rem_flag = 1;
+        size_t arr = sizeof(GemVal) * (size_t)t->cap;
+        scanned += 2 * arr;
+        if (gem_region_contains(&region, t->keys)) {
+            GemVal *nk = (GemVal *)gem_arena_alloc(arena, arr);
+            memcpy(nk, t->keys, sizeof(GemVal) * (size_t)t->len);
+            t->keys = nk;
+        }
+        if (gem_region_contains(&region, t->vals)) {
+            GemVal *nv = (GemVal *)gem_arena_alloc(arena, arr);
+            memcpy(nv, t->vals, sizeof(GemVal) * (size_t)t->len);
+            t->vals = nv;
+        }
+        int n_moved = 0;
+        for (int i = 0; i < t->len; i++) {
+            if (gem_val_in_region(&map, t->keys[i])) {
+                t->keys[i] = gem_deep_copy_internal(t->keys[i], &map);
+                if (t->keys[i].type == VAL_STRING) {
+                    if (n_moved == moved_cap) {
+                        moved_cap = moved_cap ? moved_cap * 2 : 64;
+                        moved = (int *)realloc(moved, sizeof(int) * (size_t)moved_cap);
+                        if (!moved) { fprintf(stderr, "gem: out of memory (reset)\n"); exit(1); }
+                    }
+                    moved[n_moved++] = i;
+                }
+            }
+            if (gem_val_in_region(&map, t->vals[i])) {
+                t->vals[i] = gem_deep_copy_internal(t->vals[i], &map);
+            }
+        }
+        if (n_moved) gem_rekey_index(t, moved, n_moved);
+    }
+    free(moved);
+    /* Compact the log. Drop entries for region tables and for tables this loop's resets kept: other live
+       marks are older than base, so those are in their region anyway, and our own full resets have them in
+       theirs. Keep one entry per older table; its epoch is still >= base.clock, so enclosing marks find it.
+       A young reset only compacts what was logged since young; the whole window from base is redone on full
+       resets and when it doubles, which keeps the log and the work linear. */
+    {
+        size_t blo = 0, bhi = arena->rem_len;
+        while (blo < bhi) {
+            size_t mid = blo + (bhi - blo) / 2;
+            if (arena->rem[mid].epoch < mark->base.clock) blo = mid + 1; else bhi = mid;
+        }
+        int whole = full || arena->rem_len - blo > 2 * mark->rem_window + 4096;
+        size_t from = whole ? blo : rem_start;
+        GemArenaBlock *bb = mark->base.block;
+        GemRegion kept;
+        gem_region_build(&kept, bb->data + mark->base.used, bb->data + bb->used, bb->next);
+        size_t w = from;
+        for (size_t ri = from; ri < arena->rem_len; ri++) {
+            GemTable *t = arena->rem[ri].t;
+            if (gem_region_contains(&region, t) || gem_region_contains(&kept, t)) {
+                t->rem_flag = 0;
+                continue;
+            }
+            if (t->rem_flag == 2) continue;   /* already kept one */
+            t->rem_flag = 2;
+            arena->rem[w++] = arena->rem[ri];
+        }
+        for (size_t ri = from; ri < w; ri++) arena->rem[ri].t->rem_flag = 0;
+        /* charge a cache line per entry, the tables are likely cold */
+        scanned += (arena->rem_len - from) * 64;
+        arena->rem_len = w;
+        if (whole) mark->rem_window = w - blo;
+        free(kept.ranges);
+    }
+    if (gem_diag_state > 0) {
+        gem_diag_last_walk = gem_diag_now() - tw0;
+        gem_diag_t_walk += gem_diag_last_walk;
+    }
+    for (GemBuffer *b = pt->buffers; b; b = b->arena_next) {
+        scanned += sizeof(GemBuffer);
+        if (gem_region_contains(&region, b->data)) {
+            char *nd = (char *)gem_arena_alloc(arena, (size_t)b->cap);
+            memcpy(nd, b->data, (size_t)b->len);
+            b->data = nd;
+        }
+    }
+    /* mailbox: region nodes get reallocated, older ones reused in place */
+    {
+        GemMsgNode *n = proc->mailbox.head;
+        GemMsgNode *head = NULL, *tail = NULL;
+        while (n) {
+            GemMsgNode *next = n->next;
+            /* a backlog gets rewalked by every reset until received; charge it so resets space out as it grows */
+            scanned += 256;
+            GemVal v = gem_deep_copy_internal(n->value, &map);
+            GemMsgNode *node = n;
+            if (gem_region_contains(&region, n)) node = (GemMsgNode *)gem_arena_alloc(arena, sizeof(GemMsgNode));
+            node->value = v;
+            node->next = NULL;
+            if (tail) tail->next = node; else head = node;
+            tail = node;
+            n = next;
+        }
+        proc->mailbox.head = head;
+        proc->mailbox.tail = tail;
+    }
+    if (proc->read_buf && gem_region_contains(&region, proc->read_buf)) {
+        proc->read_buf = NULL;
+        proc->read_buf_cap = 0;
+    }
+    gem_copy_map_cleanup(&map);
+
+    gem_pin_sweep_from(proc, pt->pin_seq);
+
+    /* region tables are dead now (live ones were copied); free their indexes */
+    for (GemTable *t = post_tables; t && t != pt->tables; t = t->arena_next) {
+        gem_str_index_free(&t->str_index);
+    }
+    (void)post_buffers;
+    size_t region_bytes = 0;
+    for (int i = 0; i < region.n; i++) region_bytes += (size_t)(region.ranges[i].hi - region.ranges[i].lo);
+    gem_arena_free_blocks(post_blocks);
+    arena->bytes_freed += region_used;
+    if (!tail_free) {
+        if (mb->dirty < mb->used) mb->dirty = mb->used;
+#ifdef GEM_DEBUG
+        memset(mb->data + pt->used, GEM_POISON_BYTE, mb->used - pt->used);
+#endif
+        mb->used = pt->used;
+    }
+
+    size_t copied = arena->bytes_allocated - bytes_before;
+    gem_diag_note_reset(copied, scanned, region_bytes, full);
+
+    /* copied nothing: give back the empty copy block. Otherwise a loop that ends right after its reset (a sort
+       comparator, a callback) leaves a mapping behind each time, and with no enclosing loop to free them they
+       pile up past vm.max_map_count under GEM_RESET_STRESS. */
+    if (copied == 0 && !tail_free) {
+        gem_arena_free_blocks(mb->next);
+        mb->next = NULL;
+        arena->current = mb;
+    }
+
+    /* promote: kept data now counts as older. New allocations start in a fresh block so the copies' block
+       keeps its free tail for the next reset's copies; the new epoch makes writes to kept tables log again. */
+    GemArenaBlock *last = arena->current;
+    mark->young.block = last;
+    mark->young.used = last->used;
+    mark->young.tables = arena->table_list;
+    mark->young.buffers = arena->buffer_list;
+    mark->young.pin_seq = arena->pin_seq;
+    mark->young.clock = ++gem_mut_clock;
+    mark->young.arena = arena;
+    mark->young.ret_trig = arena->bytes_allocated - arena->bytes_freed + gem_reset_threshold;
+    if (copied > 0) gem_arena_append_block(arena, last, 0);
+    *copied_out = copied;
+    *scanned_out = scanned;
+    *region_out = region_used;
+
+    size_t budget;
+    if (full) {
+        /* kept at least half: mostly live, so wait for 4x growth, not 2x */
+        size_t factor = (mark->old_bytes > 0 && 2 * copied >= region_bytes) ? 4 : 2;
+        mark->old_bytes = copied;
+        mark->old_limit = factor * copied + gem_reset_threshold;
+        /* the promotions before it already paid for the full copy */
+        budget = scanned / 2;
+    } else {
+        mark->old_bytes += copied;
+        budget = 2 * copied + scanned / 2;
+    }
+    if (budget < gem_reset_threshold) budget = gem_reset_threshold;
+    mark->trigger = arena->bytes_allocated + budget;
+#ifdef GEM_DEBUG
+    gem_debug_check_reset(proc, mark, &region, roots, n_roots, pinned_roots, n_pinned, region_used + copied);
+#endif
+    free(region.ranges);
+}
+
+void gem_remember_table(GemTable *t) {
+    GemArena *a = gem_current_arena();
+    if (a->rem_len == a->rem_cap) {
+        a->rem_cap = a->rem_cap ? a->rem_cap * 2 : 256;
+        a->rem = (GemRemEntry *)realloc(a->rem, sizeof(GemRemEntry) * a->rem_cap);
+        if (!a->rem) { fprintf(stderr, "gem: out of memory (remembered log)\n"); exit(1); }
+    }
+    a->rem[a->rem_len].t = t;
+    a->rem[a->rem_len].epoch = gem_mut_clock;
+    a->rem_len++;
+    /* counts as allocation so a loop that only writes tables still gets a reset, which compacts the log */
+    a->bytes_allocated += sizeof(GemRemEntry);
+}
+
+/* GEM_DIAG=2: a line per reset of GEM_DIAG_SLOW_S or more, naming the innermost frame (or the leaf site) */
+static void gem_diag_trace(const char *kind, double dt) {
+    if (gem_diag_state != 2 || dt < GEM_DIAG_SLOW_S) return;
+    const char *name = "?", *file = "?";
+    int line = 0;
+    if (gem_leaf_site) {
+        name = gem_leaf_site->name; file = gem_leaf_site->file; line = gem_leaf_line;
+    } else if (gem_call_depth > 0 && gem_call_depth <= GEM_MAX_CALL_DEPTH) {
+        GemFrame *f = &gem_call_stack[gem_call_depth - 1];
+        name = f->name; file = f->file; line = f->line;
+    }
+    struct timespec ts;
+    clock_gettime(CLOCK_REALTIME, &ts);
+    fprintf(stderr, "gem_reset: t=%.3f pid=%lld %s %.1fms walk=%.1fms region=%zuK copied=%zuK scanned=%zuK in %s (%s:%d)\n",
+            ts.tv_sec + ts.tv_nsec * 1e-9, (long long)gem_pid_of_slot(gem_current_pid), kind,
+            dt * 1e3, gem_diag_last_walk * 1e3, gem_diag_last_region / 1024,
+            gem_diag_last_copied / 1024, gem_diag_last_scanned / 1024, name, file, line);
+}
+
+void gem_arena_reset_region(GemArenaMark *mark, GemVal **roots, int n_roots,
+                            GemVal **pinned_roots, int n_pinned) {
+    if (gem_current_pid < 0) return;
+    if (!gem_arena_reset_due(mark)) return;
+    gem_diag_init();
+    double t0 = gem_diag_now();
+    size_t copied, scanned, region;
+    gem_region_reset_impl(mark, roots, n_roots, pinned_roots, n_pinned, &copied, &scanned, &region);
+    double dt = gem_diag_now() - t0;
+    gem_diag_note_time(dt);
+    gem_diag_trace(gem_diag_last_full ? "full" : "young", dt);
+}
+
+void gem_arena_reset_return(const GemArenaPoint *pt, GemVal *ret, int own_frames) {
+    if (gem_current_pid < 0 || gem_call_depth <= own_frames) return;
+    GemArena *arena = &gem_proc_table[gem_current_pid].arena;
+    size_t live = arena->bytes_allocated - arena->bytes_freed - (pt->ret_trig - gem_reset_threshold);
+    if (live + (arena->bytes_allocated - arena->ret_at) < arena->ret_min) return;
+    gem_diag_init();
+    double t0 = gem_diag_now();
+    /* one-shot mark with young == base: a full reset of everything since pt; promotion and trigger go nowhere */
+    GemArenaMark mark;
+    mark.base = *pt;
+    mark.young = *pt;
+    mark.trigger = 0;
+    mark.old_bytes = 0;
+    mark.old_limit = 0;
+    mark.rem_window = 0;
+    GemVal *roots[1] = { ret };
+    size_t copied, scanned, region;
+    gem_region_reset_impl(&mark, roots, ret ? 1 : 0, NULL, 0, &copied, &scanned, &region);
+    /* Hysteresis is per arena, not per frame: a recursion passing a growing result up copies it again only
+       once region + allocation since reach 2x this copy (4x if mostly live) plus scanned/2. So copies grow
+       geometrically instead of happening at every level. */
+    size_t factor = 2 * copied >= region ? 4 : 2;
+    arena->ret_min = factor * copied + scanned / 2;
+    arena->ret_at = arena->bytes_allocated;
+    gem_rstats.ret++;
+    gem_rstats.ret_copied += copied;
+    double dt = gem_diag_now() - t0;
+    gem_diag_note_time(dt);
+    gem_diag_trace("return", dt);
+}
+
+/* Module globals: per-process slots, copied lazily at spawn.
+
+   At a spawn the parent snapshots each heavy slot that has no unit yet. A unit is an immutable malloc copy
+   of a group of slots that share structure, made with one copy map, refcounted per out[]/in[] entry; its
+   source tables get stamped with its gen. Later spawns reuse it until the parent changes it: a slot write
+   drops that slot's unit (gem_global_unshare), a write to a stamped table drops that gen's unit
+   (gem_table_check_mutable), and a unit holding a buffer or pinned box is single-use. Light slots are
+   copied at every spawn.
+
+   In the child a heavy slot starts VAL_LAZY. The first access faults in all of that unit's still-lazy slots
+   with one map, sharing the unit's strings (gem_global_fault). A slot still lazy when the child spawns is
+   handed on as the same unit. Resets root every slot; lazy slots and unit strings are never in a region. */
+
+GemVal *gem_cur_globals = NULL;
+int gem_n_globals = 0;
+static uint32_t gem_mod_gen_counter = 0;
+
+struct GemModUnit {
+    int refs;          /* one per out[] / in[] entry pointing at it */
+    uint32_t gen;      /* stamp on the parent's tables copied into it */
+    int shareable;     /* 0: holds a buffer or pinned box, used by one spawn only */
+    int n;
+    int *slots;        /* slot indices, ascending */
+    GemVal *vals;      /* their values, one malloc copy */
+};
+
+static const GemVal GEM_LAZY_VAL = { .type = VAL_LAZY, .magic = GEM_MAGIC };
+
+/* 0 when the program called gem_globals_init (C that indexes gem_cur_globals directly): spawn then
+   faults every slot in at once and keeps no units */
+static int gem_mod_lazy = 0;
+
+void gem_globals_init(int n) {
+    gem_n_globals = n;
+}
+
+void gem_globals_init_lazy(int n) {
+    gem_n_globals = n;
+    gem_mod_lazy = 1;
+}
+
+GemVal *gem_globals_alloc(void) {
+    size_t n = (size_t)(gem_n_globals > 0 ? gem_n_globals : 1);
+    GemVal *g = (GemVal *)calloc(1, n * sizeof(GemVal) + 2 * n * sizeof(GemModUnit *));
+    if (!g) { fprintf(stderr, "gem: out of memory (module slots)\n"); exit(1); }
+    for (int i = 0; i < gem_n_globals; i++) g[i] = GEM_NIL;
+    return g;
+}
+
+/* worth a unit */
+static int gem_mod_heavy(GemVal v) {
+    switch (v.type) {
+        case VAL_TABLE:
+        case VAL_BUFFER: return 1;
+        case VAL_FN: return v.env != NULL;
+        case VAL_STRING: return v.slen > GEM_MOD_LIGHT_STRING;
+        default: return 0;
+    }
+}
+
+static void gem_mod_unit_release(GemModUnit *u) {
+    if (--u->refs > 0) return;
+    gem_deep_free_n(u->vals, u->n);
+    free(u->slots);
+    free(u->vals);
+    free(u);
+}
+
+static int gem_mod_unit_index(const GemModUnit *u, int slot) {
+    int lo = 0, hi = u->n - 1;
+    while (lo <= hi) {
+        int mid = (lo + hi) / 2;
+        if (u->slots[mid] < slot) lo = mid + 1;
+        else if (u->slots[mid] > slot) hi = mid - 1;
+        else return mid;
+    }
+    return -1;
+}
+
+/* stop handing u to future children */
+static void gem_mod_unshare(GemProcess *p, GemModUnit *u) {
+    for (int k = 0; k < p->mod_live_n; k++) {
+        if (p->mod_live[k] == u) {
+            p->mod_live[k] = p->mod_live[--p->mod_live_n];
+            break;
+        }
+    }
+    GemModUnit **out = GEM_GLOBALS_OUT(p->globals);
+    u->refs++;  /* hold u while dropping the slot references */
+    for (int k = 0; k < u->n; k++) {
+        int s = u->slots[k];
+        if (out[s] == u) {
+            out[s] = NULL;
+            gem_mod_unit_release(u);
+        }
+    }
+    gem_mod_unit_release(u);
+}
+
+static GemModUnit *gem_mod_live_find(GemProcess *p, uint32_t gen) {
+    for (int k = 0; k < p->mod_live_n; k++)
+        if (p->mod_live[k]->gen == gen) return p->mod_live[k];
+    return NULL;
+}
+
+void gem_global_unshare(int i) {
+    GemProcess *p = &gem_proc_table[gem_current_pid];
+    GemModUnit *u = GEM_GLOBALS_OUT(p->globals)[i];
+    if (u) gem_mod_unshare(p, u);
+}
+
+void gem_table_mutate_slow(GemTable *t) {
+    if (t->immutable) {
+        gem_error("cannot modify a module table");
+        abort();
+    }
+    uint32_t gen = t->snap_gen;
+    t->snap_gen = 0;
+    if (gem_current_pid < 0) return;
+    GemProcess *p = &gem_proc_table[gem_current_pid];
+    if (!p->globals) return;
+    GemModUnit *u = gem_mod_live_find(p, gen);
+    if (u) gem_mod_unshare(p, u);
+}
+
+GemVal gem_global_fault(int i) {
+    GemVal *g = gem_cur_globals;
+    GemModUnit **in = GEM_GLOBALS_IN(g);
+    GemModUnit *u = in[i];
+    if (!u) { g[i] = GEM_NIL; return g[i]; }  /* not reached: a lazy slot has a unit */
+    GemCopyMap map;
+    gem_copy_map_init(&map, 0);
+    map.share_strings = 1;
+    for (int k = 0; k < u->n; k++) {
+        int s = u->slots[k];
+        if (g[s].type == VAL_LAZY && in[s] == u)
+            g[s] = gem_deep_copy_internal(u->vals[k], &map);
+    }
+    gem_copy_map_cleanup(&map);
+    return g[i];
+}
+
+static int gem_uf_find(int *uf, int x) {
+    while (uf[x] != x) { uf[x] = uf[uf[x]]; x = uf[x]; }
+    return x;
+}
+
+static void gem_uf_union(int *uf, int a, int b) {
+    a = gem_uf_find(uf, a);
+    b = gem_uf_find(uf, b);
+    if (a != b) uf[a < b ? b : a] = a < b ? a : b;
+}
+
+static int gem_int_cmp(const void *a, const void *b) {
+    int x = *(const int *)a, y = *(const int *)b;
+    return (x > y) - (x < y);
+}
+
+static void gem_mod_build_units(GemProcess *p) {
+    int n = gem_n_globals;
+    GemVal *g = p->globals;
+    GemModUnit **out = GEM_GLOBALS_OUT(g);
+    int *R = NULL;
+    char *inR = NULL;
+    int nr = 0;
+    for (int i = 0; i < n; i++) {
+        if (g[i].type == VAL_LAZY || out[i] || !gem_mod_heavy(g[i])) continue;
+        if (!R) {
+            R = (int *)malloc(sizeof(int) * (size_t)n);
+            inR = (char *)calloc((size_t)n, 1);
+            if (!R || !inR) { fprintf(stderr, "gem: out of memory (spawn)\n"); exit(1); }
+        }
+        R[nr++] = i;
+        inR[i] = 1;
+    }
+    if (nr == 0) return;
+
+    /* 1. components: an object reached from two slots unites them. Reaching a table of a still-valid unit
+       drops it and pulls its slots in, so units stay disjoint. */
+    int *uf = (int *)malloc(sizeof(int) * (size_t)n);
+    for (int i = 0; i < n; i++) uf[i] = i;
+    GemCopyMap owner;  /* object -> first slot that reached it, +1 */
+    gem_copy_map_init(&owner, 1);
+    GemVal *stack = NULL;
+    size_t sn = 0, scap = 0;
+#define GEM_MOD_PUSH(v) do { GemVal _v = (v); \
+        if (_v.type == VAL_TABLE || _v.type == VAL_BUFFER || (_v.type == VAL_FN && _v.env)) { \
+            if (sn == scap) { scap = scap ? scap * 2 : 64; stack = (GemVal *)realloc(stack, sizeof(GemVal) * scap); \
+                              if (!stack) { fprintf(stderr, "gem: out of memory (spawn)\n"); exit(1); } } \
+            stack[sn++] = _v; } } while (0)
+    for (int ri = 0; ri < nr; ri++) {
+        int i = R[ri];
+        GEM_MOD_PUSH(g[i]);
+        while (sn > 0) {
+            GemVal v = stack[--sn];
+            void *key = v.type == VAL_TABLE ? (void *)v.table
+                      : v.type == VAL_BUFFER ? (void *)v.buffer : v.env;
+            void *o = gem_copy_map_find(&owner, key);
+            if (o) { gem_uf_union(uf, i, (int)(intptr_t)o - 1); continue; }
+            gem_copy_map_add(&owner, key, (void *)(intptr_t)(i + 1));
+            if (v.type == VAL_TABLE) {
+                GemTable *t = v.table;
+                if (t->snap_gen) {
+                    GemModUnit *u = gem_mod_live_find(p, t->snap_gen);
+                    if (u) {
+                        for (int k = 0; k < u->n; k++) {
+                            int s = u->slots[k];
+                            if (out[s] == u && !inR[s]) { R[nr++] = s; inR[s] = 1; }
+                        }
+                        gem_mod_unshare(p, u);
+                    }
+                }
+                for (int j = 0; j < t->len; j++) {
+                    GEM_MOD_PUSH(t->keys[j]);
+                    GEM_MOD_PUSH(t->vals[j]);
+                }
+            } else if (v.type == VAL_FN) {
+                intptr_t nf = *(intptr_t *)v.env;
+                GemVal **fields = (GemVal **)((char *)v.env + sizeof(intptr_t));
+                for (intptr_t f = 0; f < nf; f++) {
+                    void *ob = gem_copy_map_find(&owner, fields[f]);
+                    if (ob) { gem_uf_union(uf, i, (int)(intptr_t)ob - 1); continue; }
+                    gem_copy_map_add(&owner, fields[f], (void *)(intptr_t)(i + 1));
+                    GEM_MOD_PUSH(*fields[f]);
+                }
+            }
+        }
+    }
+#undef GEM_MOD_PUSH
+    free(stack);
+    gem_copy_map_cleanup(&owner);
+
+    /* 2. One unit per component, slots ascending. */
+    qsort(R, (size_t)nr, sizeof(int), gem_int_cmp);
+    int *cnt = (int *)calloc((size_t)n, sizeof(int));
+    GemModUnit **unit_of = (GemModUnit **)calloc((size_t)n, sizeof(GemModUnit *));
+    for (int ri = 0; ri < nr; ri++) cnt[gem_uf_find(uf, R[ri])]++;
+    for (int ri = 0; ri < nr; ri++) {
+        int r = gem_uf_find(uf, R[ri]);
+        GemModUnit *u = unit_of[r];
+        if (!u) {
+            u = (GemModUnit *)calloc(1, sizeof(GemModUnit));
+            u->slots = (int *)malloc(sizeof(int) * (size_t)cnt[r]);
+            u->vals = (GemVal *)malloc(sizeof(GemVal) * (size_t)cnt[r]);
+            unit_of[r] = u;
+        }
+        u->slots[u->n++] = R[ri];
+    }
+
+    /* 3. Copy each unit, stamping its source tables. */
+    for (int ri = 0; ri < nr; ri++) {
+        GemModUnit *u = unit_of[gem_uf_find(uf, R[ri])];
+        if (u->gen) continue;
+        if (++gem_mod_gen_counter == 0) ++gem_mod_gen_counter;
+        u->gen = gem_mod_gen_counter;
+        GemCopyMap map;
+        gem_copy_map_init(&map, 1);
+        map.stamp_gen = u->gen;
+        map.snap_src = p;
+        map.src_pid = (int)(p - gem_proc_table);
+        for (int k = 0; k < u->n; k++) u->vals[k] = gem_deep_copy_internal(g[u->slots[k]], &map);
+        u->shareable = !map.saw_mutable;
+        gem_copy_map_cleanup(&map);
+        for (int k = 0; k < u->n; k++) {
+            out[u->slots[k]] = u;
+            u->refs++;
+        }
+        if (p->mod_live_n == p->mod_live_cap) {
+            p->mod_live_cap = p->mod_live_cap ? p->mod_live_cap * 2 : 16;
+            p->mod_live = (GemModUnit **)realloc(p->mod_live, sizeof(GemModUnit *) * (size_t)p->mod_live_cap);
+            if (!p->mod_live) { fprintf(stderr, "gem: out of memory (spawn)\n"); exit(1); }
+        }
+        p->mod_live[p->mod_live_n++] = u;
+    }
+    free(cnt);
+    free(unit_of);
+    free(uf);
+    free(R);
+    free(inR);
+}
+
+void gem_spawn_module_state(GemVal *fn_val, GemVal *cg, int parent) {
+    GemProcess *p = NULL;
+    if (parent >= 0 && gem_n_globals > 0 && gem_proc_table[parent].globals) {
+        p = &gem_proc_table[parent];
+        gem_mod_build_units(p);
+    }
+    GemVal *pg = p ? p->globals : NULL;
+    GemModUnit **cin = GEM_GLOBALS_IN(cg);
+    char *eager = NULL;
+    if (fn_val) {
+        /* copy the env and the module slots it shares structure with in one map, so a captured module table
+           is still that table in the child (those units are valid, so copying the parent's slots is the same) */
+        GemCopyMap map;
+        gem_copy_map_init(&map, 0);
+        map.probe = p != NULL;
+        map.src_pid = parent;
+        *fn_val = gem_deep_copy_internal(*fn_val, &map);
+        for (int gi = 0; gi < map.probe_n; gi++) {
+            GemModUnit *u = gem_mod_live_find(p, map.probe_gens[gi]);
+            if (!u) continue;  /* a stale stamp */
+            if (!eager) eager = (char *)calloc((size_t)gem_n_globals, 1);
+            for (int k = 0; k < u->n; k++) {
+                int s = u->slots[k];
+                if (eager[s]) continue;
+                eager[s] = 1;
+                cg[s] = gem_deep_copy_internal(pg[s], &map);  /* may add gens */
+            }
+        }
+        gem_copy_map_cleanup(&map);
+    }
+    if (!p) { free(eager); return; }
+    GemModUnit **pout = GEM_GLOBALS_OUT(pg), **pin = GEM_GLOBALS_IN(pg);
+    for (int i = 0; i < gem_n_globals; i++) {
+        if (eager && eager[i]) continue;
+        GemVal v = pg[i];
+        if (v.type == VAL_LAZY) {
+            cg[i] = v;
+            cin[i] = pin[i];
+            pin[i]->refs++;
+        } else if (gem_mod_heavy(v)) {
+            GemModUnit *u = pout[i];
+            GemVal uv = u->vals[gem_mod_unit_index(u, i)];
+            cg[i] = uv.type == VAL_STRING ? uv : GEM_LAZY_VAL;
+            cin[i] = u;
+            u->refs++;
+        } else if (v.type == VAL_STRING) {
+            cg[i] = gem_string_with_len(v.sval, v.slen);
+        } else {
+            cg[i] = v;
+        }
+    }
+    free(eager);
+    for (int k = 0; k < p->mod_live_n; ) {
+        GemModUnit *u = p->mod_live[k];
+        if (!u->shareable || !gem_mod_lazy) gem_mod_unshare(p, u);  /* removes it from mod_live */
+        else k++;
+    }
+    if (!gem_mod_lazy) {
+        GemVal *saved = gem_cur_globals;
+        gem_cur_globals = cg;
+        for (int i = 0; i < gem_n_globals; i++)
+            if (cg[i].type == VAL_LAZY) gem_global_fault(i);
+        gem_cur_globals = saved;
+    }
+}
+
+void gem_globals_free(GemProcess *p) {
+    if (!p->globals) return;
+    while (p->mod_live_n > 0) gem_mod_unshare(p, p->mod_live[0]);
+    GemModUnit **out = GEM_GLOBALS_OUT(p->globals), **in = GEM_GLOBALS_IN(p->globals);
+    for (int i = 0; i < gem_n_globals; i++) {
+        if (out[i]) { gem_mod_unit_release(out[i]); out[i] = NULL; }  /* not reached: unshared above */
+        if (in[i]) { gem_mod_unit_release(in[i]); in[i] = NULL; }
+    }
+    free(p->mod_live);
+    p->mod_live = NULL;
+    p->mod_live_cap = 0;
+    free(p->globals);
+    p->globals = NULL;
+}

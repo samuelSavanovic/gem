@@ -1,0 +1,62 @@
+# `let x = ...x...` in a loop body declares a new `x` each iteration from the outer one, which never
+# changes. Hiding an enclosing block's variable in the same fn is a compile error
+# (tests/broken/let_hides_outer.gem); hiding a module-level one from a fn is allowed, and warns when
+# code after the loop reads the outer `x` and nothing in the loop assigns it.
+
+let total = 0
+let out = ""
+let count = 0
+
+fn summed()
+  for x in [1, 2, 3]
+    let total = total + x
+  end
+  print("total", total)
+end
+summed()
+
+fn joined(words)
+  for w in words
+    if w != ""
+      let out = out + w
+    end
+  end
+  out
+end
+print("joined", joined(["a", "b"]))
+
+fn counted(items)
+  match items
+  when [_, _]
+    for i = 0, 2
+      let count = count + 1
+    end
+  else
+    nil
+  end
+  count
+end
+print("counted", counted([1, 2]))
+
+# no warning for a `let` hiding a module-level variable in a loop: of the loop variable, after an
+# earlier let in the body, with an assignment in the loop, with no read after it, or in a closure
+let k = 0
+let m = 0
+let tag = ""
+
+fn quiet(lines)
+  let acc = ""
+  let line = "outer"
+  for line in lines
+    let line = line + "!"
+    let k = 1
+    let k = k + 1
+    let m = m + 1
+    m += 1
+    let tag = tag + line
+    let f = fn() let acc = acc + "y" end
+    print(line, k, m, tag)
+  end
+  print(acc, line, k, m)
+end
+quiet(["a"])

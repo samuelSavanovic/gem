@@ -1,0 +1,106 @@
+# Error sink entries -> publishDiagnostics payloads, one per file.
+# An entry's `source` is the text of the file it was raised against, so errors in other files get the right line.
+# Warnings only codegen produces never show up: the LSP doesn't run codegen.
+
+load "./rpc"
+load "../compiler/errors" (get_source_line)
+
+let DIAGNOSTIC_SOURCE = "gem"
+
+fn path_to_uri(path)
+  "file://" + path
+end
+
+# sink columns are 1-based bytes; LSP wants 0-based UTF-16
+fn entry_range(e)
+  let line = e.line
+  if line == nil
+    line = 1
+  end
+  let col = e.col
+  if col == nil or col < 1
+    col = 1
+  end
+  let span = e.span
+  if span == nil or span < 1
+    span = 1
+  end
+
+  let line_text = if e.source != nil then get_source_line(e.source, line) else "" end
+
+  let start_byte = col - 1
+  let end_byte = start_byte + span
+  let line_bytes = len(line_text)
+  if end_byte > line_bytes
+    end_byte = line_bytes
+  end
+  if end_byte < start_byte
+    end_byte = start_byte
+  end
+  let start_u16 = rpc.byte_col_to_utf16_col(line_text, start_byte)
+  let end_u16 = rpc.byte_col_to_utf16_col(line_text, end_byte)
+  if end_u16 <= start_u16
+    end_u16 = start_u16 + 1
+  end
+
+  rpc.make_range(rpc.make_position(line - 1, start_u16),
+                 rpc.make_position(line - 1, end_u16))
+end
+
+fn entry_message(e)
+  if e.hint != nil and e.hint != ""
+    return e.msg + "\nhint: " + e.hint
+  end
+  e.msg
+end
+
+fn entry_to_diagnostic(e, severity)
+  rpc.make_diagnostic(entry_range(e), severity, entry_message(e), DIAGNOSTIC_SOURCE)
+end
+
+# [{uri, diagnostics}] per sink file, plus an empty one for entry_uri so its squiggles clear; cache may be nil
+fn build_publishes(entry_uri, cache)
+  if cache == nil or cache.sink == nil
+    return [{uri: entry_uri, diagnostics: []}]
+  end
+
+  let by_file = {}
+  let order = []
+  let add = fn(e, severity)
+    if e.line == nil
+      # nowhere to put it
+      return nil
+    end
+    let path = e.file
+    if path == nil
+      path = ""
+    end
+    if not has_key(by_file, path)
+      by_file[path] = []
+      push(order, path)
+    end
+    push(by_file[path], entry_to_diagnostic(e, severity))
+  end
+  for e in cache.sink.drain()
+    add(e, 1)
+  end
+  for e in cache.sink.warnings()
+    add(e, 2)
+  end
+
+  let publishes = []
+  let saw_entry = false
+  for path in order
+    let uri = path_to_uri(path)
+    if uri == entry_uri
+      saw_entry = true
+    end
+    push(publishes, {uri: uri, diagnostics: by_file[path]})
+  end
+  if not saw_entry
+    push(publishes, {uri: entry_uri, diagnostics: []})
+  end
+  publishes
+end
+
+export build_publishes, path_to_uri

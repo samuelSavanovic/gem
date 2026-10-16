@@ -1,0 +1,27 @@
+# writes to module state from a spawned process are per-process, and each gets a `note:` naming
+# the binding as written, with project-relative paths. tests/check_notes.sh checks the note text;
+# this file checks the semantics.
+load "./modules/spawn_note_counter" as counter
+
+let local_hits = 0
+let parent = self()
+
+spawn do
+  counter.bump("a")
+  counter.bump("b")
+  local_hits = local_hits + 1
+  send(parent, {child_total: counter.total(), child_hits: local_hits})
+end
+
+let msg = receive()
+print("child total: {msg.child_total}, child hits: {msg.child_hits}")
+
+# a `for` variable named like a module binding is a renamed block binding, not module state,
+# so a spawn writing it gets no note
+for local_hits in [1, 2]
+  spawn do
+    local_hits = local_hits + 10
+  end
+end
+
+print("parent total: {counter.total()}, parent hits: {local_hits}")

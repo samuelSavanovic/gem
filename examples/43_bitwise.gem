@@ -1,0 +1,39 @@
+# 10=1010b, 12=1100b
+print("band:", band(10, 12))
+print("bor:",  bor(10,  12))
+print("bxor:", bxor(10, 12))
+print("bnot 0:", bnot(0))
+print("bshl:", bshl(1, 4))
+print("bshr:", bshr(16, 2))
+
+# logical right shift: a negative value shifts in zeros
+print("bshr neg:", bshr(-1, 1))
+
+print("band same:", band(255, 255))
+print("bor zero:", bor(0, 0))
+print("bxor same:", bxor(42, 42))
+print("bnot -1:", bnot(-1))
+print("bshl 0:", bshl(7, 0))
+print("bshr 0:", bshr(7, 0))
+print("bshl 63:", bshl(1, 63))
+print("bshr 63:", bshr(-1, 63))
+
+let f = band
+print("first-class:", f(6, 3))
+
+let e1 = pcall band(1.5, 2)
+print("band float:", e1.ok == false)
+
+let e2 = pcall bor("a", 2)
+print("bor str:", e2.ok == false)
+
+let e3 = pcall bnot(true)
+print("bnot bool:", e3.ok == false)
+
+let e4 = pcall bshl(1, 64)
+print("bshl oob:", e4.ok == false)
+
+let e5 = pcall bshr(1, -1)
+print("bshr neg:", e5.ok == false)
+
+print("BITWISE DONE")

@@ -1,0 +1,75 @@
+## A double-ended queue: O(1) amortized push and pop at both ends, O(1) indexing. Backs Redis lists.
+
+# two arrays: `front` holds the first elements reversed (its last is the deque's first), `back` the
+# rest in order. Popping from an empty side moves half of the other over, so pops stay O(1) amortized.
+
+fn new()
+  {front: [], back: []}
+end
+
+fn size(d)
+  len(d.front) + len(d.back)
+end
+
+fn push_front(d, x)
+  push(d.front, x)
+end
+
+fn push_back(d, x)
+  push(d.back, x)
+end
+
+## nil when `i` is out of range; `i` must be >= 0.
+fn at(d, i)
+  let lf = len(d.front)
+  if i < lf
+    return d.front[lf - 1 - i]
+  end
+  d.back[i - lf]
+end
+
+## nil when empty.
+fn pop_front(d)
+  if len(d.front) == 0
+    let lb = len(d.back)
+    if lb == 0 then return nil end
+    let k = (lb + 1) / 2
+    let front = []
+    let i = k - 1
+    while i >= 0
+      push(front, d.back[i])
+      i -= 1
+    end
+    let back = []
+    for j = k, lb
+      push(back, d.back[j])
+    end
+    d.front = front
+    d.back = back
+  end
+  pop(d.front)
+end
+
+## nil when empty.
+fn pop_back(d)
+  if len(d.back) == 0
+    let lf = len(d.front)
+    if lf == 0 then return nil end
+    let k = (lf + 1) / 2
+    let back = []
+    let i = k - 1
+    while i >= 0
+      push(back, d.front[i])
+      i -= 1
+    end
+    let front = []
+    for j = k, lf
+      push(front, d.front[j])
+    end
+    d.front = front
+    d.back = back
+  end
+  pop(d.back)
+end
+
+export new, size, push_front, push_back, at, pop_front, pop_back

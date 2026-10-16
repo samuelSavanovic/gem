@@ -1,0 +1,98 @@
+# Cursor helpers for goto-def and completion. Columns are bytes; the caller converts from UTF-16.
+
+# index of the NAME token under a 1-based line/col, or -1; a cursor just past a name's end still counts
+fn identifier_at(tokens, line_1, col_1)
+  let n = len(tokens)
+  let i = 0
+  while i < n
+    let t = tokens[i]
+    if t.type == "NAME" and t.line == line_1
+      let start_col = t.col
+      let end_col = start_col + len(t.value)
+      if col_1 >= start_col and col_1 <= end_col
+        return i
+      end
+    end
+    i += 1
+  end
+  -1
+end
+
+# 0-based line + byte col -> text offset, or -1 past EOF. col is clamped to the line end (a \r before \n counts)
+fn line_col_to_offset(text, line_0, byte_col)
+  let blen = len(text)
+  let i = 0
+  let line = 0
+  let line_start = 0
+  while i < blen and line < line_0
+    if ord(text, i) == 10
+      line += 1
+      line_start = i + 1
+    end
+    i += 1
+  end
+  if line < line_0
+    return -1
+  end
+  let off = line_start + byte_col
+  let scan = line_start
+  while scan < blen and ord(text, scan) != 10
+    scan += 1
+  end
+  if off > scan then off = scan end
+  if off > blen then off = blen end
+  off
+end
+
+# [A-Za-z0-9_], same as the lexer
+fn is_ident_char(c)
+  if c == 95 then return true end
+  if c >= 48 and c <= 57 then return true end
+  if c >= 65 and c <= 90 then return true end
+  if c >= 97 and c <= 122 then return true end
+  false
+end
+
+fn is_ident_start(c)
+  if c == 95 then return true end
+  if c >= 65 and c <= 90 then return true end
+  if c >= 97 and c <= 122 then return true end
+  false
+end
+
+# What's being typed at `offset`: {kind: "ident", prefix}, or after a `.` {kind: "field", recv, prefix}.
+# Works on text, so a broken parse is fine. For `a.b.c.` the receiver is just `c`.
+fn prefix_at(text, offset)
+  if offset < 0 then offset = 0 end
+  if offset > len(text) then offset = len(text) end
+  let prefix_end = offset
+  let prefix_start = prefix_end
+  while prefix_start > 0 and is_ident_char(ord(text, prefix_start - 1))
+    prefix_start -= 1
+  end
+  let prefix = substr(text, prefix_start, prefix_end - prefix_start)
+  # digits after a number, not a name
+  if len(prefix) > 0
+    let first = ord(prefix, 0)
+    if first >= 48 and first <= 57
+      return {kind: "ident", prefix: ""}
+    end
+  end
+  if prefix_start > 0 and ord(text, prefix_start - 1) == 46
+    let recv_end = prefix_start - 1
+    let recv_start = recv_end
+    while recv_start > 0 and is_ident_char(ord(text, recv_start - 1))
+      recv_start -= 1
+    end
+    if recv_start < recv_end
+      let recv = substr(text, recv_start, recv_end - recv_start)
+      let first = ord(recv, 0)
+      if first < 48 or first > 57
+        return {kind: "field", recv: recv, prefix: prefix}
+      end
+    end
+  end
+  {kind: "ident", prefix: prefix}
+end
+
+export identifier_at, line_col_to_offset, prefix_at, is_ident_char, is_ident_start

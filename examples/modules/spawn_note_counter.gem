@@ -1,0 +1,16 @@
+# for 134: underscores in both module and binding names check that the note maps
+# `__mod_spawn_note_counter_hit_count` back to `spawn_note_counter.hit_count` without guessing the split
+let hit_count = 0
+let by_kind = {}
+
+fn bump(kind)
+  hit_count = hit_count + 1
+  by_kind[kind] = hit_count
+  hit_count
+end
+
+fn total()
+  hit_count
+end
+
+export bump, total

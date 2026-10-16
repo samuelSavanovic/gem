@@ -1,0 +1,69 @@
+## Routes: a page about Gem, the server's numbers as JSON, static files.
+
+load "std/http"
+load "std/time"
+load "./recorder"
+
+let STATS_TIMEOUT_MS = 1000
+
+let PAGE = """
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gem</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<main>
+<h1><img src="/static/gem.svg" alt="" width="40" height="40"> Gem</h1>
+<p>Gem is a small dynamically typed language that compiles to C, with
+Erlang-style processes: spawn, send, receive, supervisors and "let it
+crash".</p>
+<p>This page is served by a Gem program, <code>examples/httpd</code>, on
+Gem's own HTTP server. It is a long-running test of that server under
+whatever the internet sends it.</p>
+<p><a href="/stats">Its numbers</a> ·
+<a href="https://github.com/samuelSavanovic/gem">the repository</a></p>
+</main>
+</body>
+</html>
+"""
+
+# counts and our own figures only: never echo a path, address or header a client sent
+fn stats_json(s)
+  let m = if s.metrics == nil then {} else s.metrics end
+  {
+    counting_since: time.iso8601(s.since),
+    uptime_s: if m.uptime_ms == nil then nil else m.uptime_ms / 1000 end,
+    requests: s.requests,
+    connections: {open: s.open, ended: s.closes},
+    refused: s.refused,
+    crashes: s.crashes,
+    events_dropped: s.dropped,
+    rss_kb: m.rss_kb,
+    processes: m.procs,
+    gem_commit: m.gem_commit
+  }
+end
+
+## `/stats` is 503 when the recorder doesn't answer.
+fn router(recorder_name, static_dir)
+  let app = http.router()
+  app.get("/") do |req|
+    http.html(PAGE)
+  end
+  app.get("/stats") do |req|
+    let s = recorder.stats(recorder_name, STATS_TIMEOUT_MS)
+    if s == nil
+      http.json_response({error: "recorder unavailable"}, 503)
+    else
+      http.json_response(stats_json(s))
+    end
+  end
+  app.static("/static", static_dir)
+  app
+end
+
+export router

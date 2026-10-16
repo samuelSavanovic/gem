@@ -1,0 +1,65 @@
+# std/dynamic_supervisor: children started on demand, restarted with their original args
+load "std/dynamic_supervisor"
+
+# signals start, optionally crashes on its second iteration, exits normally on "stop"
+fn make_worker(args, parent)
+  spawn(fn()
+    send(parent, {tag: "started", id: args.id, pid: self()})
+    let crashed_once = false
+    while true
+      receive
+      when {tag: "crash"}
+        if not crashed_once
+          crashed_once = true
+          error("boom")
+        end
+      when {tag: "stop"}
+        return nil
+      end
+    end
+  end)
+end
+
+let me = self()
+
+let dsup = dynamic_supervisor.start({
+  child: {
+    start: fn(args) make_worker(args, me) end,
+    restart: "permanent"
+  }
+})
+
+let p1 = dynamic_supervisor.start_child(dsup, {id: "alpha"})
+let p2 = dynamic_supervisor.start_child(dsup, {id: "beta"})
+
+let started = []
+while len(started) < 2
+  receive
+  when {tag: "started", id: id, pid: pid}
+    push(started, id)
+  end
+end
+sort(started)
+print("test1: started", started[0], started[1])
+
+let kids = dynamic_supervisor.which_children(dsup)
+print("test2: count", len(kids))
+
+# a permanent restart replays the original args
+send(p1, {tag: "crash"})
+receive
+when {tag: "started", id: id}
+  print("test3: restarted id", id)
+end
+
+let kids2 = dynamic_supervisor.which_children(dsup)
+print("test3: count after crash", len(kids2))
+
+let term_ok = dynamic_supervisor.terminate_child(dsup, p2)
+print("test4: terminate_child ok", term_ok)
+sleep(20)
+let kids3 = dynamic_supervisor.which_children(dsup)
+print("test4: count after terminate", len(kids3))
+
+let bogus = dynamic_supervisor.terminate_child(dsup, 999999)
+print("test5: bogus terminate ok", bogus)

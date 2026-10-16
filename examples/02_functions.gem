@@ -1,0 +1,33 @@
+fn add(a, b)
+  a + b
+end
+
+print(add(3, 4))
+
+fn greet(name)
+  print("hello " + name)
+end
+greet("gem")
+
+fn factorial(n)
+  if n <= 1
+    return 1
+  end
+  n * factorial(n - 1)
+end
+print(factorial(5))
+
+fn seven()
+  7
+end
+print(seven())
+
+fn max(a, b)
+  if a > b
+    a
+  else
+    b
+  end
+end
+print(max(10, 20))
+print(max(99, 1))

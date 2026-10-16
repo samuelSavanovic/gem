@@ -1,0 +1,47 @@
+# a closure inside a TCO'd fn may call that fn (or a sibling in a mutual cycle) in its own tail
+# position. That's a real call from the closure, not a loop restart of the enclosing fn.
+
+fn walk(n, log)
+  let again = fn() walk(n - 1, log) end
+  push(log, n)
+  if n <= 0 then return log end
+  if n == 3 then return again() end
+  walk(n - 1, log)
+end
+print(walk(5, []))
+
+# with a default param (rebind-mode TCO)
+fn walkd(n, log = [])
+  let again = fn() walkd(n - 1, log) end
+  push(log, n)
+  if n <= 0 then return log end
+  if n == 3 then return again() end
+  walkd(n - 1, log)
+end
+print(walkd(5))
+
+# the enclosing fn uses the closure's result
+fn twice(n)
+  let next = fn() twice(n - 1) end
+  if n <= 0 then return 0 end
+  if n == 2 then return 10 + next() end
+  twice(n - 1)
+end
+print(twice(4))
+
+# trampolined mutual cycle: a closure in one member tail-calls the other, result used
+fn even(n)
+  if n == 0 then return true end
+  let f = fn() odd(n - 1) end
+  if n == 3
+    let r = f()
+    return "closure saw {r}"
+  end
+  odd(n - 1)
+end
+fn odd(n)
+  if n == 0 then return false end
+  even(n - 1)
+end
+print(even(7))
+print(even(100000))

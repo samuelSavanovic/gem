@@ -1,0 +1,16 @@
+load "std/string"
+
+print(string.ends_with("hello.gem", ".gem"))
+print(string.ends_with("hello", ".gem"))
+print(string.ends_with("", ".gem"))
+print(string.ends_with(".gem", ".gem"))
+print(string.ends_with("x.gem", "y.gem"))
+
+print(string.starts_with("hello", "hel"))
+print(string.starts_with("hello", "world"))
+print(string.starts_with("", "hel"))
+print(string.starts_with("hel", "hel"))
+print(string.starts_with("hello", ""))
+
+print(string.ends_with("hi", ".gem"))
+print(string.starts_with("hi", "hel"))

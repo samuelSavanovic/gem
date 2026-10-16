@@ -1,0 +1,12 @@
+# Every pattern kind, in match and receive, with a same-line body and no `then`.
+send(self(), 1)
+receive
+when x print(x)
+end
+match 1
+when 1 print("one")
+when {a: v} print(v)
+when [p] p
+when ^x 3
+when "s" "t"
+end

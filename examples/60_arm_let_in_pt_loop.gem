@@ -1,0 +1,41 @@
+# lets inside an else arm, captured by a spawned closure, in a `while true` process loop
+
+let main_pid = self()
+
+fn worker(reply_to)
+  while true
+    let msg = receive()
+    if msg.tag == "stop"
+      send(reply_to, {tag: "done"})
+      return nil
+    else
+      let n = msg.n
+      let acc = reply_to
+      let r = pcall(fn()
+        spawn(fn()
+          send(acc, {tag: "result", n: n * 2})
+        end)
+      end)
+    end
+  end
+end
+
+let w = spawn(fn() worker(main_pid) end)
+let total = 50
+for i = 0, total
+  send(w, {tag: "go", n: i})
+end
+send(w, {tag: "stop"})
+
+let received = 0
+let done_seen = false
+while not (done_seen and received == total)
+  let r = receive()
+  match r
+  when {tag: "result", n: _}
+    received += 1
+  when {tag: "done"}
+    done_seen = true
+  end
+end
+print("ok: " + to_string(received))

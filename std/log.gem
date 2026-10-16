@@ -1,0 +1,55 @@
+## log: leveled lines on stderr with a UTC timestamp.
+## The level is per process and a spawned process copies its parent's, so set it in main before spawning.
+
+load "std/time"
+load "std/string"
+
+let LEVELS = {debug: 0, info: 1, warn: 2, error: 3}
+
+let min_level = 1
+
+# log.error below hides the `error` builtin in this whole file
+let raise = error
+
+fn emit(label, msg)
+  eprint("{time.iso8601()} [{label}] {msg}")
+end
+
+## Sets the lowest level printed: "debug", "info" (default), "warn" or "error".
+fn set_level(level)
+  if not has_key(LEVELS, level)
+    let near = if type(level) == "string" then string.closest(level, keys(LEVELS)) end
+    let hint = if near != nil then " (did you mean \"{near}\"?)" else "" end
+    raise("log.set_level: unknown level {level}{hint}; use \"debug\", \"info\", \"warn\" or \"error\"")
+  end
+  min_level = LEVELS[level]
+end
+
+## Prints `msg` at DEBUG, hidden by default.
+fn debug(msg)
+  if min_level <= 0
+    emit("DEBUG", msg)
+  end
+end
+
+## Prints `msg` at level INFO.
+fn info(msg)
+  if min_level <= 1
+    emit("INFO", msg)
+  end
+end
+
+## Prints `msg` at level WARN.
+fn warn(msg)
+  if min_level <= 2
+    emit("WARN", msg)
+  end
+end
+
+## Prints `msg` at ERROR. Doesn't raise.
+let error = fn(msg)
+  # a `let`, not a `fn`, so `raise` above still gets the builtin
+  emit("ERROR", msg)
+end
+
+export set_level, debug, info, warn, error

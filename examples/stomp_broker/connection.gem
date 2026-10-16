@@ -1,0 +1,259 @@
+## One client connection: a reader process that parses frames, and a writer that runs the protocol
+## and owns the socket's writes.
+
+load "std/gen_server"
+load "std/string"
+load "./frame"
+load "./registry"
+
+let READ_SIZE = 65536
+let MAX_FRAME = 4 * 1024 * 1024
+
+# no read timeout: without heart-beats a quiet subscriber is still live
+fn reader_loop(fd, writer)
+  let pending = buf_new()    # the start of a frame that hasn't ended yet
+  let pending_len = 0
+  while true
+    let chunk = tcp_read(fd, READ_SIZE)
+    if chunk == nil or chunk == ""
+      send(writer, {tag: "eof"})
+      return nil
+    end
+    if string.index_of(chunk, "\0") < 0
+      pending_len += len(chunk)
+      if pending_len > MAX_FRAME
+        send(writer, {tag: "frame_too_large"})
+        return nil
+      end
+      buf_push(pending, chunk)
+      continue
+    end
+    let rest = send_frames(to_string(pending) + chunk, writer)
+    if rest == nil
+      return nil
+    end
+    pending = buf_new()
+    buf_push(pending, rest)
+    pending_len = len(rest)
+  end
+end
+
+# the bytes after the last complete frame, or nil after a bad one
+fn send_frames(data, writer)
+  let pos = 0
+  while true
+    pos = skip_heartbeats(data, pos)
+    let nul = string.index_of(data, "\0", pos)
+    if nul < 0
+      if len(data) - pos > MAX_FRAME
+        send(writer, {tag: "frame_too_large"})
+        return nil
+      end
+      return substr(data, pos, len(data) - pos)
+    end
+    if nul - pos > MAX_FRAME
+      send(writer, {tag: "frame_too_large"})
+      return nil
+    end
+    let f = frame.parse_frame(substr(data, pos, nul - pos))
+    if f == nil
+      send(writer, {tag: "bad_frame"})
+      return nil
+    end
+    send(writer, {tag: "frame", frame: f})
+    pos = nul + 1
+  end
+end
+
+fn skip_heartbeats(data, pos)
+  let n = len(data)
+  while pos < n
+    let c = ord(data, pos)
+    if c != 10 and c != 13
+      break
+    end
+    pos += 1
+  end
+  pos
+end
+
+# handlers return true to keep the connection open
+
+fn writer_loop(conn)
+  while true
+    receive
+    when {tag: "frame", frame: f}
+      if not handle_frame(conn, f) then return nil end
+    when {tag: "deliver", frame: f}
+      if not write_frame(conn, f) then return nil end
+    when {tag: "eof"}
+      return nil
+    when {tag: "bad_frame"}
+      send_error(conn, "malformed frame")
+      return nil
+    when {tag: "frame_too_large"}
+      send_error(conn, "frame larger than {MAX_FRAME} bytes")
+      return nil
+    when {tag: "DOWN", pid: pid}
+      if not resubscribe(conn, pid) then return nil end
+    when other
+      nil
+    end
+  end
+end
+
+fn handle_frame(conn, f)
+  if not conn.connected
+    if f.command == "CONNECT" or f.command == "STOMP"
+      return handle_connect(conn, f)
+    end
+    return send_error(conn, "expected CONNECT, got {f.command}")
+  end
+  let ok = dispatch(conn, f)
+  let receipt = f.headers.receipt
+  if ok and receipt != nil
+    ok = write_frame(conn, {command: "RECEIPT", headers: {"receipt-id": receipt}, body: ""})
+  end
+  ok and f.command != "DISCONNECT"
+end
+
+fn dispatch(conn, f)
+  match f.command
+  when "SUBSCRIBE" then handle_subscribe(conn, f)
+  when "UNSUBSCRIBE" then handle_unsubscribe(conn, f)
+  when "SEND" then handle_send(conn, f)
+  when "DISCONNECT" then true
+  else
+    send_error(conn, "unknown command: {f.command}")
+  end
+end
+
+fn handle_connect(conn, f)
+  conn.connected = true
+  write_frame(conn, {
+    command: "CONNECTED",
+    headers: {version: "1.2", session: "{conn.id}", "heart-beat": "0,0"},
+    body: ""
+  })
+end
+
+fn handle_subscribe(conn, f)
+  let destination = f.headers.destination
+  let id = f.headers.id
+  if destination == nil or id == nil
+    return send_error(conn, "SUBSCRIBE requires destination and id headers")
+  end
+  if has_key(conn.subs, id)
+    return send_error(conn, "subscription id {id} is already in use")
+  end
+  let r = pcall subscribe(conn, id, destination)
+  if not r.ok
+    return send_error(conn, "can't subscribe to {destination}: {r.error}")
+  end
+  true
+end
+
+# monitored so a crashed destination's subscriptions move to the fresh one the registry starts
+fn subscribe(conn, id, destination)
+  let dest = registry.lookup_or_create(destination)
+  monitor(dest)
+  gen_server.cast(dest, {op: "subscribe", conn_pid: self(), sub_id: id})
+  conn.subs[id] = {pid: dest, destination: destination}
+end
+
+# a destination died: subscribe each of its ids again. The registry got the same DOWN before this
+# lookup reaches it, so it starts a fresh one. Messages published in between are lost.
+fn resubscribe(conn, pid)
+  let lost = []
+  for id, sub in conn.subs
+    if sub.pid == pid
+      push(lost, id)
+    end
+  end
+  for id in lost
+    let r = pcall subscribe(conn, id, conn.subs[id].destination)
+    if not r.ok
+      return send_error(conn, "subscription {id} lost: {r.error}")
+    end
+  end
+  true
+end
+
+fn handle_unsubscribe(conn, f)
+  let id = f.headers.id
+  if id == nil
+    return send_error(conn, "UNSUBSCRIBE requires an id header")
+  end
+  let sub = conn.subs[id]
+  if sub != nil
+    gen_server.cast(sub.pid, {op: "unsubscribe", conn_pid: self(), sub_id: id})
+    delete(conn.subs, id)
+    if not watches(conn, sub.pid)
+      demonitor(sub.pid)
+    end
+  end
+  true
+end
+
+fn watches(conn, pid)
+  for id, sub in conn.subs
+    if sub.pid == pid
+      return true
+    end
+  end
+  false
+end
+
+fn handle_send(conn, f)
+  let destination = f.headers.destination
+  if destination == nil
+    return send_error(conn, "SEND requires a destination header")
+  end
+  let r = pcall registry.lookup_or_create(destination)
+  if not r.ok
+    return send_error(conn, "can't send to {destination}: {r.error}")
+  end
+  gen_server.cast(r.value, {op: "publish", body: f.body, headers: f.headers})
+  true
+end
+
+# a client that doesn't take a frame within the timeout is dropped, or its deliveries would queue
+# up here without bound
+fn write_frame(conn, f)
+  let bytes = frame.render_frame(f)
+  tcp_write(conn.fd, bytes, conn.write_timeout_ms) == len(bytes)
+end
+
+# STOMP closes the connection after an ERROR
+fn send_error(conn, message)
+  write_frame(conn, {command: "ERROR", headers: {message: message}, body: ""})
+  false
+end
+
+# claims the socket so it closes however the writer ends; the reader only uses it, and a crash of
+# either kills the other through their link. The reader is unlinked first on the way out, so its
+# "shutdown" doesn't come back as the writer's exit reason.
+fn run_writer(fd, id, write_timeout_ms)
+  claim(fd)
+  let me = self()
+  let r = pcall spawn_link do
+    reader_loop(fd, me)
+  end
+  if not r.ok
+    # process table full: the client is refused, not a crash
+    return nil
+  end
+  writer_loop({fd: fd, id: id, write_timeout_ms: write_timeout_ms, connected: false, subs: {}})
+  unlink(r.value)
+  kill(r.value, "shutdown")
+end
+
+## `id` is the session id. Closes `fd` when done, or when the client doesn't take a frame within
+## `write_timeout_ms`. If this raises, `fd` is still the caller's.
+fn start(fd, id, write_timeout_ms)
+  spawn do
+    run_writer(fd, id, write_timeout_ms)
+  end
+end
+
+export start

@@ -1,0 +1,117 @@
+let x = 10
+let f1 = fn()
+  let f2 = fn()
+    let f3 = fn()
+      x
+    end
+    f3()
+  end
+  f2()
+end
+print(f1())
+
+let counter = 0
+let inc = fn()
+  counter += 1
+end
+let get = fn()
+  counter
+end
+inc()
+inc()
+inc()
+print(get())
+
+fn match_else_only(val)
+  match val
+  else
+    return "fallback"
+  end
+end
+print(match_else_only(42))
+
+fn match_empty(val)
+  match val
+  else nil
+  end
+  "after"
+end
+print(match_empty("ignored"))
+
+let arr = ["a", "b", "c"]
+for k, v in arr
+  print("{k}:{v}")
+end
+
+let empty_dq = """
+"""
+print(len(empty_dq))
+
+let empty_sq = '''
+'''
+print(len(empty_sq))
+
+let ws = """
+
+"""
+print(len(ws))             # the blank line goes with the trailing newline
+
+let tbl = {a: 1}
+print("val={tbl.a}")
+
+let arr2 = [10, 20]
+print("sum={arr2[0] + arr2[1]}")
+
+let t = {end: 1, if: 2, else: 3}
+print(t.end)
+print(t.if)
+print(t.else)
+
+let outer = {inner: {val: "deep"}}
+print(outer.inner.val)
+
+let nested = {a: {b: {c: 99}}}
+print(nested.a.b.c)
+
+fn noop()
+end
+let r = noop()
+print(r)
+
+let fns = []
+for i = 0, 3
+  let captured_i = i
+  push(fns, fn() captured_i end)
+end
+print(fns[0]())
+print(fns[1]())
+print(fns[2]())
+
+let {only} = {only: "solo"}
+print(only)
+
+let [first, second] = [100, 200]
+print(first)
+print(second)
+
+let a = 1
+let b = 2
+print("a+b={a + b}, a*b={a * b}")
+
+print(not false)
+print(not true)
+print(not nil)
+print(not 0)               # 0 is truthy
+
+print("abc" == "abc")
+print("abc" == "def")
+print("" == "")
+
+let fib = nil
+fib = fn(n)
+  if n <= 1
+    return n
+  end
+  fib(n - 1) + fib(n - 2)
+end
+print(fib(10))

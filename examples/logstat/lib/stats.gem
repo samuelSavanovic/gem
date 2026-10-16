@@ -1,0 +1,67 @@
+## Per-group request counts for one field of the parsed lines.
+
+load "std/table"
+
+let FIELDS = ["ip", "user", "method", "path", "status", "hour"]
+
+let METRICS = ["requests", "bytes", "errors"]
+
+fn new(field)
+  {by: field, lines: 0, malformed: 0, requests: 0, bytes: 0, errors: 0, groups: {}}
+end
+
+fn add(s, req)
+  let is_error = to_int(req.status) >= 400
+  s.lines = s.lines + 1
+  s.requests = s.requests + 1
+  s.bytes = s.bytes + req.bytes
+
+  let key = req[s.by]
+  let g = s.groups[key]
+  if g == nil
+    g = {key: key, requests: 0, bytes: 0, errors: 0}
+    s.groups[key] = g
+  end
+  g.requests = g.requests + 1
+  g.bytes = g.bytes + req.bytes
+  if is_error
+    s.errors = s.errors + 1
+    g.errors = g.errors + 1
+  end
+end
+
+fn malformed(s)
+  s.lines = s.lines + 1
+  s.malformed = s.malformed + 1
+end
+
+fn distinct(s)
+  len(s.groups)
+end
+
+## The `n` groups with the most `metric` (all of them for 0), ties by key.
+fn top(s, metric, n)
+  let rows = []
+  for key, g in s.groups
+    push(rows, g)
+  end
+  sort(rows, fn(a, b)
+    let d = b[metric] - a[metric]
+    if d != 0
+      return d
+    end
+    if a.key < b.key
+      return -1
+    end
+    if a.key > b.key
+      return 1
+    end
+    0
+  end)
+  if n <= 0 or n >= len(rows)
+    return rows
+  end
+  table.slice(rows, 0, n)
+end
+
+export FIELDS, METRICS, new, add, malformed, distinct, top

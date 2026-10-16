@@ -1,0 +1,35 @@
+let arr = [10, 20, 30, 40, 50]
+
+print("last:", arr[-1])
+print("second-to-last:", arr[-2])
+print("first via neg:", arr[-5])
+
+# arr[-len(arr)] is the first element
+print("first via neg len:", arr[-len(arr)])
+
+arr[-1] = 99
+print("set last:", arr[4])
+arr[-3] = 77
+print("set middle:", arr[2])
+
+let s = "hello"
+print("str last:", s[-1])
+print("str first:", s[-5])
+print("str second:", s[-4])
+
+let err1 = pcall arr[-10]
+print("oob neg get:", err1.ok == false)
+
+let err2 = pcall(fn() arr[-10] = 0 end)
+print("oob neg set:", err2.ok == false)
+
+let err3 = pcall s[-10]
+print("oob str neg:", err3.ok == false)
+
+let one = [42]
+print("single -1:", one[-1])
+
+let err4 = pcall(fn() let e = []; e[-1] end)
+print("empty neg:", err4.ok == false)
+
+print("NEGATIVE INDEXING DONE")

@@ -1,0 +1,8 @@
+# The expression form `pcall <expr>` runs its expression: a fn literal or
+# a bare name would only be evaluated.
+# expect: `pcall fn() ... end` returns the fn without running it
+fn f(x) x end
+let a = pcall fn() 1 end
+let b = pcall f
+let c = pcall f(1)
+let d = pcall do f(1) end

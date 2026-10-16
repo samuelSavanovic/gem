@@ -1,0 +1,33 @@
+# a table in a closure-mutated variable (a pinned box): its nested allocations must survive every reset
+
+let main_pid = self()
+
+let w = spawn(fn()
+  let acc = {value: 0, label: "start", history: []}
+
+  let bump = fn(n)
+    acc.value = acc.value + n
+    acc.label = "iter-" + to_string(acc.value)
+    push(acc.history, n)
+  end
+
+  while true
+    let msg = receive()
+    if msg == "done"
+      send(main_pid, {tag: "result", value: acc.value, label: acc.label, hlen: len(acc.history)})
+      return
+    end
+    bump(msg)
+    let junk = {a: "padding-" + to_string(acc.value), b: [1,2,3,4,5,6,7,8]}
+  end
+end)
+
+let n = 10000
+for i = 0, n
+  send(w, 1)
+end
+send(w, "done")
+let r = receive()
+print("value: " + to_string(r.value))
+print("label: " + r.label)
+print("hlen: " + to_string(r.hlen))

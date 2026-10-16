@@ -1,0 +1,348 @@
+#!/usr/bin/env bash
+# soak test: runs each target server under a steady mixed load for a long time (1 h by default) and
+# checks it stays up, answers correctly, and keeps memory, fds and latency flat
+#
+#   benchmarks/soak/run.sh                          # all targets, 1 h each
+#   DURATION=2m benchmarks/soak/run.sh              # quick check of the harness
+#   TARGETS=mini_redis DURATION=4h benchmarks/soak/run.sh
+#   TARGETS=honeypot benchmarks/soak/run.sh
+#   python3 benchmarks/soak/report.py <run dir>     # redo the report
+#
+# Targets, in TARGETS order: mini_redis, stomp (examples/stomp_broker), bookmark
+# (examples/bookmark_app), honeypot, httpd. Each gets a fresh server, built once up front, run with
+# GEM_DIAG=1 (or the GEM_DIAG given).
+#
+# Env:
+#   TARGETS        targets to run (default "mini_redis stomp bookmark honeypot httpd")
+#   DURATION       per target: seconds, or with s/m/h (default 1h)
+#   SAMPLE_S       seconds between samples (default DURATION/120, 2..30)
+#   GUARD_RSS_MB   kill a server whose RSS passes this (default 4096)
+#   OUT            run directory, new or without the targets' directories
+#                  (default benchmarks/soak/logs/<timestamp>)
+#   GEM_DIAG       the servers' GEM_DIAG (default 1; 2 adds a line per reset of 1 ms or more to
+#                  server.log). The build runs without it.
+#   MINI_REDIS_PORT (default 6395), HONEYPOT_PORT (default 2333),
+#                  HTTPD_PORT (default 8090); stomp uses 61613 and
+#                  bookmark 8080, which those programs hardcode
+#   SETTLE_S       seconds honeypot and httpd keep running after their load
+#                  stops (default 30), so the metrics show what they give back
+#   MINI_REDIS_ARGS, STOMP_ARGS, BOOKMARK_ARGS, HONEYPOT_ARGS, HTTPD_ARGS
+#                  extra options for that target's load generator, e.g.
+#                  MINI_REDIS_ARGS="--rate 8000 --subs 50" (see --help)
+#   HONEYPOT_SERVER_ARGS, HTTPD_SERVER_ARGS
+#                  extra options for the server itself, after the run's own
+#                  (a later flag wins), e.g. "--max-sessions 1000"
+#
+# Every sample is flushed and fsynced as it's taken, so a stopped or crashed run keeps it. Ctrl-C,
+# SIGTERM and SIGHUP stop the current target cleanly, skip the rest and write the report. On macOS
+# caffeinate holds off sleep.
+#
+# Exit status: 0 when no target failed and the run wasn't stopped (a run too short to judge exits 0),
+# 1 when one failed or the run was stopped, 2 for a setup problem or an unwritable report.
+
+set -uo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+PYTHON=${PYTHON:-python3}
+TARGETS=${TARGETS:-"mini_redis stomp bookmark honeypot httpd"}
+DURATION=${DURATION:-1h}
+GUARD_RSS_MB=${GUARD_RSS_MB:-4096}
+MINI_REDIS_PORT=${MINI_REDIS_PORT:-6395}
+HONEYPOT_PORT=${HONEYPOT_PORT:-2333}
+HTTPD_PORT=${HTTPD_PORT:-8090}
+SETTLE_S=${SETTLE_S:-30}
+OUT=${OUT:-"$SCRIPT_DIR/logs/$(date +%Y%m%d-%H%M%S)"}
+SERVER_DIAG=${GEM_DIAG:-1}
+unset GEM_DIAG
+
+die() { echo "soak: $*" >&2; exit 2; }
+
+case $DURATION in
+  *h) DURATION_S=$(( ${DURATION%h} * 3600 )) ;;
+  *m) DURATION_S=$(( ${DURATION%m} * 60 )) ;;
+  *s) DURATION_S=${DURATION%s} ;;
+  *) DURATION_S=$DURATION ;;
+esac
+[[ "$DURATION_S" =~ ^[0-9]+$ && "$DURATION_S" -ge 10 ]] || die "DURATION must be at least 10 s: $DURATION"
+if [[ -z "${SAMPLE_S:-}" ]]; then
+  SAMPLE_S=$(( DURATION_S / 120 ))
+  (( SAMPLE_S < 2 )) && SAMPLE_S=2
+  (( SAMPLE_S > 30 )) && SAMPLE_S=30
+fi
+
+for t in $TARGETS; do
+  case $t in
+    mini_redis|stomp|bookmark) ;;
+    honeypot|httpd)
+      # their loads hold thousands of connections open, on both ends
+      if (( $(ulimit -Sn) < 16384 )); then
+        ulimit -Sn 16384 2> /dev/null || die "$t needs 16384 open files: raise the hard limit (ulimit -Hn)"
+      fi ;;
+    *) die "unknown target '$t' (mini_redis, stomp, bookmark, honeypot, httpd)" ;;
+  esac
+done
+command -v "$PYTHON" > /dev/null || die "$PYTHON not found"
+[[ -x "$ROOT/build/gem" ]] || die "build/gem not found: run 'make build'"
+
+port_of() {
+  case $1 in
+    mini_redis) echo "$MINI_REDIS_PORT" ;;
+    stomp) echo 61613 ;;
+    bookmark) echo 8080 ;;
+    honeypot) echo "$HONEYPOT_PORT" ;;
+    httpd) echo "$HTTPD_PORT" ;;
+  esac
+}
+
+port_open() {
+  "$PYTHON" -c 'import socket,sys; s=socket.socket(); s.settimeout(0.5); sys.exit(s.connect_ex(("127.0.0.1", int(sys.argv[1]))) != 0)' "$1"
+}
+
+for t in $TARGETS; do
+  port_open "$(port_of "$t")" && die "port $(port_of "$t") ($t) is already in use"
+  # the CSVs append and the honeypot keeps its database in work/data, so a second run in the same
+  # directory would mix with the first
+  [[ -e "$OUT/$t" ]] && die "$OUT/$t already exists: give the run a new OUT"
+done
+
+mkdir -p "$OUT/bin" || die "cannot create $OUT"
+OUT="$(cd "$OUT" && pwd)"
+
+{
+  echo "date: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  echo "gem commit: $(git -C "$ROOT" rev-parse --short HEAD)$(git -C "$ROOT" diff --quiet HEAD || echo ' (dirty)')"
+  echo "system: $(uname -srm)"
+  if [[ "$(uname)" == Darwin ]]; then
+    echo "cpu: $(sysctl -n machdep.cpu.brand_string), $(sysctl -n hw.ncpu) cores"
+    echo "memory: $(( $(sysctl -n hw.memsize) / 1073741824 )) GB"
+  else
+    echo "cpu: $(grep -m1 'model name' /proc/cpuinfo | cut -d: -f2 | sed 's/^ //'), $(nproc) cores"
+    echo "memory: $(awk '/MemTotal/ {printf "%d GB", $2 / 1048576}' /proc/meminfo)"
+  fi
+  echo "python: $("$PYTHON" --version 2>&1)"
+  echo "targets: $TARGETS"
+  echo "duration per target: ${DURATION_S} s, sample every ${SAMPLE_S} s, guard RSS ${GUARD_RSS_MB} MB"
+  [[ -n "${MINI_REDIS_ARGS:-}" ]] && echo "MINI_REDIS_ARGS: $MINI_REDIS_ARGS"
+  [[ -n "${STOMP_ARGS:-}" ]] && echo "STOMP_ARGS: $STOMP_ARGS"
+  [[ -n "${BOOKMARK_ARGS:-}" ]] && echo "BOOKMARK_ARGS: $BOOKMARK_ARGS"
+  [[ -n "${HONEYPOT_ARGS:-}" ]] && echo "HONEYPOT_ARGS: $HONEYPOT_ARGS"
+  [[ -n "${HONEYPOT_SERVER_ARGS:-}" ]] && echo "HONEYPOT_SERVER_ARGS: $HONEYPOT_SERVER_ARGS"
+  [[ -n "${HTTPD_ARGS:-}" ]] && echo "HTTPD_ARGS: $HTTPD_ARGS"
+  [[ -n "${HTTPD_SERVER_ARGS:-}" ]] && echo "HTTPD_SERVER_ARGS: $HTTPD_SERVER_ARGS"
+} > "$OUT/meta.txt"
+cat "$OUT/meta.txt"
+echo "run directory: $OUT"
+
+# build everything first so a build error stops the run now, not an hour in
+for t in $TARGETS; do
+  case $t in
+    mini_redis) src=examples/mini_redis/main.gem ;;
+    stomp) src=examples/stomp_broker/main.gem ;;
+    bookmark) src=examples/bookmark_app/app.gem ;;
+    honeypot) src=examples/honeypot/main.gem ;;
+    httpd) src=examples/httpd/main.gem ;;
+  esac
+  echo "building $t"
+  "$ROOT/build/gem" "$ROOT/$src" -o "$OUT/bin/$t" > "$OUT/bin/$t.build.log" 2>&1 \
+    || { cat "$OUT/bin/$t.build.log" >&2; die "building $t failed"; }
+done
+
+if [[ "$(uname)" == Darwin ]] && command -v caffeinate > /dev/null; then
+  (trap '' HUP && exec caffeinate -dims -w $$) &
+fi
+
+STOPPING=0
+server_pid=""
+load_pid=""
+sampler_pid=""
+on_signal() {
+  STOPPING=1
+  echo
+  echo "soak: stopping (the samples so far are kept)"
+  [[ -n "$load_pid" ]] && kill -TERM "$load_pid" 2> /dev/null
+}
+trap on_signal INT TERM HUP
+
+# wait_for <pid>: its exit status, waiting through the interruptions a trapped signal makes
+wait_for() {
+  local st
+  while :; do
+    wait "$1"
+    st=$?
+    kill -0 "$1" 2> /dev/null || return "$st"
+  done
+}
+
+# stop_server <target> <dir>: exits through exit() so it prints its GEM_DIAG stats where it can
+# (mini_redis has SHUTDOWN), else SIGTERM; records in status.txt whether it was still alive
+stop_server() {
+  local t=$1 dir=$2 st
+  if ! kill -0 "$server_pid" 2> /dev/null; then
+    wait_for "$server_pid"
+    st=$?
+    echo "server_end=exited before the end, status $st" >> "$dir/status.txt"
+    return
+  fi
+  echo "server_end=alive" >> "$dir/status.txt"
+  if [[ $t == mini_redis ]]; then
+    # shellcheck disable=SC2016 # $8 is RESP's length prefix, not a variable
+    "$PYTHON" -c 'import socket,sys; s=socket.create_connection(("127.0.0.1", int(sys.argv[1])), 5); s.sendall(b"*1\r\n$8\r\nSHUTDOWN\r\n"); s.recv(1)' \
+      "$MINI_REDIS_PORT" 2> /dev/null
+  else
+    kill -TERM "$server_pid" 2> /dev/null
+  fi
+  for _ in $(seq 50); do
+    kill -0 "$server_pid" 2> /dev/null || break
+    sleep 0.1
+  done
+  kill -KILL "$server_pid" 2> /dev/null
+  wait_for "$server_pid"
+}
+
+run_target() {
+  local t=$1 dir="$OUT/$1" port load extra st
+  port=$(port_of "$t")
+  mkdir -p "$dir"
+  echo "duration_s=$DURATION_S" > "$dir/status.txt"
+  echo "started=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$dir/status.txt"
+
+  # each server runs in its own directory (bookmark_app opens bookmarks.db and serves ./static from
+  # its cwd), with SIGINT and SIGHUP ignored: Ctrl-C and a closed terminal signal the whole process
+  # group, and the server must outlive them to be shut down cleanly
+  mkdir -p "$dir/work"
+  case $t in
+    mini_redis)
+      (cd "$dir/work" && trap '' INT HUP && GEM_DIAG="$SERVER_DIAG" exec "$OUT/bin/mini_redis" --port "$port") > "$dir/server.log" 2>&1 &
+      load=mini_redis_load.py; extra=${MINI_REDIS_ARGS:-} ;;
+    stomp)
+      (cd "$dir/work" && trap '' INT HUP && GEM_DIAG="$SERVER_DIAG" exec "$OUT/bin/stomp") > "$dir/server.log" 2>&1 &
+      load=stomp_load.py; extra=${STOMP_ARGS:-} ;;
+    bookmark)
+      cp -R "$ROOT/examples/bookmark_app/static" "$dir/work/static"
+      (cd "$dir/work" && trap '' INT HUP && GEM_DIAG="$SERVER_DIAG" LOG_LEVEL=warn exec "$OUT/bin/bookmark") > "$dir/server.log" 2>&1 &
+      load=bookmark_load.py; extra=${BOOKMARK_ARGS:-} ;;
+    honeypot)
+      # every client comes from 127.0.0.1, so the per-IP cap is lifted; metrics every 10 s in work/data
+      mkdir -p "$dir/work/data"
+      # shellcheck disable=SC2086 # HONEYPOT_SERVER_ARGS is a list of options
+      (cd "$dir/work" && trap '' INT HUP && GEM_DIAG="$SERVER_DIAG" exec "$OUT/bin/honeypot" \
+        --port "$port" --data data --metrics-ms 10000 --max-per-ip 100000 --max-sessions 20000 \
+        --commit "$(git -C "$ROOT" rev-parse --short HEAD)" ${HONEYPOT_SERVER_ARGS:-}) > "$dir/server.log" 2>&1 &
+      load=honeypot_load.py; extra=${HONEYPOT_ARGS:-} ;;
+    httpd)
+      # httpd's default caps (1,000 connections, 32 per IP): the load sends from many loopback addresses,
+      # all but its crowd and bursts under the caps. Where only 127.0.0.1 is loopback (macOS) the per-IP
+      # cap is lifted instead. Metrics every 10 s in work/data.
+      mkdir -p "$dir/work/data"
+      cp -R "$ROOT/examples/httpd/static" "$dir/work/static"
+      local per_ip=""
+      "$PYTHON" -c 'import socket; socket.socket().bind(("127.0.0.2", 0))' 2> /dev/null \
+        || per_ip="--max-per-ip 100000"
+      # shellcheck disable=SC2086 # per_ip and HTTPD_SERVER_ARGS are lists of options
+      (cd "$dir/work" && trap '' INT HUP && GEM_DIAG="$SERVER_DIAG" exec "$OUT/bin/httpd" \
+        --port "$port" --data data --static static --metrics-ms 10000 $per_ip \
+        --commit "$(git -C "$ROOT" rev-parse --short HEAD)" ${HTTPD_SERVER_ARGS:-}) > "$dir/server.log" 2>&1 &
+      load=httpd_load.py; extra=${HTTPD_ARGS:-} ;;
+  esac
+  server_pid=$!
+  echo "server_pid=$server_pid" >> "$dir/status.txt"
+
+  for _ in $(seq 100); do
+    port_open "$port" && break
+    kill -0 "$server_pid" 2> /dev/null || break
+    sleep 0.1
+  done
+  if ! port_open "$port"; then
+    echo "soak: $t did not start listening on $port, see $dir/server.log" >&2
+    echo "server_end=did not start" >> "$dir/status.txt"
+    kill -KILL "$server_pid" 2> /dev/null
+    wait_for "$server_pid"
+    return 1
+  fi
+
+  echo
+  echo "── $t: ${DURATION_S} s, from $(date +%H:%M:%S) ──"
+  # shellcheck disable=SC2086 # $extra is a list of options
+  "$PYTHON" "$SCRIPT_DIR/$load" --port "$port" --duration-s "$DURATION_S" \
+    --sample-s "$SAMPLE_S" --out "$dir/load.csv" --errors "$dir/errors.log" $extra \
+    > "$dir/load.log" 2>&1 &
+  load_pid=$!
+  (trap '' INT HUP && exec "$PYTHON" "$SCRIPT_DIR/sample.py" --pid "$server_pid" \
+    --interval "$SAMPLE_S" --out "$dir/server.csv" --status "$dir/status.txt" \
+    --notify "$load_pid" --guard-rss-mb "$GUARD_RSS_MB") > "$dir/sampler.log" 2>&1 &
+  sampler_pid=$!
+
+  # waits for the load generator, printing progress once a minute; still running 5 minutes past its
+  # deadline means hung: SIGTERM, then SIGKILL (its rows are on disk either way)
+  local started=$SECONDS next_progress=$(( SECONDS + 60 )) hung=0
+  while kill -0 "$load_pid" 2> /dev/null; do
+    sleep 1
+    if (( SECONDS >= next_progress )); then
+      progress "$dir"
+      next_progress=$(( next_progress + 60 ))
+    fi
+    if (( hung == 0 && SECONDS - started >= DURATION_S + 300 )); then
+      hung=1
+      echo "soak: the $t load generator is hung, stopping it" >&2
+      echo "load_hung=yes" >> "$dir/status.txt"
+      kill -TERM "$load_pid" 2> /dev/null
+    elif (( hung == 1 && SECONDS - started >= DURATION_S + 330 )); then
+      kill -KILL "$load_pid" 2> /dev/null
+    fi
+  done
+  wait_for "$load_pid"
+  st=$?
+  load_pid=""
+  echo "load_exit=$st" >> "$dir/status.txt"
+  if [[ ($t == honeypot || $t == httpd) && $STOPPING == 0 ]]; then
+    echo "  settling for ${SETTLE_S} s"
+    sleep "$SETTLE_S"
+    echo "settled_s=$SETTLE_S" >> "$dir/status.txt"
+  fi
+  # the sampler first: it would take the shutdown for a crash
+  kill -TERM "$sampler_pid" 2> /dev/null
+  wait_for "$sampler_pid"
+  sampler_pid=""
+  stop_server "$t" "$dir"
+  echo "ended=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$dir/status.txt"
+  tail -n 1 "$dir/load.log"
+  return 0
+}
+
+# progress <dir>: a line with the latest samples, so a long run shows it's alive
+progress() {
+  local dir=$1
+  "$PYTHON" - "$dir" << 'EOF' 2> /dev/null
+import csv, sys
+d = sys.argv[1]
+def last(path):
+    rows = list(csv.DictReader(open(path)))
+    return rows[-1] if rows else {}
+s, l = last(f"{d}/server.csv"), last(f"{d}/load.csv")
+rss = int(s.get("rss_kb") or 0) // 1024
+p99 = [k for k in l if k.endswith("_p99_ms") and l[k]]
+print(f"  {float(l.get('elapsed_s') or 0):6.0f} s  RSS {rss} MB  fds {s.get('fds', '')}  errors {l.get('errors') or 0}"
+      + "".join(f"  {k[:-7]} p99 {float(l[k]):.1f} ms" for k in p99))
+EOF
+}
+
+for t in $TARGETS; do
+  [[ $STOPPING == 1 ]] && break
+  run_target "$t"
+done
+
+echo
+"$PYTHON" "$SCRIPT_DIR/report.py" "$OUT" > /dev/null || die "report failed"
+"$PYTHON" - "$OUT/report.md" << 'EOF'
+import sys
+for line in open(sys.argv[1]):
+    if line.startswith("## "):
+        print()
+        print(line[3:].rstrip())
+    elif line.startswith("- **") or line.startswith("Ran "):
+        print("  " + line.removeprefix("- ").replace("**", "").rstrip())
+EOF
+echo
+echo "report: $OUT/report.md"
+[[ $STOPPING == 0 ]] && ! grep -q -E '^\| [a-z_]+ \| FAIL \|' "$OUT/report.md"

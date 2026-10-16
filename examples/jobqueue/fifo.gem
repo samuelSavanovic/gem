@@ -1,0 +1,36 @@
+## A FIFO queue with O(1) amortized push and pop.
+
+# an array and the index of its first element; `remove_at(items, 0)` per pop would be O(n²) for a
+# backlog of n. The popped prefix is dropped once it's half the array.
+
+fn new()
+  {items: [], head: 0}
+end
+
+fn size(q)
+  len(q.items) - q.head
+end
+
+fn put(q, x)
+  push(q.items, x)
+end
+
+## nil when empty.
+fn take(q)
+  if q.head >= len(q.items)
+    return nil
+  end
+  let x = q.items[q.head]
+  q.head = q.head + 1
+  if q.head * 2 >= len(q.items)
+    let rest = []
+    for i = q.head, len(q.items)
+      push(rest, q.items[i])
+    end
+    q.items = rest
+    q.head = 0
+  end
+  x
+end
+
+export new, size, put, take

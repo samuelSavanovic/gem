@@ -1,0 +1,22 @@
+# tables, functions and buffers compare by identity, whatever their contents
+load "std/table"
+let t = {a: 1}
+let alias = t
+let f = fn() 1 end
+
+print("same table: {t == t} {t == alias}")
+print("equal contents: {t == {a: 1}}")
+print("same fn: {f == f}; other fn: {f == fn() 1 end}")
+let b = buf_new()
+print("same buffer: {b == b}; other buffer: {b == buf_new()} type={type(b)}")
+print("table in array: {table.contains([1, t], t)}; copy in array: {table.contains([t], {a: 1})}")
+
+let m = {}
+m[t] = "first"
+m[t] = "second"
+print("table key: len={len(m)} value={m[t]} other={m[{a: 1}]}")
+
+# a copy sent through a message is a different table
+send(self(), t)
+let copy = receive()
+print("message copy: {copy == t} {copy.a}")

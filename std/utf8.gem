@@ -1,0 +1,112 @@
+## utf8: strings by code point instead of byte. An invalid byte counts as one character.
+
+extern fn gem_utf8_len(s: Bytes) -> Int
+extern fn gem_utf8_valid(s: Bytes) -> Bool
+extern fn gem_utf8_split(s: Bytes, as_strings: Int) -> Table
+extern fn gem_utf8_char(cp: Int) -> Table
+extern fn gem_utf8_offset(s: Bytes, index: Int) -> Int
+extern fn gem_utf8_case(s: Bytes, upper: Int) -> Table
+
+fn check(fname, s)
+  if type(s) != "string"
+    error("utf8.{fname}: s must be a string, got {type(s)}")
+  end
+end
+
+## Returns the number of characters in `s`.
+fn len(s)
+  check("len", s)
+  gem_utf8_len(s)
+end
+
+## True when `s` is valid UTF-8 (no stray, overlong or surrogate sequences).
+fn valid(s)
+  check("valid", s)
+  gem_utf8_valid(s)
+end
+
+## Returns the characters of `s`, each as a string of its bytes.
+fn chars(s)
+  check("chars", s)
+  gem_utf8_split(s, 1)
+end
+
+## Returns the code points of `s` as ints.
+fn codepoints(s)
+  check("codepoints", s)
+  gem_utf8_split(s, 0)
+end
+
+## The UTF-8 string of code point `cp`, or of each one in the array `cp`.
+## Raises for a negative, surrogate or out-of-range code point.
+fn char(cp)
+  if type(cp) == "int"
+    let s = gem_utf8_char(cp)
+    if s == nil
+      error("utf8.char: {cp} is not a Unicode scalar value")
+    end
+    return s
+  end
+  if type(cp) != "table"
+    error("utf8.char: cp must be an int or an array of ints, got {type(cp)}")
+  end
+  build_string do |add|
+    for c in cp
+      add(char(c))
+    end
+  end
+end
+
+## `count` characters of `s` from character `start`, or to the end. A negative `start` counts from the end.
+fn sub(s, start, count = nil)
+  check("sub", s)
+  if start < 0
+    start = gem_utf8_len(s) + start
+    if start < 0
+      start = 0
+    end
+  end
+  let from = gem_utf8_offset(s, start)
+  if from < 0
+    return ""
+  end
+  if count == nil
+    return substr(s, from)
+  end
+  if count <= 0
+    return ""
+  end
+  let rest = substr(s, from)
+  let to = gem_utf8_offset(rest, count)
+  if to < 0
+    return rest
+  end
+  substr(rest, 0, to)
+end
+
+## Upper case for Latin, Greek, Cyrillic, Armenian and fullwidth Latin. No length-changing maps (ß to SS).
+fn upper(s)
+  check("upper", s)
+  gem_utf8_case(s, 1)
+end
+
+## Lower case, for the same scripts as `upper`.
+fn lower(s)
+  check("lower", s)
+  gem_utf8_case(s, 0)
+end
+
+## `s` reversed by characters, not bytes.
+fn reverse(s)
+  check("reverse", s)
+  let cs = gem_utf8_split(s, 1)
+  build_string do |add|
+    let i = gem_utf8_len(s) - 1
+    while i >= 0
+      add(cs[i])
+      i -= 1
+    end
+  end
+end
+
+export len, valid, chars, codepoints, char, sub, upper, lower, reverse

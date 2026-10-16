@@ -1,0 +1,11 @@
+# two `export` statements: both count
+let D = 5
+fn helper() 7 end
+
+fn with_defaults(a, x = D, y = helper(), z = a + D)
+  [a, x, y, z]
+end
+export with_defaults
+
+let anon_default = fn(x = D) x end
+export anon_default

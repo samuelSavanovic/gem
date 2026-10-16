@@ -1,0 +1,95 @@
+## STOMP 1.2 frames: parse and render.
+##
+##   let f = frame.parse_frame("SEND\ndestination:/queue/a\n\nhi")
+##   f    # {command: "SEND", headers: {destination: "/queue/a"}, body: "hi"}
+##   frame.render_frame(f)    # "SEND\ndestination:/queue/a\n\nhi\0"
+##
+## No `content-length` support, so a body can't contain a NUL byte.
+
+load "std/string"
+
+let UNESCAPES = {r: "\r", n: "\n", c: ":", "\\": "\\"}
+
+## `\\c` -> `:` and so on; an unknown escape is kept.
+fn unescape_header(s)
+  if string.index_of(s, "\\") < 0
+    return s
+  end
+  let n = len(s)
+  build_string do |add|
+    let i = 0
+    while i < n
+      let c = s[i]
+      if c == "\\" and i + 1 < n and has_key(UNESCAPES, s[i + 1])
+        add(UNESCAPES[s[i + 1]])
+        i += 2
+      else
+        add(c)
+        i += 1
+      end
+    end
+  end
+end
+
+fn escape_header(s)
+  let out = str_replace(s, "\\", "\\\\")
+  out = str_replace(out, "\r", "\\r")
+  out = str_replace(out, "\n", "\\n")
+  str_replace(out, ":", "\\c")
+end
+
+fn without_cr(line)
+  let n = len(line)
+  if n > 0 and ord(line, n - 1) == 13
+    return substr(line, 0, n - 1)
+  end
+  line
+end
+
+## Without its trailing NUL; nil when malformed. Lines may end in LF or CRLF, and a repeated header
+## keeps the first value it had.
+fn parse_frame(raw)
+  let sep = string.index_of(raw, "\n\n")
+  let body_at = sep + 2
+  let crlf = string.index_of(raw, "\r\n\r\n")
+  if crlf >= 0 and (sep < 0 or crlf < sep)
+    sep = crlf
+    body_at = crlf + 4
+  end
+  if sep < 0
+    return nil
+  end
+
+  let lines = string.split(substr(raw, 0, sep), "\n")
+  let command = without_cr(lines[0])
+  if command == ""
+    return nil
+  end
+
+  let headers = {}
+  for i = 1, len(lines)
+    let line = without_cr(lines[i])
+    let colon = string.index_of(line, ":")
+    if colon < 0
+      return nil
+    end
+    let key = unescape_header(substr(line, 0, colon))
+    if not has_key(headers, key)
+      headers[key] = unescape_header(substr(line, colon + 1, len(line) - colon - 1))
+    end
+  end
+
+  {command: command, headers: headers, body: substr(raw, body_at, len(raw) - body_at)}
+end
+
+fn render_frame(f)
+  build_string do |add|
+    add(f.command, "\n")
+    for k, v in f.headers
+      add(escape_header(k), ":", escape_header(v), "\n")
+    end
+    add("\n", f.body, "\0")
+  end
+end
+
+export parse_frame, render_frame, escape_header, unescape_header

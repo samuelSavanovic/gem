@@ -1,0 +1,14 @@
+# A trailing block inside an if / while / for header is reported once per
+# header, whether it is a brace block, a paren-less brace block or a do
+# block with params.
+fn seven() 7 end
+fn apply(f) f(3) end
+if seven() { 7 } == 7
+  print("a")
+end
+while apply { |x| x } > 100
+  print("b")
+end
+for i = apply() do |x| x end, 5
+  print(i)
+end

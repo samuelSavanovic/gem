@@ -1,0 +1,882 @@
+# Liveness for `while` loops: what's live at the back-edge is the root set for the reset there.
+# A missed live var silently corrupts memory, so when in doubt it's live.
+# Anything a closure in the body captures is live across the back-edge, except closures passed straight to
+# spawn: spawn copies their captures into the child, so they only need to live until the call.
+
+fn is_liveness_node(node, tag)
+  type(node) == "table" and node.tag == tag
+end
+
+fn lset_add(s, val)
+  s[val] = true
+end
+
+fn lset_remove(s, val)
+  if s[val] == true
+    delete(s, val)
+  end
+end
+
+fn lset_copy(s)
+  let r = {}
+  for k, _ in s
+    r[k] = true
+  end
+  r
+end
+
+fn lset_union_into(dst, src)
+  for k, _ in src
+    dst[k] = true
+  end
+end
+
+fn lset_eq(a, b)
+  for k, _ in a
+    if b[k] != true
+      return false
+    end
+  end
+  for k, _ in b
+    if a[k] != true
+      return false
+    end
+  end
+  true
+end
+
+fn lset_add_array(s, arr)
+  for x in arr
+    s[x] = true
+  end
+end
+
+let _is_stc = nil
+fn liveness_is_self_tail_call(fn_name, node)
+  _is_stc(fn_name, node)
+end
+
+fn liveness_has_self_tail_call(fn_name, stmts)
+  if len(stmts) == 0
+    return false
+  end
+  _is_stc(fn_name, stmts[len(stmts) - 1])
+end
+
+_is_stc = fn(fn_name, node)
+  if node == nil
+    return false
+  end
+  if type(node) != "table" or node.tag == nil
+    return false
+  end
+  match node
+  when {tag: "call", func: func}
+    return is_liveness_node(func, "var") and func.name == fn_name
+  when {tag: "return", value: value}
+    if value != nil
+      return _is_stc(fn_name, value)
+    end
+    return false
+  when {tag: "if", then: then_body, else: else_body}
+    if liveness_has_self_tail_call(fn_name, then_body)
+      return true
+    end
+    if else_body != nil
+      return liveness_has_self_tail_call(fn_name, else_body)
+    end
+    return false
+  when {tag: "match", whens: whens, else: else_body}
+    for i = 0, len(whens)
+      if liveness_has_self_tail_call(fn_name, whens[i].body)
+        return true
+      end
+    end
+    if else_body != nil
+      return liveness_has_self_tail_call(fn_name, else_body)
+    end
+    return false
+  when {tag: "receive_match", arms: arms, after_body: after_body}
+    for i = 0, len(arms)
+      if liveness_has_self_tail_call(fn_name, arms[i].body)
+        return true
+      end
+    end
+    if after_body != nil
+      return liveness_has_self_tail_call(fn_name, after_body)
+    end
+    return false
+  when {tag: "block", stmts: stmts}
+    return liveness_has_self_tail_call(fn_name, stmts)
+  else
+    nil
+  end
+  return false
+end
+
+let _collect_free_node = nil
+let _collect_free_stmts = nil
+
+_collect_free_node = fn(node, defined, free)
+  if node == nil
+    return nil
+  end
+  if type(node) != "table" or node.tag == nil
+    return nil
+  end
+
+  match node
+  when {tag: "var", name: name}
+    if defined[name] != true
+      free[name] = true
+    end
+  when {tag: "int"}
+    return nil
+  when {tag: "float"}
+    return nil
+  when {tag: "string"}
+    return nil
+  when {tag: "bool"}
+    return nil
+  when {tag: "nil"}
+    return nil
+  when {tag: "break"}
+    return nil
+  when {tag: "continue"}
+    return nil
+  when {tag: "let", value: value}
+    _collect_free_node(value, defined, free)
+  when {tag: "assign", name: name, value: value}
+    if defined[name] != true
+      free[name] = true
+    end
+    _collect_free_node(value, defined, free)
+  when {tag: "anon_fn", params: params, body: body}
+    let inner = lset_copy(defined)
+    lset_add_array(inner, params)
+    if node.rest_param != nil
+      inner[node.rest_param] = true
+    end
+    _collect_free_stmts(body, inner, free)
+    if node.defaults != nil
+      for d in node.defaults
+        if d != nil
+          _collect_free_node(d, inner, free)
+        end
+      end
+    end
+  when {tag: "fn_def"}
+    return nil
+  when {tag: "if", cond: cond, then: thens, else: el}
+    _collect_free_node(cond, defined, free)
+    _collect_free_stmts(thens, defined, free)
+    if el != nil
+      _collect_free_stmts(el, defined, free)
+    end
+  when {tag: "while", cond: cond, body: body}
+    _collect_free_node(cond, defined, free)
+    _collect_free_stmts(body, defined, free)
+  when {tag: "match", target: target, target_var: target_var, whens: whens, else: el}
+    _collect_free_node(target, defined, free)
+    let mdef = lset_copy(defined)
+    if target_var != nil
+      mdef[target_var] = true
+    end
+    for w in whens
+      _collect_free_node(w.value, mdef, free)
+      let armdef = lset_copy(mdef)
+      if w.bindings != nil
+        for b in w.bindings
+          _collect_free_node(b, armdef, free)
+          if is_liveness_node(b, "let")
+            armdef[b.name] = true
+          end
+        end
+      end
+      _collect_free_stmts(w.body, armdef, free)
+    end
+    if el != nil
+      _collect_free_stmts(el, defined, free)
+    end
+  when {tag: "receive_match", arms: arms, after_ms: after_ms, after_body: after_body}
+    let rdef = lset_copy(defined)
+    if node.recv_var != nil
+      rdef[node.recv_var] = true
+    end
+    for arm in arms
+      _collect_free_node(arm.pattern.condition, rdef, free)
+      let armdef = lset_copy(rdef)
+      if arm.pattern.bindings != nil
+        for b in arm.pattern.bindings
+          _collect_free_node(b, armdef, free)
+          if is_liveness_node(b, "let")
+            armdef[b.name] = true
+          end
+        end
+      end
+      _collect_free_stmts(arm.body, armdef, free)
+    end
+    if after_ms != nil
+      _collect_free_node(after_ms, rdef, free)
+    end
+    if after_body != nil
+      _collect_free_stmts(after_body, rdef, free)
+    end
+  when {tag: "table", entries: entries}
+    for e in entries
+      _collect_free_node(e.value, defined, free)
+    end
+  when {tag: "array", elements: elements}
+    for e in elements
+      _collect_free_node(e, defined, free)
+    end
+  when {tag: "interp", parts: parts}
+    for p in parts
+      _collect_free_node(p, defined, free)
+    end
+  when {tag: "block", stmts: stmts}
+    _collect_free_stmts(stmts, defined, free)
+  when {tag: "return", value: value}
+    if value != nil
+      _collect_free_node(value, defined, free)
+    end
+  else
+    for nk, v in node
+      if nk != "tag" and type(v) == "table"
+        let vks = keys(v)
+        if len(vks) > 0 and type(vks[0]) == "int"
+          let vi = 0
+          while vi < len(v)
+            if type(v[vi]) == "table"
+              _collect_free_node(v[vi], defined, free)
+            end
+            vi += 1
+          end
+        else
+          _collect_free_node(v, defined, free)
+        end
+      end
+    end
+  end
+end
+
+_collect_free_stmts = fn(stmts, defined, free)
+  let d = lset_copy(defined)
+  for s in stmts
+    _collect_free_node(s, d, free)
+    if is_liveness_node(s, "let")
+      d[s.name] = true
+    elif is_liveness_node(s, "block")
+      # a block node's lets belong to the enclosing list
+      for inner in s.stmts
+        if is_liveness_node(inner, "let")
+          d[inner.name] = true
+        end
+      end
+    end
+  end
+end
+
+let _has_break_here = nil
+_has_break_here = fn(node)
+  if node == nil
+    return false
+  end
+  if type(node) != "table" or node.tag == nil
+    return false
+  end
+  if node.tag == "break"
+    return true
+  end
+  # breaks in nested loops and fns aren't ours
+  if node.tag == "while"
+    return false
+  end
+  if node.tag == "anon_fn"
+    return false
+  end
+  if node.tag == "fn_def"
+    return false
+  end
+  for nk, v in node
+    if nk != "tag" and type(v) == "table"
+      let vks = keys(v)
+      if len(vks) > 0 and type(vks[0]) == "int"
+        let vi = 0
+        while vi < len(v)
+          if type(v[vi]) == "table"
+            if _has_break_here(v[vi])
+              return true
+            end
+          end
+          vi += 1
+        end
+      else
+        if _has_break_here(v)
+          return true
+        end
+      end
+    end
+  end
+  false
+end
+
+fn liveness_loop_has_break(while_node)
+  for s in while_node.body
+    if _has_break_here(s)
+      return true
+    end
+  end
+  false
+end
+
+# adds the names an expression reads to `into`; a closure reads its free vars
+
+let _uses_expr = nil
+_uses_expr = fn(node, into)
+  if node == nil
+    return nil
+  end
+  if type(node) != "table" or node.tag == nil
+    return nil
+  end
+
+  match node
+  when {tag: "var", name: name}
+    into[name] = true
+  when {tag: "int"}
+    return nil
+  when {tag: "float"}
+    return nil
+  when {tag: "string"}
+    return nil
+  when {tag: "bool"}
+    return nil
+  when {tag: "nil"}
+    return nil
+  when {tag: "binop", left: l, right: r}
+    _uses_expr(l, into)
+    _uses_expr(r, into)
+  when {tag: "unop", expr: e}
+    _uses_expr(e, into)
+  when {tag: "dot", object: o}
+    _uses_expr(o, into)
+  when {tag: "index", object: o, key: k}
+    _uses_expr(o, into)
+    _uses_expr(k, into)
+  when {tag: "call", func: func, args: args}
+    _uses_expr(func, into)
+    for a in args
+      _uses_expr(a, into)
+    end
+  when {tag: "table", entries: entries}
+    for e in entries
+      _uses_expr(e.value, into)
+    end
+  when {tag: "array", elements: elements}
+    for e in elements
+      _uses_expr(e, into)
+    end
+  when {tag: "interp", parts: parts}
+    for p in parts
+      _uses_expr(p, into)
+    end
+  when {tag: "anon_fn", params: params, body: body}
+    let inner = sorted_params_to_set(params)
+    if node.rest_param != nil
+      inner[node.rest_param] = true
+    end
+    let free = {}
+    _collect_free_stmts(body, inner, free)
+    if node.defaults != nil
+      for d in node.defaults
+        if d != nil
+          _collect_free_node(d, inner, free)
+        end
+      end
+    end
+    lset_union_into(into, free)
+  else
+    for nk, v in node
+      if nk != "tag" and type(v) == "table"
+        let vks = keys(v)
+        if len(vks) > 0 and type(vks[0]) == "int"
+          let vi = 0
+          while vi < len(v)
+            if type(v[vi]) == "table"
+              _uses_expr(v[vi], into)
+            end
+            vi += 1
+          end
+        else
+          _uses_expr(v, into)
+        end
+      end
+    end
+  end
+end
+
+fn sorted_params_to_set(arr)
+  let s = {}
+  for x in arr
+    s[x] = true
+  end
+  s
+end
+
+
+let _transfer_stmt = nil
+let _transfer_stmts = nil
+
+_transfer_stmts = fn(stmts, live_out)
+  let live = lset_copy(live_out)
+  let i = len(stmts) - 1
+  while i >= 0
+    live = _transfer_stmt(stmts[i], live)
+    i -= 1
+  end
+  live
+end
+
+# live_in of a nested while, by fixpoint
+let _fixpoint_inner_loop = nil
+_fixpoint_inner_loop = fn(while_node, live_after)
+  let live_top = {}
+  let prev = nil
+  let iter = 0
+  while iter < 64
+    let live_after_body = lset_copy(live_top)
+    # the loop can exit (false cond or break) from any iteration
+    lset_union_into(live_after_body, live_after)
+    let live_in_body = _transfer_stmts(while_node.body, live_after_body)
+    let new_top = {}
+    _uses_expr(while_node.cond, new_top)
+    lset_union_into(new_top, live_in_body)
+    if prev != nil and lset_eq(new_top, prev)
+      return new_top
+    end
+    prev = lset_copy(new_top)
+    live_top = new_top
+    iter += 1
+  end
+  live_top
+end
+
+_transfer_stmt = fn(s, live_out)
+  if s == nil
+    return live_out
+  end
+  if type(s) != "table" or s.tag == nil
+    return live_out
+  end
+
+  match s
+  when {tag: "let", name: name, value: value}
+    let live_in = lset_copy(live_out)
+    lset_remove(live_in, name)
+    _uses_expr(value, live_in)
+    return live_in
+  when {tag: "assign", name: name, value: value}
+    let live_in = lset_copy(live_out)
+    lset_remove(live_in, name)
+    _uses_expr(value, live_in)
+    return live_in
+  when {tag: "dot_assign", object: object, value: value}
+    let live_in = lset_copy(live_out)
+    _uses_expr(object, live_in)
+    _uses_expr(value, live_in)
+    return live_in
+  when {tag: "index_assign", object: object, key: key, value: value}
+    let live_in = lset_copy(live_out)
+    _uses_expr(object, live_in)
+    _uses_expr(key, live_in)
+    _uses_expr(value, live_in)
+    return live_in
+  when {tag: "if", cond: cond, then: thens, else: el}
+    let live_then = _transfer_stmts(thens, live_out)
+    let live_else = if el != nil then _transfer_stmts(el, live_out) else lset_copy(live_out) end
+    let live_in = lset_copy(live_then)
+    lset_union_into(live_in, live_else)
+    _uses_expr(cond, live_in)
+    return live_in
+  when {tag: "while"}
+    return _fixpoint_inner_loop(s, live_out)
+  when {tag: "match", target: target, target_var: target_var, whens: whens, else: el}
+    let merged = {}
+    if el != nil
+      let live_else = _transfer_stmts(el, live_out)
+      lset_union_into(merged, live_else)
+    else
+      lset_union_into(merged, live_out)
+    end
+    for w in whens
+      # bindings run before the body
+      let arm_stmts = []
+      if w.bindings != nil
+        for b in w.bindings
+          push(arm_stmts, b)
+        end
+      end
+      for bs in w.body
+        push(arm_stmts, bs)
+      end
+      let live_arm = _transfer_stmts(arm_stmts, live_out)
+      _uses_expr(w.value, live_arm)
+      lset_union_into(merged, live_arm)
+    end
+    if target_var != nil
+      lset_remove(merged, target_var)
+    end
+    _uses_expr(target, merged)
+    return merged
+  when {tag: "receive_match", arms: arms, after_ms: after_ms, after_body: after_body}
+    let merged = {}
+    if after_body != nil
+      let live_after = _transfer_stmts(after_body, live_out)
+      if after_ms != nil
+        _uses_expr(after_ms, live_after)
+      end
+      lset_union_into(merged, live_after)
+    end
+    if len(arms) == 0
+      lset_union_into(merged, live_out)
+      return merged
+    end
+    for arm in arms
+      let arm_stmts = []
+      if arm.pattern.bindings != nil
+        for b in arm.pattern.bindings
+          push(arm_stmts, b)
+        end
+      end
+      for bs in arm.body
+        push(arm_stmts, bs)
+      end
+      let live_arm = _transfer_stmts(arm_stmts, live_out)
+      if arm.pattern.condition != nil
+        _uses_expr(arm.pattern.condition, live_arm)
+      end
+      lset_union_into(merged, live_arm)
+    end
+    if s.recv_var != nil
+      lset_remove(merged, s.recv_var)
+    end
+    return merged
+  when {tag: "block", stmts: stmts}
+    return _transfer_stmts(stmts, live_out)
+  when {tag: "return", value: value}
+    let live_in = {}
+    if value != nil
+      _uses_expr(value, live_in)
+    end
+    return live_in
+  when {tag: "break"}
+    # approximated by live_out; the loop's fixpoint is seeded with what's live after it
+    return lset_copy(live_out)
+  when {tag: "continue"}
+    # approximated by live_out; the loop fixpoint covers the jump to the top
+    return lset_copy(live_out)
+  when {tag: "fn_def"}
+    return lset_copy(live_out)
+  when {tag: "call"}
+    let live_in = lset_copy(live_out)
+    _uses_expr(s, live_in)
+    return live_in
+  else
+    let live_in = lset_copy(live_out)
+    _uses_expr(s, live_in)
+    return live_in
+  end
+end
+
+# Live set at while_node's back-edge: {ok: true, live} or {ok: false, reason}. Includes live_after_loop
+# unless the loop is `while true` with no break.
+fn compute_loop_live_at_backedge(while_node, live_after_loop)
+  let body_defined = {}
+  let closure_caps = {}
+  collect_closure_captures_in_stmts(while_node.body, body_defined, closure_caps)
+
+  let cond_is_true = is_liveness_node(while_node.cond, "bool") and while_node.cond.value == true
+  let has_break = liveness_loop_has_break(while_node)
+  let post_reachable = has_break or not cond_is_true
+
+  # seeding with live_after_loop also makes `break` (live_in = live_out) right
+  let live_top = {}
+  lset_union_into(live_top, closure_caps)
+  if post_reachable
+    lset_union_into(live_top, live_after_loop)
+  end
+
+  let prev = nil
+  let iter = 0
+  while iter < 64
+    let live_after_body = lset_copy(live_top)
+    let live_in_body = _transfer_stmts(while_node.body, live_after_body)
+    let new_top = lset_copy(live_in_body)
+    _uses_expr(while_node.cond, new_top)
+    lset_union_into(new_top, closure_caps)
+    if post_reachable
+      lset_union_into(new_top, live_after_loop)
+    end
+    if prev != nil and lset_eq(new_top, prev)
+      return {ok: true, live: new_top}
+    end
+    prev = lset_copy(new_top)
+    live_top = new_top
+    iter += 1
+  end
+  {ok: false, reason: "liveness fixpoint did not converge"}
+end
+
+
+# free vars of every closure in the body, minus the lets defined before it
+let collect_closure_captures_in_node = nil
+collect_closure_captures_in_node = fn(node, defined, caps)
+  if node == nil
+    return nil
+  end
+  if type(node) != "table" or node.tag == nil
+    return nil
+  end
+  if node.tag == "anon_fn"
+    let inner = lset_copy(defined)
+    lset_add_array(inner, node.params)
+    if node.rest_param != nil
+      inner[node.rest_param] = true
+    end
+    let free = {}
+    _collect_free_stmts(node.body, inner, free)
+    if node.defaults != nil
+      for d in node.defaults
+        if d != nil
+          _collect_free_node(d, inner, free)
+        end
+      end
+    end
+    lset_union_into(caps, free)
+    return nil
+  end
+  if node.tag == "fn_def"
+    return nil
+  end
+  # spawn(fn ... end) copies captures into the child at the call, so skip arg 0 (nested closures run there too)
+  if liveness_is_spawn_with_closure(node)
+    collect_closure_captures_in_node(node.func, defined, caps)
+    let i = 1
+    while i < len(node.args)
+      collect_closure_captures_in_node(node.args[i], defined, caps)
+      i += 1
+    end
+    return nil
+  end
+  for nk, v in node
+    if nk != "tag" and type(v) == "table"
+      let vks = keys(v)
+      if len(vks) > 0 and type(vks[0]) == "int"
+        # a statement list: its lets are defined for the closures after them
+        collect_closure_captures_in_stmts(v, defined, caps)
+      else
+        collect_closure_captures_in_node(v, defined, caps)
+      end
+    end
+  end
+end
+
+fn is_spawn_callee_name(name)
+  name == "spawn" or name == "spawn_link" or name == "spawn_monitor"
+end
+
+fn liveness_is_spawn_with_closure(node)
+  if not is_liveness_node(node, "call")
+    return false
+  end
+  if not is_liveness_node(node.func, "var")
+    return false
+  end
+  if not is_spawn_callee_name(node.func.name)
+    return false
+  end
+  if node.args == nil or len(node.args) == 0
+    return false
+  end
+  is_liveness_node(node.args[0], "anon_fn")
+end
+
+fn collect_closure_captures_in_stmts(stmts, defined, caps)
+  let d = lset_copy(defined)
+  for s in stmts
+    collect_closure_captures_in_node(s, d, caps)
+    if is_liveness_node(s, "let")
+      d[s.name] = true
+    elif is_liveness_node(s, "block")
+      for inner in s.stmts
+        if is_liveness_node(inner, "let")
+          d[inner.name] = true
+        end
+      end
+    end
+  end
+end
+
+# Walks a fn body or the top level backward and sets `liveness_result` on every `process_tail` while,
+# for compile_while. A loop gets the live set after it, so reads after the loop are rooted; arms get the
+# enclosing statement's live_out, a loop body the back-edge set, a closure body the empty set.
+
+let _attach_node = nil
+let _attach_stmts = nil
+let _scan_anons = nil
+
+_attach_stmts = fn(stmts, live_out)
+  let live = lset_copy(live_out)
+  let i = len(stmts) - 1
+  while i >= 0
+    live = _attach_node(stmts[i], live)
+    i -= 1
+  end
+  live
+end
+
+# every closure body in an expression, each as its own scope (statements: _attach_node; fn_defs: codegen)
+_scan_anons = fn(node)
+  if node == nil
+    return nil
+  end
+  if type(node) != "table" or node.tag == nil
+    return nil
+  end
+  if node.tag == "anon_fn"
+    _attach_stmts(node.body, {})
+    if node.defaults != nil
+      for d in node.defaults
+        if d != nil
+          _scan_anons(d)
+        end
+      end
+    end
+    return nil
+  end
+  if node.tag == "fn_def"
+    return nil
+  end
+  for nk, v in node
+    if nk != "tag" and type(v) == "table"
+      let vks = keys(v)
+      if len(vks) > 0 and type(vks[0]) == "int"
+        let vi = 0
+        while vi < len(v)
+          if type(v[vi]) == "table"
+            _scan_anons(v[vi])
+          end
+          vi += 1
+        end
+      else
+        _scan_anons(v)
+      end
+    end
+  end
+end
+
+_attach_node = fn(s, live_out)
+  if s == nil
+    return live_out
+  end
+  if type(s) != "table" or s.tag == nil
+    return live_out
+  end
+
+  if s.tag == "while"
+    let r = compute_loop_live_at_backedge(s, live_out)
+    if s.process_tail == true
+      s.liveness_result = r
+    end
+    let body_live_after = if r.ok then r.live else lset_copy(live_out) end
+    _attach_stmts(s.body, body_live_after)
+    _scan_anons(s.cond)
+    if r.ok
+      return lset_copy(r.live)
+    end
+    return _transfer_stmt(s, live_out)
+  end
+
+  if s.tag == "if"
+    if s.then != nil
+      _attach_stmts(s.then, live_out)
+    end
+    if s.else != nil
+      _attach_stmts(s.else, live_out)
+    end
+    _scan_anons(s.cond)
+    return _transfer_stmt(s, live_out)
+  end
+
+  if s.tag == "match"
+    _scan_anons(s.target)
+    if s.whens != nil
+      for w in s.whens
+        _attach_stmts(w.body, live_out)
+        _scan_anons(w.value)
+        if w.bindings != nil
+          for b in w.bindings
+            _scan_anons(b)
+          end
+        end
+      end
+    end
+    if s.else != nil
+      _attach_stmts(s.else, live_out)
+    end
+    return _transfer_stmt(s, live_out)
+  end
+
+  if s.tag == "receive_match"
+    if s.arms != nil
+      for arm in s.arms
+        _attach_stmts(arm.body, live_out)
+        if arm.pattern != nil
+          if arm.pattern.condition != nil
+            _scan_anons(arm.pattern.condition)
+          end
+          if arm.pattern.bindings != nil
+            for b in arm.pattern.bindings
+              _scan_anons(b)
+            end
+          end
+        end
+      end
+    end
+    if s.after_ms != nil
+      _scan_anons(s.after_ms)
+    end
+    if s.after_body != nil
+      _attach_stmts(s.after_body, live_out)
+    end
+    return _transfer_stmt(s, live_out)
+  end
+
+  if s.tag == "block"
+    return _attach_stmts(s.stmts, live_out)
+  end
+
+  if s.tag == "for" or s.tag == "for_kv" or s.tag == "for_range"
+    if s.iter != nil
+      _scan_anons(s.iter)
+    end
+    if s.from != nil
+      _scan_anons(s.from)
+    end
+    if s.to != nil
+      _scan_anons(s.to)
+    end
+    _attach_stmts(s.body, live_out)
+    return _transfer_stmt(s, live_out)
+  end
+
+  _scan_anons(s)
+  return _transfer_stmt(s, live_out)
+end
+
+fn compute_live_for_pt_loops_in_stmts(stmts)
+  _attach_stmts(stmts, {})
+end
+
+export compute_loop_live_at_backedge, compute_live_for_pt_loops_in_stmts, liveness_has_self_tail_call, liveness_loop_has_break, sorted_params_to_set, lset_eq, lset_copy, is_spawn_callee_name

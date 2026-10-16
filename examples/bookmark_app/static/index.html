@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bookmark Manager</title>
+  <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <div class="container">
+    <h1>Bookmark Manager</h1>
+
+    <form hx-post="/bookmarks" hx-target="#bookmarks" hx-swap="innerHTML" class="create-form">
+      <div class="form-row">
+        <label>URL <input type="url" name="url" placeholder="https://example.com" required></label>
+        <label>Title <input type="text" name="title" placeholder="My Bookmark"></label>
+        <label>Tags <input type="text" name="tags" placeholder="dev, tools"></label>
+        <button type="submit">Add Bookmark</button>
+      </div>
+    </form>
+
+    <div id="bookmarks" hx-get="/bookmarks" hx-trigger="load" hx-swap="innerHTML">
+      <p>Loading bookmarks...</p>
+    </div>
+  </div>
+</body>
+</html>

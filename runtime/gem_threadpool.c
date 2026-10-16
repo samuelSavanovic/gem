@@ -1,0 +1,403 @@
+/* Worker threads for blocking calls (file I/O, exec, sqlite open/close, extern blocking fns). Workers
+   signal the scheduler through a wake pipe, then drop their reference to the request (see GemIORequest).
+
+   Host name lookups get their own lane so a dead nameserver can't starve file I/O. Lookups can't be
+   cancelled, so those workers are detached and exit doesn't wait for them; they start on demand (up to
+   GEM_RESOLVER_MAX) and quit after GEM_RESOLVER_IDLE_S idle. */
+
+#include "gem.h"
+
+#include <pthread.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <errno.h>
+#include <sys/stat.h>
+#include <time.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <netdb.h>
+
+/* default worker count; the GEM_POOL_SIZE env var overrides it, capped at GEM_POOL_MAX */
+#ifndef GEM_POOL_SIZE
+#define GEM_POOL_SIZE 4
+#endif
+#define GEM_POOL_MAX 256
+
+#define GEM_RESOLVER_MAX 16
+#define GEM_RESOLVER_IDLE_S 10
+
+/* a queue and its workers. The ring grows: thousands of processes can each have a request queued, and
+   an abandoned lookup stays queued until taken. */
+typedef struct {
+    pthread_t workers[GEM_POOL_MAX];   /* the I/O lane's, joined at shutdown */
+    int nworkers;
+    int idle;
+    int elastic;                       /* workers start on demand and exit when idle */
+    GemIORequest **queue;
+    int q_cap, q_head, q_tail, q_count;
+    pthread_cond_t cond;
+} GemIOLane;
+
+enum { GEM_LANE_IO, GEM_LANE_RESOLVE, GEM_LANES };
+static GemIOLane gem_io_lanes[GEM_LANES] = {
+    { .cond = PTHREAD_COND_INITIALIZER },
+    { .cond = PTHREAD_COND_INITIALIZER, .elastic = 1 },
+};
+static pthread_mutex_t gem_io_mutex = PTHREAD_MUTEX_INITIALIZER;
+static int gem_io_wake_pipe_fds[2] = {-1, -1};
+static volatile int gem_io_shutdown_flag = 0;
+
+char *gem_read_whole_file(const char *path, size_t *out_len, char **err_msg) {
+    char msg[512];
+    *out_len = 0;
+    *err_msg = NULL;
+    FILE *f = gem_fopen(path, "rb");
+    if (!f) {
+        snprintf(msg, sizeof(msg), "cannot open '%s': %s", path, strerror(errno));
+        *err_msg = strdup(msg);
+        return NULL;
+    }
+    /* st_size only for regular files; procfs reports 0 and pipes nothing useful, so those read to EOF */
+    struct stat st;
+    size_t cap = 4096;
+    if (fstat(fileno(f), &st) == 0) {
+        if (S_ISDIR(st.st_mode)) {
+            fclose(f);
+            snprintf(msg, sizeof(msg), "'%s' is a directory", path);
+            *err_msg = strdup(msg);
+            return NULL;
+        }
+        if (S_ISREG(st.st_mode) && (uint64_t)st.st_size > (uint64_t)GEM_MAX_STRLEN) {
+            fclose(f);
+            snprintf(msg, sizeof(msg), "'%s' is %lld bytes, over the string limit of %d bytes",
+                     path, (long long)st.st_size, GEM_MAX_STRLEN);
+            *err_msg = strdup(msg);
+            return NULL;
+        }
+        if (S_ISREG(st.st_mode) && st.st_size > 0) cap = (size_t)st.st_size + 1;
+    }
+    char *data = (char *)malloc(cap);
+    size_t len = 0;
+    for (;;) {
+        len += fread(data + len, 1, cap - 1 - len, f);
+        if (len < cap - 1) break;          /* short read: EOF or error */
+        int c = fgetc(f);                  /* full: is there more? */
+        if (c == EOF) break;
+        if (len >= (size_t)GEM_MAX_STRLEN) {
+            len = (size_t)GEM_MAX_STRLEN + 1;   /* stop reading: too long */
+            break;
+        }
+        cap *= 2;
+        data = (char *)realloc(data, cap);
+        data[len++] = (char)c;
+    }
+    if (len > (size_t)GEM_MAX_STRLEN) {
+        fclose(f);
+        free(data);
+        snprintf(msg, sizeof(msg), "'%s' holds more than the string limit of %d bytes",
+                 path, GEM_MAX_STRLEN);
+        *err_msg = strdup(msg);
+        return NULL;
+    }
+    if (ferror(f)) {
+        fclose(f);
+        free(data);
+        snprintf(msg, sizeof(msg), "read failed for '%s'", path);
+        *err_msg = strdup(msg);
+        return NULL;
+    }
+    fclose(f);
+    data[len] = '\0';
+    *out_len = len;
+    return data;
+}
+
+static void gem_io_do_read(GemIORequest *req) {
+    req->result_data = gem_read_whole_file(req->path, &req->result_len, &req->error_msg);
+}
+
+static void gem_io_do_write(GemIORequest *req, const char *mode) {
+    FILE *f = gem_fopen(req->path, mode);
+    if (!f) {
+        char buf[512];
+        snprintf(buf, sizeof(buf), "cannot open '%s' for writing: %s", req->path, strerror(errno));
+        req->error_msg = strdup(buf);
+        return;
+    }
+    size_t nwritten = req->content_len ? fwrite(req->content, 1, req->content_len, f) : 0;
+    fclose(f);
+    if (nwritten != req->content_len) {
+        char buf[512];
+        snprintf(buf, sizeof(buf), "write failed for '%s'", req->path);
+        req->error_msg = strdup(buf);
+    }
+}
+
+static void gem_io_do_exec(GemIORequest *req) {
+    req->exit_code = gem_run_shell(req->path);
+}
+
+static void gem_io_do_read_range(GemIORequest *req) {
+    req->result_data = gem_read_file_range(req->path, req->offset, req->count,
+                                           &req->result_len, &req->error_msg);
+}
+
+static void gem_io_do_exec_capture(GemIORequest *req) {
+    req->exit_code = gem_run_capture(req->path, req->content, req->content_len,
+                                     &req->result_data, &req->result_len,
+                                     &req->err_data, &req->err_len, &req->error_msg);
+}
+
+const char *gem_resolve4(const char *host, uint32_t *addr) {
+    struct addrinfo hints, *res = NULL;
+    memset(&hints, 0, sizeof(hints));
+    hints.ai_family = AF_INET;
+    hints.ai_socktype = SOCK_STREAM;
+    int rc = getaddrinfo(host, NULL, &hints, &res);
+    if (rc != 0) return gai_strerror(rc);
+    if (res == NULL) return "no address";
+    *addr = ((struct sockaddr_in *)res->ai_addr)->sin_addr.s_addr;
+    freeaddrinfo(res);
+    return NULL;
+}
+
+static void gem_io_do_resolve(GemIORequest *req) {
+    const char *err = gem_resolve4(req->path, &req->addr4);
+    if (err) req->error_msg = strdup(err);
+}
+
+static void *gem_io_worker_fn(void *arg) {
+    GemIOLane *lane = (GemIOLane *)arg;
+    for (;;) {
+        pthread_mutex_lock(&gem_io_mutex);
+        lane->idle++;
+        int expired = 0;
+        while (lane->q_count == 0 && !gem_io_shutdown_flag && !expired) {
+            if (!lane->elastic) {
+                pthread_cond_wait(&lane->cond, &gem_io_mutex);
+                continue;
+            }
+            struct timespec until;
+            clock_gettime(CLOCK_REALTIME, &until);
+            until.tv_sec += GEM_RESOLVER_IDLE_S;
+            expired = pthread_cond_timedwait(&lane->cond, &gem_io_mutex, &until) == ETIMEDOUT;
+        }
+        lane->idle--;
+        if (lane->q_count == 0) {
+            if (lane->elastic) lane->nworkers--;
+            pthread_mutex_unlock(&gem_io_mutex);
+            break;
+        }
+        GemIORequest *req = lane->queue[lane->q_head];
+        lane->q_head = (lane->q_head + 1) % lane->q_cap;
+        lane->q_count--;
+        pthread_mutex_unlock(&gem_io_mutex);
+
+        switch (req->op) {
+            case GEM_IO_READ_FILE:   gem_io_do_read(req); break;
+            case GEM_IO_WRITE_FILE:  gem_io_do_write(req, "wb"); break;
+            case GEM_IO_APPEND_FILE: gem_io_do_write(req, "ab"); break;
+            case GEM_IO_EXEC:        gem_io_do_exec(req); break;
+            case GEM_IO_EXTERN:      req->extern_fn(req->extern_args); break;
+            case GEM_IO_RESOLVE:     gem_io_do_resolve(req); break;
+            case GEM_IO_READ_RANGE:  gem_io_do_read_range(req); break;
+            case GEM_IO_EXEC_CAPTURE: gem_io_do_exec_capture(req); break;
+        }
+
+        __atomic_store_n(&req->done, 1, __ATOMIC_RELEASE);
+        char c = 1;
+        (void)write(gem_io_wake_pipe_fds[1], &c, 1);
+        gem_io_release(req);
+    }
+    return NULL;
+}
+
+static int gem_pool_size(void) {
+    const char *env = getenv("GEM_POOL_SIZE");
+    if (!env) return GEM_POOL_SIZE;
+    long n = 0;
+    int ok = *env != '\0';
+    for (const char *c = env; *c && ok; c++) {
+        if (*c < '0' || *c > '9') ok = 0;
+        else if (n <= GEM_POOL_MAX) n = n * 10 + (*c - '0');
+    }
+    if (!ok || n < 1) {
+        fprintf(stderr, "gem: GEM_POOL_SIZE must be a number of worker threads (at least 1), got '%s'\n", env);
+        exit(1);
+    }
+    return n < GEM_POOL_MAX ? (int)n : GEM_POOL_MAX;
+}
+
+void gem_threadpool_init(void) {
+    if (pipe(gem_io_wake_pipe_fds) != 0) {
+        perror("gem: pipe failed for threadpool wake-pipe");
+        return;
+    }
+    for (int i = 0; i < 2; i++) {
+        fcntl(gem_io_wake_pipe_fds[i], F_SETFL, O_NONBLOCK);
+        fcntl(gem_io_wake_pipe_fds[i], F_SETFD, FD_CLOEXEC);
+    }
+
+    gem_io_shutdown_flag = 0;
+    GemIOLane *lane = &gem_io_lanes[GEM_LANE_IO];
+    int want = gem_pool_size();
+    lane->nworkers = 0;
+    for (int i = 0; i < want; i++) {
+        if (pthread_create(&lane->workers[lane->nworkers], NULL, gem_io_worker_fn, lane) != 0) break;
+        lane->nworkers++;
+    }
+    if (lane->nworkers == 0) {
+        fprintf(stderr, "gem: cannot start a thread for the I/O pool\n");
+        exit(1);
+    }
+    /* ulimit -u or systemd TasksMax can cut this short */
+    if (lane->nworkers < want)
+        fprintf(stderr, "gem: started %d of %d I/O pool threads (GEM_POOL_SIZE)\n", lane->nworkers, want);
+}
+
+/* start a detached worker if one more request would outnumber the idle ones (hold gem_io_mutex);
+   0 if the lane has no worker and none could start */
+static int gem_io_grow(GemIOLane *lane) {
+    if (lane->idle > lane->q_count || lane->nworkers >= GEM_RESOLVER_MAX) return 1;
+    pthread_t t;
+    pthread_attr_t attr;
+    pthread_attr_init(&attr);
+    pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
+    if (pthread_create(&t, &attr, gem_io_worker_fn, lane) == 0) lane->nworkers++;
+    pthread_attr_destroy(&attr);
+    return lane->nworkers > 0;
+}
+
+/* resolver workers aren't joined (a lookup can't be cut short); while any exist the wake pipe stays open,
+   so a late one can't write into a reused fd */
+void gem_threadpool_shutdown(void) {
+    pthread_mutex_lock(&gem_io_mutex);
+    gem_io_shutdown_flag = 1;
+    for (int l = 0; l < GEM_LANES; l++)
+        pthread_cond_broadcast(&gem_io_lanes[l].cond);
+    pthread_mutex_unlock(&gem_io_mutex);
+
+    GemIOLane *lane = &gem_io_lanes[GEM_LANE_IO];
+    for (int i = 0; i < lane->nworkers; i++)
+        pthread_join(lane->workers[i], NULL);
+    lane->nworkers = 0;
+
+    if (gem_io_lanes[GEM_LANE_RESOLVE].nworkers > 0) return;
+    if (gem_io_wake_pipe_fds[0] >= 0) close(gem_io_wake_pipe_fds[0]);
+    if (gem_io_wake_pipe_fds[1] >= 0) close(gem_io_wake_pipe_fds[1]);
+    gem_io_wake_pipe_fds[0] = gem_io_wake_pipe_fds[1] = -1;
+}
+
+void gem_io_release(GemIORequest *req) {
+    int left = __sync_sub_and_fetch(&req->refs, 1);
+    GEM_ASSERT(left >= 0, "an I/O request released more times than it was shared");
+    if (left != 0) return;
+    free(req->path);
+    free(req->content);
+    free(req->result_data);
+    free(req->err_data);
+    free(req->error_msg);
+    free(req->busy);
+    if (req->free_extern) req->free_extern(req->extern_args);
+    free(req);
+}
+
+/* hold gem_io_mutex. 0 (queue untouched) if the queue can't grow or an elastic lane can't get a worker. */
+static int gem_io_enqueue(GemIORequest *req) {
+    GemIOLane *lane = &gem_io_lanes[req->op == GEM_IO_RESOLVE ? GEM_LANE_RESOLVE : GEM_LANE_IO];
+    if (lane->elastic && !gem_io_grow(lane)) return 0;
+    if (lane->q_count == lane->q_cap) {
+        int cap = lane->q_cap ? lane->q_cap * 2 : 1024;
+        GemIORequest **q = (GemIORequest **)malloc(sizeof(GemIORequest *) * (size_t)cap);
+        if (!q) return 0;
+        for (int i = 0; i < lane->q_count; i++)
+            q[i] = lane->queue[(lane->q_head + i) % lane->q_cap];
+        free(lane->queue);
+        lane->queue = q;
+        lane->q_cap = cap;
+        lane->q_head = 0;
+        lane->q_tail = lane->q_count;
+    }
+    lane->queue[lane->q_tail] = req;
+    lane->q_tail = (lane->q_tail + 1) % lane->q_cap;
+    lane->q_count++;
+    pthread_cond_signal(&lane->cond);
+    return 1;
+}
+
+GemIORequest *gem_io_submit(GemIOOp op, const char *path,
+                            const char *content, size_t content_len) {
+    GemIORequest *req = (GemIORequest *)calloc(1, sizeof(GemIORequest));
+    req->op = op;
+    req->requester_pid = gem_current_pid;
+    req->refs = 2;
+    req->path = strdup(path);
+    if (content && content_len > 0) {
+        req->content = (char *)malloc(content_len);
+        memcpy(req->content, content, content_len);
+        req->content_len = content_len;
+    }
+
+    pthread_mutex_lock(&gem_io_mutex);
+    if (!gem_io_enqueue(req)) {
+        pthread_mutex_unlock(&gem_io_mutex);
+        free(req->path);
+        free(req->content);
+        free(req);
+        return NULL;
+    }
+    pthread_mutex_unlock(&gem_io_mutex);
+    return req;
+}
+
+GemIORequest *gem_io_submit_range(const char *path, int64_t offset, int64_t count) {
+    GemIORequest *req = (GemIORequest *)calloc(1, sizeof(GemIORequest));
+    req->op = GEM_IO_READ_RANGE;
+    req->requester_pid = gem_current_pid;
+    req->refs = 2;
+    req->path = strdup(path);
+    req->offset = offset;
+    req->count = count;
+    pthread_mutex_lock(&gem_io_mutex);
+    if (!gem_io_enqueue(req)) {
+        pthread_mutex_unlock(&gem_io_mutex);
+        free(req->path);
+        free(req);
+        return NULL;
+    }
+    pthread_mutex_unlock(&gem_io_mutex);
+    return req;
+}
+
+GemIORequest *gem_io_submit_extern(void (*fn)(void *), void *args,
+                                   void (*free_args)(void *)) {
+    GemIORequest *req = (GemIORequest *)calloc(1, sizeof(GemIORequest));
+    req->op = GEM_IO_EXTERN;
+    req->requester_pid = gem_current_pid;
+    req->refs = 2;
+    req->extern_fn = fn;
+    req->extern_args = args;
+    req->free_extern = free_args;
+
+    pthread_mutex_lock(&gem_io_mutex);
+    if (!gem_io_enqueue(req)) {
+        pthread_mutex_unlock(&gem_io_mutex);
+        if (free_args) free_args(args);
+        free(req);
+        return NULL;
+    }
+    pthread_mutex_unlock(&gem_io_mutex);
+    return req;
+}
+
+int gem_io_check_completions(void) {
+    if (gem_io_wake_pipe_fds[0] < 0) return 0;
+    char buf[64];
+    int any = 0;
+    while (read(gem_io_wake_pipe_fds[0], buf, sizeof(buf)) > 0) any = 1;
+    return any;
+}
+
+int gem_io_wake_fd(void) {
+    return gem_io_wake_pipe_fds[0];
+}

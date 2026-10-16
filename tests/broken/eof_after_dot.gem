@@ -1,0 +1,4 @@
+# A file ending right after a dot is a parse error, not a crash.
+# expect: expected field name after '.', got 'EOF'
+let s = {}
+s.

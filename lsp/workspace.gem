@@ -1,0 +1,101 @@
+# Cache of parsed files the editor hasn't opened (usually std/*.gem) for cross-module goto-def and completion,
+# in a process registered as "lsp_workspace", keyed by absolute path. Open files go through their doc process.
+# Entries are never refreshed (nothing sends `invalidate`), so a module stays as first parsed until restart.
+
+load "./symbols" (build_symbols)
+load "../compiler/parser" (parse_source)
+load "../compiler/lexer" (tokenize)
+load "../compiler/lower" (lower)
+load "../compiler/errors" (make_error_sink)
+load "../compiler/loader" (find_project_root, find_install_root, compute_stdlib_root)
+
+let _install_root_path = find_install_root()
+
+fn install_root()
+  _install_root_path
+end
+
+# {ast, tokens, symbols, text}, or nil if the file can't be read
+fn parse_file(path)
+  let pres = pcall(fn()
+    return read_file(path)
+  end)
+  if not pres.ok
+    return nil
+  end
+  let text = pres.value
+  let base_dir = dirname(path)
+  let project_root = find_project_root(base_dir)
+  if project_root != nil
+    project_root = normalize_path(project_root)
+  end
+  let stdlib_root = compute_stdlib_root(install_root(), project_root)
+  let sink = make_error_sink()
+  let token_sink = make_error_sink()
+  let tokens = tokenize(text, path, token_sink)
+  let ast = lower(parse_source(text, path, sink))
+  let syms = build_symbols(ast, path, base_dir, project_root, stdlib_root)
+  {ast: ast, tokens: tokens, symbols: syms, text: text}
+end
+
+fn workspace_loop(cache)
+  receive
+  when {tag: "lookup", path: path, from: from}
+    let entry = if has_key(cache, path)
+      cache[path]
+    else
+      let parsed = parse_file(path)
+      if parsed != nil
+        cache[path] = parsed
+      end
+      parsed
+    end
+    send(from.pid, {tag: "ws_reply", ref: from.ref, entry: entry})
+    workspace_loop(cache)
+  when {tag: "invalidate", path: path}
+    if has_key(cache, path)
+      delete(cache, path)
+    end
+    workspace_loop(cache)
+  when {tag: "stop"}
+    return
+  end
+end
+
+# waits for the process to register, like doc.open
+fn start()
+  if whereis("lsp_workspace") != nil
+    return nil
+  end
+  let parent_pid = self()
+  let ref = make_ref()
+  spawn(fn()
+    register("lsp_workspace", self())
+    send(parent_pid, {tag: "ws_ready", ref: ref})
+    workspace_loop({})
+  end)
+  receive
+  when {tag: "ws_ready", ref: ^ref}
+    nil
+  after 5000
+    nil
+  end
+  nil
+end
+
+# the cache entry, or nil if the file can't be read
+fn lookup(path)
+  if whereis("lsp_workspace") == nil
+    return nil
+  end
+  let ref = make_ref()
+  send("lsp_workspace", {tag: "lookup", path: path, from: {pid: self(), ref: ref}})
+  receive
+  when {tag: "ws_reply", ref: ^ref, entry: e}
+    e
+  after 5000
+    nil
+  end
+end
+
+export start, lookup

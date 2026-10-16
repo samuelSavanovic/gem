@@ -1,0 +1,129 @@
+# Request dispatch and handlers. Before `initialize` only `initialize` and `exit` work (requests get -32002,
+# notifications are dropped); after `shutdown` everything but `exit` errors; `exit` exits 0 only after shutdown.
+
+load "./rpc"
+load "./doc"
+load "./definition"
+load "./completion"
+load "./diagnostics"
+
+# `gem/debug/symbols` is for tests/lsp, off unless GEM_LSP_DEBUG is set
+fn debug_enabled()
+  let v = getenv("GEM_LSP_DEBUG")
+  v != nil and v != "" and v != "0"
+end
+
+# entry_uri always gets a publish, even an empty one, so old squiggles clear after a clean parse
+fn publish_for(entry_uri)
+  let cache = doc.get_cache(entry_uri)
+  let publishes = diagnostics.build_publishes(entry_uri, cache)
+  for p in publishes
+    doc.publish_diagnostics(p.uri, p.diagnostics)
+  end
+end
+
+fn server_capabilities()
+  {
+    capabilities: {
+      textDocumentSync: 1,  # full sync
+      definitionProvider: true,
+      completionProvider: {triggerCharacters: ["."]}
+    },
+    serverInfo: {name: "gem-lsp", version: "0.1.0"}
+  }
+end
+
+fn make_dispatcher()
+  let initialized = false
+  let shutdown_requested = false
+
+  let dispatch = fn(msg)
+    let method = msg.method
+    let id = msg.id
+    let params = msg.params
+
+    if method == "initialize"
+      rpc.write_message(rpc.make_response(id, server_capabilities()))
+      initialized = true
+      return
+    end
+
+    if method == "initialized"
+      return
+    end
+
+    if method == "exit"
+      if shutdown_requested
+        exit(0)
+      else
+        exit(1)
+      end
+    end
+
+    if not initialized
+      if id != nil
+        rpc.write_message(rpc.make_error_response(id, rpc.ERR_SERVER_NOT_INITIALIZED, "Server not initialized"))
+      end
+      return
+    end
+
+    if shutdown_requested
+      if id != nil
+        rpc.write_message(rpc.make_error_response(id, rpc.ERR_INVALID_REQUEST, "Server is shutting down"))
+      end
+      return
+    end
+
+    if method == "shutdown"
+      shutdown_requested = true
+      rpc.write_message(rpc.make_response(id, nil))
+      return
+    end
+
+    if method == "textDocument/didOpen"
+      doc.open(params.textDocument)
+      publish_for(params.textDocument.uri)
+      return
+    end
+
+    if method == "textDocument/didChange"
+      doc.change(params.textDocument, params.contentChanges)
+      publish_for(params.textDocument.uri)
+      return
+    end
+
+    if method == "textDocument/didClose"
+      doc.close(params.textDocument)
+      return
+    end
+
+    if method == "gem/debug/symbols" and debug_enabled()
+      let syms = doc.get_symbols(params.uri)
+      if syms == nil
+        rpc.write_message(rpc.make_error_response(id, rpc.ERR_INVALID_PARAMS, "doc not open: " + params.uri))
+      else
+        rpc.write_message(rpc.make_response(id, syms))
+      end
+      return
+    end
+
+    if method == "textDocument/definition"
+      rpc.write_message(rpc.make_response(id, definition.handle(params)))
+      return
+    end
+
+    if method == "textDocument/completion"
+      rpc.write_message(rpc.make_response(id, completion.handle(params)))
+      return
+    end
+
+    # unknown notifications are dropped silently
+    if id != nil
+      rpc.write_message(rpc.make_error_response(id, rpc.ERR_METHOD_NOT_FOUND, "Method not found: " + method))
+    end
+  end
+
+  {dispatch: dispatch}
+end
+
+export make_dispatcher

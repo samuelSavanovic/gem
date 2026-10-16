@@ -1,0 +1,805 @@
+/* file, filesystem and exec builtins, plus plain C helpers the compiler calls through `extern fn` */
+
+#if defined(__linux__) && !defined(_GNU_SOURCE)
+#define _GNU_SOURCE   /* pipe2 */
+#endif
+#include "gem.h"
+#include <errno.h>
+#include <sys/stat.h>
+#include <sys/wait.h>
+#include <time.h>
+#include <dirent.h>
+#include <unistd.h>
+#include <libgen.h>
+#include <limits.h>
+#include <spawn.h>
+#include <poll.h>
+#include <fcntl.h>
+#include <signal.h>
+#include <pthread.h>
+#ifdef __APPLE__
+#include <mach-o/dyld.h>
+#endif
+
+FILE *gem_fopen(const char *path, const char *mode) {
+    int flags = O_CLOEXEC;
+    if (mode[0] == 'r') flags |= O_RDONLY;
+    else if (mode[0] == 'w') flags |= O_WRONLY | O_CREAT | O_TRUNC;
+    else flags |= O_WRONLY | O_CREAT | O_APPEND;
+    int fd = open(path, flags, 0666);
+    if (fd < 0) return NULL;
+    FILE *f = fdopen(fd, mode);
+    if (!f) { int e = errno; close(fd); errno = e; }
+    return f;
+}
+
+/* read_file(path, offset, count) reopens the file each call, so offset > 0 only makes sense for files
+   that keep their bytes between opens (regular files, block devices), not a pipe or tty */
+#define GEM_NO_OFFSET_FMT "'%s' is not a regular file: it can be read from offset 0 only (read it whole with read_file(path))"
+
+static int gem_keeps_bytes(const struct stat *st) {
+    return S_ISREG(st->st_mode) || S_ISBLK(st->st_mode);
+}
+
+char *gem_read_file_range(const char *path, int64_t offset, int64_t count,
+                          size_t *out_len, char **err_msg) {
+    char msg[512];
+    *out_len = 0;
+    *err_msg = NULL;
+    struct stat st;
+    /* check before open too: opening a FIFO blocks until a writer shows up */
+    if (offset > 0 && stat(path, &st) == 0 && !S_ISDIR(st.st_mode) && !gem_keeps_bytes(&st)) {
+        snprintf(msg, sizeof(msg), GEM_NO_OFFSET_FMT, path);
+        *err_msg = strdup(msg);
+        return NULL;
+    }
+    FILE *f = gem_fopen(path, "rb");
+    if (!f) {
+        snprintf(msg, sizeof(msg), "cannot open '%s': %s", path, strerror(errno));
+        *err_msg = strdup(msg);
+        return NULL;
+    }
+    if (fstat(fileno(f), &st) != 0) {
+        fclose(f);
+        snprintf(msg, sizeof(msg), "cannot stat '%s': %s", path, strerror(errno));
+        *err_msg = strdup(msg);
+        return NULL;
+    }
+    if (S_ISDIR(st.st_mode)) {
+        fclose(f);
+        snprintf(msg, sizeof(msg), "'%s' is a directory", path);
+        *err_msg = strdup(msg);
+        return NULL;
+    }
+    if (offset > 0 && (!gem_keeps_bytes(&st) || fseeko(f, (off_t)offset, SEEK_SET) != 0)) {
+        fclose(f);
+        snprintf(msg, sizeof(msg), GEM_NO_OFFSET_FMT, path);
+        *err_msg = strdup(msg);
+        return NULL;
+    }
+    /* size from st_size when we have it (procfs reports 0), else 64 KB, growing while bytes keep coming */
+    size_t want = (size_t)count, cap;
+    if (S_ISREG(st.st_mode) && st.st_size > 0) {
+        int64_t left = (int64_t)st.st_size > offset ? (int64_t)st.st_size - offset : 0;
+        cap = (int64_t)want < left ? want : (size_t)left;
+    } else {
+        cap = want < 65536 ? want : 65536;
+    }
+    char *data = (char *)malloc(cap + 1);
+    size_t len = 0;
+    for (;;) {
+        len += fread(data + len, 1, cap - len, f);
+        if (len < cap || len == want) break;
+        cap = cap ? cap * 2 : 4096;
+        if (cap > want) cap = want;
+        data = (char *)realloc(data, cap + 1);
+    }
+    if (ferror(f)) {
+        fclose(f);
+        free(data);
+        snprintf(msg, sizeof(msg), "read failed for '%s'", path);
+        *err_msg = strdup(msg);
+        return NULL;
+    }
+    fclose(f);
+    data[len] = '\0';
+    *out_len = len;
+    return data;
+}
+
+static GemVal gem_read_file_range_fn(GemVal *args) {
+    if (args[1].type != VAL_INT || args[2].type != VAL_INT) {
+        char buf[160]; snprintf(buf, sizeof(buf), "read_file: expected (string, int, int), got (string, %s, %s)", gem_type_str(args[1]), gem_type_str(args[2])); gem_error(buf);
+    }
+    const char *path = args[0].sval;
+    int64_t offset = args[1].ival, count = args[2].ival;
+    if (offset < 0) gem_error("read_file: negative offset");
+    if (count < 0) gem_error("read_file: negative count");
+    if (count > (int64_t)GEM_MAX_STRLEN) count = GEM_MAX_STRLEN;
+    if (gem_current_pid >= 0) {
+        GemIORequest *req = gem_io_submit_range(path, offset, count);
+        if (!req) { gem_error("read_file: I/O queue full"); }
+        GemProcess *proc = &gem_proc_table[gem_current_pid];
+        proc->io_request = req;
+        gem_io_pool_yield();
+        proc->io_request = NULL;
+        if (req->error_msg) {
+            char buf[600]; snprintf(buf, sizeof(buf), "read_file: %s", req->error_msg);
+            gem_io_release(req);
+            gem_error(buf);
+        }
+        GemVal r = gem_string_with_len(req->result_data, (int64_t)req->result_len);
+        gem_io_release(req);
+        return r;
+    }
+    size_t n;
+    char *err = NULL;
+    char *raw = gem_read_file_range(path, offset, count, &n, &err);
+    if (!raw) {
+        char buf[600]; snprintf(buf, sizeof(buf), "read_file: %s", err);
+        free(err);
+        gem_error(buf);
+    }
+    char *data = (char *)gem_alloc(n + 1);
+    memcpy(data, raw, n + 1);
+    free(raw);
+    GemVal r; r.type = VAL_STRING; r.magic = GEM_MAGIC; r.sval = data; r.slen = (int)n;
+    return r;
+}
+
+GemVal gem_read_file_fn(void *_env, GemVal *args, int argc) {
+    (void)_env;
+    if (argc < 1 || args[0].type != VAL_STRING) {
+        char buf[128]; snprintf(buf, sizeof(buf), "read_file: expected string path, got %s", argc < 1 ? "nothing" : gem_type_str(args[0])); gem_error(buf);
+    }
+    if (argc == 2 || argc > 3) {
+        char buf[128]; snprintf(buf, sizeof(buf), "read_file: expected 1 or 3 arguments (path, offset, count), got %d", argc); gem_error(buf);
+    }
+    if (argc == 3) return gem_read_file_range_fn(args);
+    const char *path = args[0].sval;
+
+    if (gem_current_pid >= 0) {
+        GemIORequest *req = gem_io_submit(GEM_IO_READ_FILE, path, NULL, 0);
+        if (!req) { gem_error("read_file: I/O queue full"); }
+        GemProcess *proc = &gem_proc_table[gem_current_pid];
+        proc->io_request = req;
+        gem_io_pool_yield();
+        proc->io_request = NULL;
+        if (req->error_msg) {
+            char buf[512]; snprintf(buf, sizeof(buf), "read_file: %s", req->error_msg);
+            gem_io_release(req);
+            gem_error(buf);
+        }
+        size_t rlen = req->result_len;
+        char *data = (char *)gem_alloc(rlen + 1);
+        memcpy(data, req->result_data, rlen);
+        data[rlen] = '\0';
+        gem_io_release(req);
+        GemVal r; r.type = VAL_STRING; r.magic = GEM_MAGIC; r.sval = data; r.slen = (int)rlen;
+        return r;
+    }
+
+    size_t nread;
+    char *err = NULL;
+    char *raw = gem_read_whole_file(path, &nread, &err);
+    if (!raw) {
+        char buf[512]; snprintf(buf, sizeof(buf), "read_file: %s", err);
+        free(err);
+        gem_error(buf);
+    }
+    char *data = (char *)gem_alloc(nread + 1);
+    memcpy(data, raw, nread + 1);
+    free(raw);
+    GemVal r; r.type = VAL_STRING; r.magic = GEM_MAGIC; r.sval = data; r.slen = (int)nread;
+    return r;
+}
+
+GemVal gem_write_file_fn(void *_env, GemVal *args, int argc) {
+    (void)_env;
+    if (argc < 2 || args[0].type != VAL_STRING || args[1].type != VAL_STRING) {
+        char buf[128]; snprintf(buf, sizeof(buf), "write_file: expected (string, string), got (%s, %s)", argc < 1 ? "nothing" : gem_type_str(args[0]), argc < 2 ? "nothing" : gem_type_str(args[1])); gem_error(buf);
+    }
+    const char *path = args[0].sval;
+    const char *content = args[1].sval;
+    size_t len = (size_t)args[1].slen;
+
+    if (gem_current_pid >= 0) {
+        GemIORequest *req = gem_io_submit(GEM_IO_WRITE_FILE, path, content, len);
+        if (!req) { gem_error("write_file: I/O queue full"); }
+        GemProcess *proc = &gem_proc_table[gem_current_pid];
+        proc->io_request = req;
+        gem_io_pool_yield();
+        proc->io_request = NULL;
+        if (req->error_msg) {
+            char buf[512]; snprintf(buf, sizeof(buf), "write_file: %s", req->error_msg);
+            gem_io_release(req);
+            gem_error(buf);
+        }
+        gem_io_release(req);
+        return GEM_NIL;
+    }
+
+    FILE *f = gem_fopen(path, "wb");
+    if (!f) {
+        char buf[512]; snprintf(buf, sizeof(buf), "write_file: cannot open '%s' for writing: %s", path, strerror(errno)); gem_error(buf);
+    }
+    size_t nwritten = fwrite(content, 1, len, f);
+    fclose(f);
+    if (nwritten != len) {
+        char buf[512]; snprintf(buf, sizeof(buf), "write_file: write failed for '%s'", path); gem_error(buf);
+    }
+    return GEM_NIL;
+}
+
+GemVal gem_append_file_fn(void *_env, GemVal *args, int argc) {
+    (void)_env;
+    if (argc < 2 || args[0].type != VAL_STRING || args[1].type != VAL_STRING) {
+        char buf[128]; snprintf(buf, sizeof(buf), "append_file: expected (string, string), got (%s, %s)",
+            argc < 1 ? "nothing" : gem_type_str(args[0]), argc < 2 ? "nothing" : gem_type_str(args[1]));
+        gem_error(buf);
+    }
+    const char *path = args[0].sval;
+    const char *content = args[1].sval;
+    size_t len = (size_t)args[1].slen;
+
+    if (gem_current_pid >= 0) {
+        GemIORequest *req = gem_io_submit(GEM_IO_APPEND_FILE, path, content, len);
+        if (!req) { gem_error("append_file: I/O queue full"); }
+        GemProcess *proc = &gem_proc_table[gem_current_pid];
+        proc->io_request = req;
+        gem_io_pool_yield();
+        proc->io_request = NULL;
+        if (req->error_msg) {
+            char buf[512]; snprintf(buf, sizeof(buf), "append_file: %s", req->error_msg);
+            gem_io_release(req);
+            gem_error(buf);
+        }
+        gem_io_release(req);
+        return GEM_NIL;
+    }
+
+    FILE *f = gem_fopen(path, "ab");
+    if (!f) { char buf[512]; snprintf(buf, sizeof(buf), "append_file: cannot open '%s': %s", path, strerror(errno)); gem_error(buf); }
+    size_t nwritten = fwrite(content, 1, len, f);
+    fclose(f);
+    if (nwritten != len) { char buf[512]; snprintf(buf, sizeof(buf), "append_file: write failed for '%s'", path); gem_error(buf); }
+    return GEM_NIL;
+}
+
+GemVal gem_file_exists_fn(void *_env, GemVal *args, int argc) {
+    (void)_env;
+    if (argc < 1 || args[0].type != VAL_STRING) {
+        char buf[128]; snprintf(buf, sizeof(buf), "file_exists: expected string path, got %s", argc < 1 ? "nothing" : gem_type_str(args[0])); gem_error(buf);
+    }
+    FILE *f = gem_fopen(args[0].sval, "rb");
+    if (f) { fclose(f); return gem_bool(1); }
+    return gem_bool(0);
+}
+
+GemVal gem_dirname_fn(void *_env, GemVal *args, int argc) {
+    (void)_env;
+    if (argc < 1 || args[0].type != VAL_STRING) {
+        char buf[128]; snprintf(buf, sizeof(buf), "dirname: expected string path, got %s", argc < 1 ? "nothing" : gem_type_str(args[0])); gem_error(buf);
+    }
+    char *copy = strdup(args[0].sval);
+    char *dir = dirname(copy);
+    GemVal r = gem_string(dir);
+    free(copy);
+    return r;
+}
+
+GemVal gem_path_join_fn(void *_env, GemVal *args, int argc) {
+    (void)_env;
+    if (argc < 2 || args[0].type != VAL_STRING || args[1].type != VAL_STRING) {
+        char buf[128]; snprintf(buf, sizeof(buf), "path_join: expected (string, string), got (%s, %s)",
+            argc < 1 ? "nothing" : gem_type_str(args[0]), argc < 2 ? "nothing" : gem_type_str(args[1])); gem_error(buf);
+    }
+    const char *dir = args[0].sval;
+    const char *file = args[1].sval;
+    size_t dlen = (size_t)args[0].slen;
+    size_t flen = (size_t)args[1].slen;
+    gem_strlen_check(dlen + 1 + flen, "path_join");
+    if (flen > 0 && file[0] == '/') {
+        char *copy = (char *)gem_alloc(flen + 1);
+        memcpy(copy, file, flen);
+        copy[flen] = '\0';
+        GemVal r; r.type = VAL_STRING; r.magic = GEM_MAGIC; r.sval = copy; r.slen = (int)flen;
+        return r;
+    }
+    int needs_sep = (dlen > 0 && dir[dlen-1] != '/');
+    size_t total = dlen + (needs_sep ? 1 : 0) + flen;
+    char *result = (char *)gem_alloc(total + 1);
+    memcpy(result, dir, dlen);
+    size_t pos = dlen;
+    if (needs_sep) result[pos++] = '/';
+    memcpy(result + pos, file, flen);
+    result[total] = '\0';
+    GemVal r; r.type = VAL_STRING; r.magic = GEM_MAGIC; r.sval = result; r.slen = (int)total;
+    return r;
+}
+
+GemVal gem_normalize_path_fn(void *_env, GemVal *args, int argc) {
+    (void)_env;
+    if (argc < 1 || args[0].type != VAL_STRING) {
+        char buf[128]; snprintf(buf, sizeof(buf), "normalize_path: expected string path, got %s", argc < 1 ? "nothing" : gem_type_str(args[0])); gem_error(buf);
+    }
+    char *resolved = realpath(args[0].sval, NULL);
+    if (resolved) {
+        GemVal r = gem_string(resolved);
+        free(resolved);
+        return r;
+    }
+    return gem_string(args[0].sval);
+}
+
+/* Real path of the running binary, for loader.gem's install root: the OS first, then argv[0] (cwd-relative
+   or on PATH), all through realpath, else argv[0] as typed. Static buffer, never NULL. */
+
+static int exe_path_try(const char *p, char *out) {
+    struct stat st;
+    if (!p || !*p) return 0;
+    if (!realpath(p, out)) return 0;
+    if (stat(out, &st) != 0 || !S_ISREG(st.st_mode)) return 0;
+    return 1;
+}
+
+char *gem_exe_path(void) {
+    static char resolved[PATH_MAX];
+    static int done = 0;
+    if (done) return resolved;
+    char cand[PATH_MAX];
+    const char *argv0 = (gem_stored_argc > 0 && gem_stored_argv) ? gem_stored_argv[0] : NULL;
+    int ok = 0;
+#if defined(__linux__)
+    ok = exe_path_try("/proc/self/exe", resolved);
+#elif defined(__APPLE__)
+    uint32_t sz = (uint32_t)sizeof(cand);
+    if (_NSGetExecutablePath(cand, &sz) == 0) ok = exe_path_try(cand, resolved);
+#endif
+    if (!ok && argv0 && *argv0) {
+        if (strchr(argv0, '/')) {
+            ok = exe_path_try(argv0, resolved);
+        } else {
+            const char *path = getenv("PATH");
+            const char *p = path ? path : "";
+            while (!ok && p) {
+                const char *colon = strchr(p, ':');
+                size_t dlen = colon ? (size_t)(colon - p) : strlen(p);
+                /* empty PATH entry = cwd */
+                int n = dlen == 0
+                    ? snprintf(cand, sizeof(cand), "./%s", argv0)
+                    : snprintf(cand, sizeof(cand), "%.*s/%s", (int)dlen, p, argv0);
+                if (n > 0 && (size_t)n < sizeof(cand) && access(cand, X_OK) == 0)
+                    ok = exe_path_try(cand, resolved);
+                p = colon ? colon + 1 : NULL;
+            }
+        }
+    }
+    if (!ok) snprintf(resolved, sizeof(resolved), "%s", argv0 ? argv0 : "");
+    done = 1;
+    return resolved;
+}
+
+/* per-compile work dirs for the compiler. Static buffer, NULL on failure. */
+
+char *gem_temp_dir_in(const char *parent) {
+    static char dir[PATH_MAX];
+    size_t n = strlen(parent);
+    while (n > 1 && parent[n - 1] == '/') n--;
+    int len = snprintf(dir, sizeof(dir), "%.*s/gem-XXXXXX", (int)n, parent);
+    if (len < 0 || (size_t)len >= sizeof(dir)) return NULL;
+    return mkdtemp(dir);
+}
+
+char *gem_temp_dir(void) {
+    const char *tmp = getenv("TMPDIR");
+    return gem_temp_dir_in(tmp && *tmp ? tmp : "/tmp");
+}
+
+int64_t gem_rmdir(const char *path) {
+    return rmdir(path) == 0 ? 1 : 0;
+}
+
+/* the compiler's binary cache: the hash is two FNV-1a lanes (a cache key, not crypto); gem_file_age uses
+   st_ctime, which a link or rename bumps */
+
+static void gem_fnv2(const uint8_t *p, size_t n, uint64_t *a, uint64_t *b) {
+    for (size_t i = 0; i < n; i++) {
+        *a = (*a ^ p[i]) * 0x100000001b3ULL;
+        *b = (*b ^ p[i]) * 0x100000001b3ULL;
+        *b ^= *b >> 29;
+    }
+}
+
+char *gem_hash_hex(const uint8_t *data, int64_t len) {
+    static char out[33];
+    uint64_t a = 0xcbf29ce484222325ULL, b = 0x84222325cbf29ce4ULL;
+    gem_fnv2(data, (size_t)len, &a, &b);
+    snprintf(out, sizeof(out), "%016llx%016llx", (unsigned long long)a, (unsigned long long)b);
+    return out;
+}
+
+char *gem_file_hash(const char *path) {
+    static char out[33];
+    FILE *f = gem_fopen(path, "rb");
+    if (!f) { out[0] = 0; return out; }
+    uint64_t a = 0xcbf29ce484222325ULL, b = 0x84222325cbf29ce4ULL;
+    uint8_t buf[65536];
+    size_t n;
+    while ((n = fread(buf, 1, sizeof(buf), f)) > 0) gem_fnv2(buf, n, &a, &b);
+    fclose(f);
+    snprintf(out, sizeof(out), "%016llx%016llx", (unsigned long long)a, (unsigned long long)b);
+    return out;
+}
+
+int64_t gem_mkdirs(const char *path) {
+    char tmp[PATH_MAX];
+    size_t n = strlen(path);
+    if (n == 0 || n >= sizeof(tmp)) return 0;
+    memcpy(tmp, path, n + 1);
+    for (size_t i = 1; i < n; i++) {
+        if (tmp[i] == '/') {
+            tmp[i] = 0;
+            if (mkdir(tmp, 0755) != 0 && errno != EEXIST) return 0;
+            tmp[i] = '/';
+        }
+    }
+    if (mkdir(tmp, 0755) == 0) return 1;
+    struct stat st;
+    return errno == EEXIST && stat(tmp, &st) == 0 && S_ISDIR(st.st_mode) ? 1 : 0;
+}
+
+int64_t gem_link(const char *from, const char *to) {
+    return link(from, to) == 0 ? 1 : 0;
+}
+
+int64_t gem_rename(const char *from, const char *to) {
+    return rename(from, to) == 0 ? 1 : 0;
+}
+
+int64_t gem_file_age(const char *path) {
+    struct stat st;
+    if (lstat(path, &st) != 0) return -1;
+    return (int64_t)(time(NULL) - st.st_ctime);
+}
+
+int64_t gem_run_program(const char *path, const uint8_t *args, int64_t len, int64_t replace) {
+    int64_t argc = 1;
+    for (int64_t i = 0; i < len; i++) if (args[i] == 0) argc++;
+    char **argv = (char **)malloc(sizeof(char *) * (size_t)(argc + 1));
+    argv[0] = (char *)path;
+    int64_t k = 1, start = 0;
+    for (int64_t i = 0; i < len; i++) {
+        if (args[i] == 0) { argv[k++] = (char *)args + start; start = i + 1; }
+    }
+    argv[k] = NULL;
+    char **envp = gem_env_snapshot();
+    int64_t ret = -1;
+    if (replace) {
+        /* undo our SIGPIPE ignore so it starts like it would from a shell */
+        fflush(NULL);
+        signal(SIGPIPE, SIG_DFL);
+        sigset_t none, old;
+        sigemptyset(&none);
+        sigprocmask(SIG_SETMASK, &none, &old);
+        execve(path, argv, envp);
+        sigprocmask(SIG_SETMASK, &old, NULL);
+        signal(SIGPIPE, SIG_IGN);
+    } else {
+        posix_spawnattr_t attr;
+        posix_spawnattr_init(&attr);
+        sigset_t def;
+        sigemptyset(&def);
+        sigaddset(&def, SIGPIPE);
+        posix_spawnattr_setsigdefault(&attr, &def);
+        posix_spawnattr_setflags(&attr, POSIX_SPAWN_SETSIGDEF);
+        pid_t pid;
+        if (posix_spawn(&pid, path, NULL, &attr, argv, envp) == 0) {
+            int status;
+            while (waitpid(pid, &status, 0) < 0 && errno == EINTR) {}
+            if (WIFEXITED(status)) ret = WEXITSTATUS(status);
+            else if (WIFSIGNALED(status)) ret = 128 + WTERMSIG(status);
+        }
+        posix_spawnattr_destroy(&attr);
+    }
+    free(envp);
+    free(argv);
+    return ret;
+}
+
+GemVal gem_remove_file_fn(void *_env, GemVal *args, int argc) {
+    (void)_env;
+    if (argc < 1 || args[0].type != VAL_STRING) {
+        char buf[128]; snprintf(buf, sizeof(buf), "remove_file: expected string path, got %s", argc < 1 ? "nothing" : gem_type_str(args[0])); gem_error(buf);
+    }
+    return gem_bool(unlink(args[0].sval) == 0 ? 1 : 0);
+}
+
+GemVal gem_mkdir_fn(void *_env, GemVal *args, int argc) {
+    (void)_env;
+    if (argc < 1 || args[0].type != VAL_STRING) {
+        char buf[128]; snprintf(buf, sizeof(buf), "mkdir: expected string path, got %s", argc < 1 ? "nothing" : gem_type_str(args[0])); gem_error(buf);
+    }
+    return gem_bool(mkdir(args[0].sval, 0755) == 0 ? 1 : 0);
+}
+
+GemVal gem_list_dir_fn(void *_env, GemVal *args, int argc) {
+    (void)_env;
+    if (argc < 1 || args[0].type != VAL_STRING) {
+        char buf[128]; snprintf(buf, sizeof(buf), "list_dir: expected string path, got %s", argc < 1 ? "nothing" : gem_type_str(args[0])); gem_error(buf);
+    }
+    DIR *d = opendir(args[0].sval);
+    if (!d) {
+        char buf[512]; snprintf(buf, sizeof(buf), "list_dir: cannot open directory '%s': %s", args[0].sval, strerror(errno)); gem_error(buf);
+    }
+    GemVal result = gem_table_new();
+    struct dirent *entry;
+    int i = 0;
+    while ((entry = readdir(d)) != NULL) {
+        if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) continue;
+        gem_table_set(result, gem_int(i), gem_string(entry->d_name));
+        i++;
+    }
+    closedir(d);
+    return result;
+}
+
+GemVal gem_rename_fn(void *_env, GemVal *args, int argc) {
+    (void)_env;
+    if (argc < 2 || args[0].type != VAL_STRING || args[1].type != VAL_STRING) {
+        char buf[128]; snprintf(buf, sizeof(buf), "rename: expected (string, string), got (%s, %s)", argc < 1 ? "nothing" : gem_type_str(args[0]), argc < 2 ? "nothing" : gem_type_str(args[1])); gem_error(buf);
+    }
+    return gem_bool(rename(args[0].sval, args[1].sval) == 0 ? 1 : 0);
+}
+
+/* follows symlinks like is_dir; a dangling link reports "link" */
+GemVal gem_stat_fn(void *_env, GemVal *args, int argc) {
+    (void)_env;
+    if (argc < 1 || args[0].type != VAL_STRING) {
+        char buf[128]; snprintf(buf, sizeof(buf), "stat: expected string path, got %s", argc < 1 ? "nothing" : gem_type_str(args[0])); gem_error(buf);
+    }
+    struct stat st;
+    if (stat(args[0].sval, &st) != 0) {
+        if (lstat(args[0].sval, &st) != 0) return GEM_NIL;
+    }
+    const char *type = S_ISREG(st.st_mode) ? "file" : S_ISDIR(st.st_mode) ? "dir" : S_ISLNK(st.st_mode) ? "link" : "other";
+#ifdef __APPLE__
+    int64_t mtime_ms = (int64_t)st.st_mtimespec.tv_sec * 1000 + st.st_mtimespec.tv_nsec / 1000000;
+#else
+    int64_t mtime_ms = (int64_t)st.st_mtim.tv_sec * 1000 + st.st_mtim.tv_nsec / 1000000;
+#endif
+    GemVal r = gem_table_new();
+    gem_table_set(r, gem_string("size"), gem_int((int64_t)st.st_size));
+    gem_table_set(r, gem_string("mtime"), gem_int(mtime_ms));
+    gem_table_set(r, gem_string("mode"), gem_int((int64_t)(st.st_mode & 07777)));
+    gem_table_set(r, gem_string("type"), gem_string(type));
+    return r;
+}
+
+GemVal gem_is_dir_fn(void *_env, GemVal *args, int argc) {
+    (void)_env;
+    if (argc < 1 || args[0].type != VAL_STRING) {
+        char buf[128]; snprintf(buf, sizeof(buf), "is_dir: expected string path, got %s", argc < 1 ? "nothing" : gem_type_str(args[0])); gem_error(buf);
+    }
+    struct stat st;
+    if (stat(args[0].sval, &st) != 0) return gem_bool(0);
+    return gem_bool(S_ISDIR(st.st_mode) ? 1 : 0);
+}
+
+/* exec/exec_capture spawn `/bin/sh -c` from pool threads, so children must inherit nothing but fds 0-2,
+ * or one command could hold the write end of another exec_capture's pipe and keep it waiting. Our fds are
+ * cloexec at creation where the OS allows (O_CLOEXEC, pipe2, accept4); macOS can't for pipes and sockets,
+ * so there we also set POSIX_SPAWN_CLOEXEC_DEFAULT. */
+
+/* children get SIGPIPE back to default, so `yes | head` ends */
+static void gem_spawn_attr_init(posix_spawnattr_t *attr) {
+    posix_spawnattr_init(attr);
+    sigset_t def;
+    sigemptyset(&def);
+    sigaddset(&def, SIGPIPE);
+    posix_spawnattr_setsigdefault(attr, &def);
+    short flags = POSIX_SPAWN_SETSIGDEF;
+#ifdef POSIX_SPAWN_CLOEXEC_DEFAULT
+    flags |= POSIX_SPAWN_CLOEXEC_DEFAULT;
+#endif
+    posix_spawnattr_setflags(attr, flags);
+}
+
+/* returns 0 or an errno, like posix_spawn */
+static int gem_spawn_shell(pid_t *pid, const char *cmd, posix_spawn_file_actions_t *fa) {
+    char *argv[] = {"sh", "-c", (char *)cmd, NULL};
+    posix_spawnattr_t attr;
+    gem_spawn_attr_init(&attr);
+    char **envp = gem_env_snapshot();
+    int rc = posix_spawn(pid, "/bin/sh", fa, &attr, argv, envp);
+    free(envp);
+    posix_spawnattr_destroy(&attr);
+    return rc;
+}
+
+int gem_run_shell(const char *cmd) {
+    pid_t pid;
+    posix_spawn_file_actions_t fa;
+    posix_spawn_file_actions_init(&fa);
+#ifdef POSIX_SPAWN_CLOEXEC_DEFAULT
+    for (int fd = 0; fd <= 2; fd++) posix_spawn_file_actions_addinherit_np(&fa, fd);
+#endif
+    int rc = gem_spawn_shell(&pid, cmd, &fa);
+    posix_spawn_file_actions_destroy(&fa);
+    if (rc != 0) return -1;
+    int status;
+    while (waitpid(pid, &status, 0) < 0)
+        if (errno != EINTR) return -1;
+    return WIFEXITED(status) ? WEXITSTATUS(status) : -1;
+}
+
+/* the child's dup2'd copies lose the cloexec flag */
+static int gem_cloexec_pipe(int fds[2]) {
+#ifdef __linux__
+    return pipe2(fds, O_CLOEXEC);
+#else
+    if (pipe(fds) != 0) return -1;
+    fcntl(fds[0], F_SETFD, FD_CLOEXEC);
+    fcntl(fds[1], F_SETFD, FD_CLOEXEC);
+    return 0;
+#endif
+}
+
+typedef struct { char *data; size_t len, cap; int over; } GemGrowBuf;
+
+static void gem_growbuf_read(GemGrowBuf *b, int fd, int *open_flag) {
+    if (b->cap - b->len < 65536 + 1) {
+        b->cap = b->cap ? b->cap * 2 : 65536 * 2;
+        b->data = (char *)realloc(b->data, b->cap);
+    }
+    ssize_t n = read(fd, b->data + b->len, 65536);
+    if (n > 0) {
+        b->len += (size_t)n;
+        if (b->len > (size_t)GEM_MAX_STRLEN) { b->over = 1; b->len = 0; }
+    } else if (n == 0 || (errno != EINTR && errno != EAGAIN)) {
+        close(fd);
+        *open_flag = 0;
+    }
+}
+
+int gem_run_capture(const char *cmd, const char *in, size_t in_len,
+                    char **out, size_t *out_len, char **err, size_t *err_len,
+                    char **errmsg) {
+    *out = NULL; *err = NULL; *out_len = 0; *err_len = 0; *errmsg = NULL;
+    int pin[2] = {-1, -1}, pout[2], perr[2];
+    if (gem_cloexec_pipe(pout) != 0) return -1;
+    if (gem_cloexec_pipe(perr) != 0) { close(pout[0]); close(pout[1]); return -1; }
+    if (in && gem_cloexec_pipe(pin) != 0) {
+        close(pout[0]); close(pout[1]); close(perr[0]); close(perr[1]);
+        return -1;
+    }
+    posix_spawn_file_actions_t fa;
+    posix_spawn_file_actions_init(&fa);
+    if (in) posix_spawn_file_actions_adddup2(&fa, pin[0], 0);
+    else posix_spawn_file_actions_addopen(&fa, 0, "/dev/null", O_RDONLY, 0);
+    posix_spawn_file_actions_adddup2(&fa, pout[1], 1);
+    posix_spawn_file_actions_adddup2(&fa, perr[1], 2);
+    pid_t pid;
+    int rc = gem_spawn_shell(&pid, cmd, &fa);
+    posix_spawn_file_actions_destroy(&fa);
+    close(pout[1]); close(perr[1]);
+    if (in) close(pin[0]);
+    if (rc != 0) {
+        close(pout[0]); close(perr[0]);
+        if (in) close(pin[1]);
+        return -1;
+    }
+    GemGrowBuf bo = {0}, be = {0};
+    int o_open = 1, e_open = 1, i_open = in != NULL;
+    size_t in_off = 0;
+    if (i_open) fcntl(pin[1], F_SETFL, fcntl(pin[1], F_GETFL) | O_NONBLOCK);
+    if (i_open && in_len == 0) { close(pin[1]); i_open = 0; }
+    while (o_open || e_open || i_open) {
+        struct pollfd pf[3];
+        int n = 0, io = -1, ie = -1, ii = -1;
+        if (o_open) { pf[n].fd = pout[0]; pf[n].events = POLLIN; io = n++; }
+        if (e_open) { pf[n].fd = perr[0]; pf[n].events = POLLIN; ie = n++; }
+        if (i_open) { pf[n].fd = pin[1]; pf[n].events = POLLOUT; ii = n++; }
+        if (poll(pf, (nfds_t)n, -1) < 0) {
+            if (errno == EINTR) continue;
+            break;
+        }
+        if (io >= 0 && pf[io].revents) gem_growbuf_read(&bo, pout[0], &o_open);
+        if (ie >= 0 && pf[ie].revents) gem_growbuf_read(&be, perr[0], &e_open);
+        if (ii >= 0 && pf[ii].revents) {
+            ssize_t w = write(pin[1], in + in_off, in_len - in_off);
+            if (w > 0) in_off += (size_t)w;
+            if ((w < 0 && errno != EINTR && errno != EAGAIN) || in_off == in_len) {
+                close(pin[1]);
+                i_open = 0;
+            }
+        }
+    }
+    if (o_open) close(pout[0]);
+    if (e_open) close(perr[0]);
+    if (i_open) close(pin[1]);
+    int status;
+    int code = -1;
+    while (waitpid(pid, &status, 0) < 0)
+        if (errno != EINTR) { status = -1; break; }
+    if (status != -1 && WIFEXITED(status)) code = WEXITSTATUS(status);
+    if (bo.over || be.over) {
+        char msg[200];
+        snprintf(msg, sizeof(msg), "the command's %s is over the string limit of %d bytes", bo.over ? "stdout" : "stderr", GEM_MAX_STRLEN);
+        *errmsg = strdup(msg);
+    }
+    if (!bo.data) bo.data = (char *)malloc(1);
+    if (!be.data) be.data = (char *)malloc(1);
+    bo.data[bo.len] = '\0';
+    be.data[be.len] = '\0';
+    *out = bo.data; *out_len = bo.len;
+    *err = be.data; *err_len = be.len;
+    return code;
+}
+
+GemVal gem_exec_capture_fn(void *_env, GemVal *args, int argc) {
+    (void)_env;
+    if (argc < 1 || args[0].type != VAL_STRING) {
+        char buf[128]; snprintf(buf, sizeof(buf), "exec_capture: expected string command, got %s", argc < 1 ? "nothing" : gem_type_str(args[0])); gem_error(buf);
+    }
+    const char *in = NULL;
+    size_t in_len = 0;
+    if (argc >= 2 && args[1].type != VAL_NIL) {
+        if (args[1].type != VAL_STRING) {
+            char buf[128]; snprintf(buf, sizeof(buf), "exec_capture: input must be a string, got %s", gem_type_str(args[1])); gem_error(buf);
+        }
+        in = args[1].sval;
+        in_len = (size_t)args[1].slen;
+    }
+    int code;
+    char *out, *err, *errmsg;
+    size_t out_len, err_len;
+    GemIORequest *req = NULL;
+    if (gem_current_pid >= 0) {
+        /* empty input == no input: stdin is at EOF either way */
+        req = gem_io_submit(GEM_IO_EXEC_CAPTURE, args[0].sval, in_len ? in : NULL, in_len);
+        if (!req) { gem_error("exec_capture: I/O queue full"); }
+        GemProcess *proc = &gem_proc_table[gem_current_pid];
+        proc->io_request = req;
+        gem_io_pool_yield();
+        proc->io_request = NULL;
+        code = req->exit_code;
+        out = req->result_data; out_len = req->result_len;
+        err = req->err_data; err_len = req->err_len;
+        errmsg = req->error_msg;
+    } else {
+        code = gem_run_capture(args[0].sval, in, in_len, &out, &out_len, &err, &err_len, &errmsg);
+    }
+    if (errmsg) {
+        char buf[300]; snprintf(buf, sizeof(buf), "exec_capture: %s", errmsg);
+        if (req) gem_io_release(req); else { free(out); free(err); free(errmsg); }
+        gem_error(buf);
+    }
+    GemVal r = gem_table_new();
+    gem_table_set(r, gem_string("status"), gem_int(code));
+    gem_table_set(r, gem_string("stdout"), gem_string_with_len(out ? out : "", (int64_t)out_len));
+    gem_table_set(r, gem_string("stderr"), gem_string_with_len(err ? err : "", (int64_t)err_len));
+    if (req) gem_io_release(req); else { free(out); free(err); }
+    return r;
+}
+
+GemVal gem_exec_fn(void *_env, GemVal *args, int argc) {
+    (void)_env;
+    if (argc < 1 || args[0].type != VAL_STRING) {
+        char buf[128]; snprintf(buf, sizeof(buf), "exec: expected string command, got %s", argc < 1 ? "nothing" : gem_type_str(args[0])); gem_error(buf);
+    }
+
+    if (gem_current_pid >= 0) {
+        GemIORequest *req = gem_io_submit(GEM_IO_EXEC, args[0].sval, NULL, 0);
+        if (!req) { gem_error("exec: I/O queue full"); }
+        GemProcess *proc = &gem_proc_table[gem_current_pid];
+        proc->io_request = req;
+        gem_io_pool_yield();
+        proc->io_request = NULL;
+        int code = req->exit_code;
+        gem_io_release(req);
+        return gem_int(code);
+    }
+
+    return gem_int(gem_run_shell(args[0].sval));
+}

@@ -1,0 +1,51 @@
+# leaf fns push no frame, so a builtin's error inside one is reported at the caller's frame and line
+
+fn add(a, b)
+  a + b
+end
+
+fn classify(x)
+  if x < 0
+    "neg"
+  elif x == 0
+    "zero"
+  else
+    "pos"
+  end
+end
+
+fn pick(t)
+  if t.kind == "ok"
+    t.val
+  else
+    -1
+  end
+end
+
+print(add(2, 3))
+print(classify(-7))
+print(classify(0))
+print(classify(42))
+print(pick({kind: "ok", val: 99}))
+print(pick({kind: "err", val: nil}))
+
+# a leaf inside leaf-friendly callers still pushes the caller's frame
+fn caller(n)
+  let s = 0
+  let i = 0
+  while i < n
+    s = add(s, classify_to_int(i))
+    i = i + 1
+  end
+  s
+end
+
+fn classify_to_int(x)
+  if x < 5
+    1
+  else
+    2
+  end
+end
+
+print(caller(10))

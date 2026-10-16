@@ -1,0 +1,12 @@
+# a relative `extern include` is resolved next to the .gem file that has it, in modules too. Headers
+# that aren't there, like "string.h", are left to the C compiler's search.
+load "./modules/extern_include_mod"
+
+extern include "support/ei_helpers.h"
+extern include "string.h"
+extern fn ei_scale(x: Int) -> Int
+extern fn strlen(s: String) -> Int
+
+print("entry header:", ei_scale(4))
+print("module header:", extern_include_mod.scaled(4))
+print("system header:", strlen("gem"))

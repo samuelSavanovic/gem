@@ -1,0 +1,97 @@
+load "std/io"
+
+let dir = exec_capture("mktemp -d").stdout
+dir = substr(dir, 0, len(dir) - 1)
+
+fn file(name, text)
+  let p = path_join(dir, name)
+  write_file(p, text)
+  p
+end
+
+fn show(path)
+  let got = []
+  io.lines(path) do |line|
+    push(got, line)
+  end
+  let r = io.reader(path)
+  let again = []
+  let line = r.next()
+  while line != nil
+    push(again, line)
+    line = r.next()
+  end
+  print(len(got), got, json_like(got) == json_like(again), r.next(), io.read_lines(path))
+end
+
+fn table_lens(a)
+  let out = []
+  for x in a
+    push(out, len(x))
+  end
+  out
+end
+
+fn json_like(a)
+  let out = ""
+  for x in a
+    out += "[{x}]"
+  end
+  out
+end
+
+show(file("a", "a\r\nbb\n\nccc"))
+show(file("b", ""))
+show(file("c", "\n"))
+show(file("d", "no newline"))
+
+# lines across the 64 KB blocks, a long line included
+let big = build_string do |add|
+  for i = 0, 30000
+    add("row {i}\n")
+  end
+  add(build_string do |add2| for i = 0, 100000 add2("x") end end, "\n")
+  add("last")
+end
+let p = file("big", big)
+let n = 0
+let total = 0
+let longest = 0
+io.lines(p) do |line|
+  n += 1
+  total += len(line)
+  if len(line) > longest
+    longest = len(line)
+  end
+end
+print(n, total, longest)
+let r = io.reader(p)
+print(r.next(), r.next())
+let missing = pcall(fn() io.lines(path_join(dir, "none"), fn(l) nil end) end)
+print(missing.ok, find(missing.error, "No such file") > 0)
+print(pcall(fn() io.lines(42, fn(l) nil end) end).error)
+
+# a \r\n split across two blocks, and a long line with no final newline
+let crlf = file("crlf", build_string do |add| for i = 0, 65535 add("y") end add("\r\nz\r\n") end)
+print(table_lens(io.read_lines(crlf)))
+let tail = file("tail", build_string do |add| for i = 0, 200000 add("t") end end)
+print(table_lens(io.read_lines(tail)), len(io.reader(tail).next()))
+
+# a FIFO can't be reopened at an offset: read whole, nothing lost
+let fifo = path_join(dir, "fifo")
+exec("mkfifo '{fifo}' && (seq 1 30000 > '{fifo}' &)")
+let count = 0
+let sum = 0
+io.lines(fifo) do |line|
+  count += 1
+  sum += to_int(line)
+end
+print(count, sum)
+exec("(printf 'one\ntwo\n' > '{fifo}' &)")
+let fr = io.reader(fifo)
+print(fr.next(), fr.next(), fr.next())
+exec("(printf 'abcdef' > '{fifo}' &)")
+print(read_file(fifo, 0, 3))
+let bad = pcall(fn() read_file(fifo, 2, 3) end)
+print(find(bad.error, "is not a regular file") > 0)
+exec("rm -rf '{dir}'")

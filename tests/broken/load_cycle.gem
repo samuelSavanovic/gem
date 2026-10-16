@@ -1,0 +1,5 @@
+# A module-load cycle (cycle_a -> cycle_b -> cycle_a) is reported once, at
+# the `load` in cycle_b that closes it, not at this entry file. The diamond
+# (cycle_a and cycle_b both load clean) is not a cycle.
+load "./modules/cycle_a"
+print(cycle_a.f())

@@ -1,0 +1,519 @@
+## dynamic_supervisor: starts children on demand from one template and restarts them when they die.
+## A target is the `{pid}` from `start`, a pid or a name.
+
+# Like Erlang's simple_one_for_one: a restart replays `template.start(args)` with the child's original args.
+# Otherwise it works like std/supervisor (trap exits, monitor and link each child, restart on DOWN and drop
+# the EXIT after it, stop the children last started first). Requests get a pcall-shaped `_dsup_reply`.
+
+load "std/string"
+
+let RESTARTS = {permanent: true, transient: true, temporary: true}
+# per child, when neither the template nor its handle gives a budget
+let DEFAULT_SHUTDOWN_MS = 5000
+let INTENSITY = "dynamic_supervisor: max restart intensity reached"
+
+# nil for a name nobody holds, or anything else
+fn pid_of(t)
+  let kind = type(t)
+  if kind == "int"
+    return t
+  end
+  if kind == "string"
+    return whereis(t)
+  end
+  if kind == "table" and type(t.pid) == "int"
+    return t.pid
+  end
+  nil
+end
+
+fn target_pid(target, caller)
+  let pid = pid_of(target)
+  if pid == nil
+    if type(target) == "string"
+      error("{caller}: no process registered as \"{target}\"")
+    end
+    error("{caller}: expected a pid, a \{pid\} handle or a registered name, got {type(target)}")
+  end
+  pid
+end
+
+fn started_pid(v)
+  let pid = if type(v) == "table" then v.pid else v end
+  if type(pid) != "int"
+    error("child start must return a pid or a \{pid\} handle, got {type(v)}")
+  end
+  pid
+end
+
+fn shutdown_of(template, handle)
+  if has_key(template, "shutdown")
+    return template.shutdown
+  end
+  # in the handle (the child's own API) only an int or nil counts as a budget; a `shutdown` method is ignored
+  if type(handle) == "table" and has_key(handle, "shutdown")
+    let s = handle.shutdown
+    if s == nil or type(s) == "int"
+      return s
+    end
+  end
+  DEFAULT_SHUTDOWN_MS
+end
+
+fn start_from_template(state, args)
+  let handle = state.template.start(args)
+  let pid = started_pid(handle)
+  let shutdown = shutdown_of(state.template, handle)
+  monitor(pid)
+  # a child that's already gone gives DOWN "noproc", then EXIT "noproc"
+  link(pid)
+  {pid: pid, args: args, shutdown: shutdown}
+end
+
+# matching the reason too leaves alone an exit signal the child sent before dying (`kill(sup, r)`)
+fn drop_exit(pid, reason)
+  receive
+  when {tag: "EXIT", pid: ^pid, reason: ^reason}
+    nil
+  after 0
+    nil
+  end
+end
+
+fn check_intensity(state)
+  let now = time_ms()
+  let recent = [now]
+  for t in state.restart_times
+    if now - t <= state.max_seconds
+      push(recent, t)
+    end
+  end
+  state.restart_times = recent
+  if len(recent) > state.max_restarts
+    error(INTENSITY)
+  end
+end
+
+fn find_child_index(children, pid)
+  if pid == -1
+    return -1
+  end
+  for i, c in children
+    if c.pid == pid
+      return i
+    end
+  end
+  -1
+end
+
+fn reply(to, ref, res)
+  send(to, {tag: "_dsup_reply", ref: ref, result: res})
+end
+
+fn handle_start_child(state, args, to, ref)
+  let res = pcall(fn() start_from_template(state, args) end)
+  if res.ok
+    push(state.children, res.value)
+    res.value = res.value.pid
+  end
+  reply(to, ref, res)
+end
+
+# nil after the timeout
+fn await_down(pid, timeout_ms)
+  if timeout_ms == nil
+    receive
+    when {tag: "DOWN", pid: ^pid, reason: reason}
+      return reason
+    end
+  end
+  receive
+  when {tag: "DOWN", pid: ^pid, reason: reason}
+    reason
+  after timeout_ms
+    nil
+  end
+end
+
+# "shutdown", then "kill" if no DOWN within `shutdown` ms (nil: forever). Takes the DOWN and drops the EXIT.
+# Returns the DOWN's reason, or nil if the child was gone and nothing was queued.
+fn stop_child(pid, shutdown)
+  if not kill(pid, "shutdown")
+    let gone = await_down(pid, 0)
+    if gone != nil
+      drop_exit(pid, gone)
+    end
+    return gone
+  end
+  let reason = await_down(pid, shutdown)
+  if reason == nil
+    kill(pid, "kill")
+    # the child was alive when the wait ended, so its DOWN does come
+    reason = await_down(pid, nil)
+  end
+  drop_exit(pid, reason)
+  reason
+end
+
+# The supervisor answers nothing else until the child is gone.
+fn handle_terminate_child(state, pid, to, ref)
+  let idx = find_child_index(state.children, pid)
+  if idx == -1
+    reply(to, ref, {ok: true, value: false})
+    return nil
+  end
+  stop_child(pid, state.children[idx].shutdown)
+  remove_at(state.children, idx)
+  reply(to, ref, {ok: true, value: true})
+end
+
+# "noproc": the child was gone before we monitored it, reason unknown; a transient child takes it as normal
+fn should_restart(restart, reason)
+  if restart == "permanent"
+    return true
+  end
+  restart == "transient" and reason != "normal" and reason != "shutdown" and reason != "noproc"
+end
+
+fn handle_down(state, pid, reason)
+  let idx = find_child_index(state.children, pid)
+  if idx == -1
+    return nil
+  end
+  drop_exit(pid, reason)
+  if not should_restart(state.template.restart, reason)
+    remove_at(state.children, idx)
+    return nil
+  end
+  check_intensity(state)
+  state.children[idx] = pending(state.children[idx].args)
+  start_pending(state)
+end
+
+# not running and owed a restart
+fn pending(args)
+  {pid: -1, args: args, shutdown: nil, pending: true}
+end
+
+fn is_pending(child)
+  child.pending == true
+end
+
+fn has_pending(children)
+  for c in children
+    if is_pending(c)
+      return true
+    end
+  end
+  false
+end
+
+fn report_failed_restart(res)
+  eprint("dynamic_supervisor: restart of a child failed: {res.error}")
+  for f in res.stack
+    eprint("  at {f.name} ({f.file}:{f.line})")
+  end
+end
+
+# in order, up to the first `start` that raises: it and the rest stay pending, and a single queued
+# `_dsup_retry` tries again later (counted as a restart)
+fn start_pending(state)
+  for i = 0, len(state.children)
+    let c = state.children[i]
+    if is_pending(c)
+      let started = pcall start_from_template(state, c.args)
+      if not started.ok
+        report_failed_restart(started)
+        if not state.retry_queued
+          state.retry_queued = true
+          send(self(), {tag: "_dsup_retry"})
+        end
+        return nil
+      end
+      state.children[i] = started.value
+    end
+  end
+  nil
+end
+
+fn handle_which_children(state, to, ref)
+  let result = []
+  for c in state.children
+    if c.pid != -1
+      push(result, {pid: c.pid, args: c.args})
+    end
+  end
+  reply(to, ref, {ok: true, value: result})
+end
+
+# returns the exit reason
+fn dsup_loop(state)
+  receive
+  when {tag: "_dsup_start_child", args: args, reply_to: to, ref: ref}
+    handle_start_child(state, args, to, ref)
+    dsup_loop(state)
+  when {tag: "_dsup_terminate_child", pid: pid, reply_to: to, ref: ref}
+    handle_terminate_child(state, pid, to, ref)
+    dsup_loop(state)
+  when {tag: "DOWN", pid: pid, reason: reason}
+    handle_down(state, pid, reason)
+    dsup_loop(state)
+  when {tag: "_dsup_which_children", reply_to: to, ref: ref}
+    handle_which_children(state, to, ref)
+    dsup_loop(state)
+  when {tag: "_dsup_retry"}
+    state.retry_queued = false
+    if has_pending(state.children)
+      check_intensity(state)
+      start_pending(state)
+    end
+    dsup_loop(state)
+  when {tag: "EXIT", reason: reason}
+    if reason != "normal"
+      # an exit signal: someone's kill, or a linked parent that died
+      return reason
+    end
+    dsup_loop(state)
+  when other
+    dsup_loop(state)
+  end
+end
+
+# children always get "shutdown", whatever the supervisor's reason, so a trapping child handles only that
+fn shutdown_children(children)
+  let i = len(children) - 1
+  while i >= 0
+    if children[i].pid != -1
+      stop_child(children[i].pid, children[i].shutdown)
+    end
+    i -= 1
+  end
+end
+
+# the re-raise reports its own stack, so print where the error came from first (not for the intensity error)
+fn report_stack(res)
+  if res.error != INTENSITY
+    eprint("dynamic_supervisor: exiting on an error raised at:")
+    for f in res.stack
+      eprint("  at {f.name} ({f.file}:{f.line})")
+    end
+  end
+end
+
+fn dsup_main(state, caller, ref)
+  process_flag("trap_exit", true)
+  send(caller, {tag: "_dsup_started", ref: ref})
+  let res = pcall dsup_loop(state)
+  let reason = if res.ok then res.value else res.error end
+  shutdown_children(state.children)
+  if not res.ok
+    report_stack(res)
+    error(res.error)
+  end
+  process_flag("trap_exit", false)
+  kill(self(), reason)
+end
+
+fn check_keys(who, what, t, allowed, where = "")
+  for k, _ in t
+    let known = false
+    for a in allowed
+      if a == k
+        known = true
+      end
+    end
+    if not known
+      let near = if type(k) == "string" then string.closest(k, allowed) end
+      let hint = if near != nil then " (did you mean \"{near}\"?)" else "" end
+      error("{who}: unknown {what} \"{k}\"{where}{hint}")
+    end
+  end
+end
+
+## Spawns a dynamic supervisor with no children and returns `{pid, shutdown: nil}`.
+## `opts.child` is the template `{start(args), restart, shutdown}`. Other options: `name`,
+## `max_restarts` (3) within `max_seconds` (5000, in ms despite the name).
+fn start(opts)
+  if type(opts) != "table"
+    error("dynamic_supervisor.start: expected an options table \{child, ...\}, got {type(opts)}")
+  end
+  check_keys("dynamic_supervisor.start", "option", opts, ["child", "max_restarts", "max_seconds", "name"])
+  let {child, max_restarts = 3, max_seconds = 5000, name = nil} = opts
+  if type(child) != "table"
+    error("dynamic_supervisor.start: expected a child template \{start, restart, shutdown\}, got {type(child)}")
+  end
+  if type(child.start) != "fn"
+    error("dynamic_supervisor.start: the child template's start must be a fn, got {type(child.start)}")
+  end
+  check_keys("dynamic_supervisor.start", "key", child, ["start", "restart", "shutdown"], " in the child template")
+  let {start, restart = "permanent"} = child
+  if not has_key(RESTARTS, restart)
+    let near = if type(restart) == "string" then string.closest(restart, keys(RESTARTS)) end
+    let hint = if near != nil then " (did you mean \"{near}\"?)" else "" end
+    error("dynamic_supervisor.start: unknown restart \"{restart}\"{hint}")
+  end
+  if type(max_restarts) != "int"
+    error("dynamic_supervisor.start: max_restarts must be an int, got {type(max_restarts)}")
+  end
+  if type(max_seconds) != "int"
+    error("dynamic_supervisor.start: max_seconds must be an int (milliseconds), got {type(max_seconds)}")
+  end
+  if name != nil
+    if type(name) != "string"
+      error("dynamic_supervisor.start: name must be a string, got {type(name)}")
+    end
+    if whereis(name) != nil
+      error("dynamic_supervisor.start: the name \"{name}\" is already registered")
+    end
+  end
+  let template = {start: start, restart: restart}
+  if has_key(child, "shutdown")
+    if child.shutdown != nil and type(child.shutdown) != "int"
+      error("dynamic_supervisor.start: the child template's shutdown must be an int (milliseconds) or nil, got {type(child.shutdown)}")
+    end
+    template.shutdown = child.shutdown
+  end
+  let caller = self()
+  let ref = make_ref()
+  let pid = spawn do
+    dsup_main({
+      template: template,
+      children: [],
+      max_restarts: max_restarts,
+      max_seconds: max_seconds,
+      restart_times: [],
+      retry_queued: false
+    }, caller, ref)
+  end
+  # it hasn't run yet, so the name is taken before anything else runs
+  if name != nil
+    register(name, pid)
+  end
+  # once it traps exits, a kill from here on is handled
+  monitor(pid)
+  receive
+  when {tag: "_dsup_started", ref: ^ref}
+    drop_monitor(pid, true)
+  when {tag: "DOWN", pid: ^pid, reason: reason}
+    error("dynamic_supervisor.start: supervisor exited: {reason}")
+  end
+  # nil budget: a parent supervisor waits for this one's whole shutdown
+  {pid: pid, shutdown: nil}
+end
+
+fn check_timeout(timeout_ms, caller)
+  if timeout_ms != nil and type(timeout_ms) != "int"
+    error("{caller}: timeout must be an int (milliseconds) or nil, got {type(timeout_ms)}")
+  end
+end
+
+# removes the monitor only if this request `added` it, and drops its DOWN if the target died meanwhile
+fn drop_monitor(pid, added)
+  if added and not demonitor(pid)
+    receive
+    when {tag: "DOWN", pid: ^pid}
+      nil
+    after 0
+      nil
+    end
+  end
+end
+
+# A monitor the caller had before the request still gets its DOWN.
+fn return_down(pid, added, reason)
+  if not added
+    send(self(), {tag: "DOWN", pid: pid, reason: reason})
+  end
+  nil
+end
+
+fn await_reply(pid, ref)
+  receive
+  when {tag: "_dsup_reply", ref: ^ref, result: res}
+    {result: res}
+  when {tag: "DOWN", pid: ^pid, reason: reason}
+    {down: reason}
+  end
+end
+
+fn await_reply_for(pid, ref, timeout_ms)
+  receive
+  when {tag: "_dsup_reply", ref: ^ref, result: res}
+    {result: res}
+  when {tag: "DOWN", pid: ^pid, reason: reason}
+    {down: reason}
+  after timeout_ms
+    nil
+  end
+end
+
+# raises `<caller>: ...` on timeout, a dead supervisor, or the error the request failed with
+fn request(target, msg, caller, timeout_ms)
+  let pid = target_pid(target, caller)
+  check_timeout(timeout_ms, caller)
+  let ref = make_ref()
+  msg.reply_to = self()
+  msg.ref = ref
+  let added = monitor(pid)
+  send(pid, msg)
+  let r = if timeout_ms == nil
+    await_reply(pid, ref)
+  else
+    await_reply_for(pid, ref, timeout_ms)
+  end
+  if r == nil
+    drop_monitor(pid, added)
+    error("{caller}: timeout")
+  end
+  if has_key(r, "down")
+    return_down(pid, added, r.down)
+    error("{caller}: supervisor exited: {r.down}")
+  end
+  drop_monitor(pid, added)
+  let res = r.result
+  if not res.ok
+    error("{caller}: {res.error}")
+  end
+  res.value
+end
+
+## Starts a child with the template's `start(args)` and returns its pid. A restart passes the same `args`.
+## The supervisor handles nothing else while `start` runs, so a slow one holds up its other callers.
+fn start_child(target, args, timeout_ms = 5000)
+  request(target, {tag: "_dsup_start_child", args: args}, "dynamic_supervisor.start_child", timeout_ms)
+end
+
+## Stops `child` ("shutdown", then "kill" after its budget) without restarting it.
+## True once it has exited, false if the supervisor doesn't have it. `timeout_ms` nil waits forever.
+fn terminate_child(target, child, timeout_ms = nil)
+  request(target, {tag: "_dsup_terminate_child", pid: pid_of(child)}, "dynamic_supervisor.terminate_child", timeout_ms)
+end
+
+## The running children as `{pid, args}` in start order (a restarted child keeps its place).
+fn which_children(target, timeout_ms = 5000)
+  request(target, {tag: "_dsup_which_children"}, "dynamic_supervisor.which_children", timeout_ms)
+end
+
+## Stops the supervisor and its children (last started first), returning once it exits. `timeout_ms` nil: no limit.
+fn stop(target, timeout_ms = nil)
+  let pid = target_pid(target, "dynamic_supervisor.stop")
+  check_timeout(timeout_ms, "dynamic_supervisor.stop")
+  let added = monitor(pid)
+  kill(pid, "shutdown")
+  if timeout_ms == nil
+    receive
+    when {tag: "DOWN", pid: ^pid, reason: reason}
+      return_down(pid, added, reason)
+    end
+  else
+    receive
+    when {tag: "DOWN", pid: ^pid, reason: reason}
+      return_down(pid, added, reason)
+    after timeout_ms
+      drop_monitor(pid, added)
+      error("dynamic_supervisor.stop: the supervisor did not stop within {timeout_ms} ms")
+    end
+  end
+end
+
+export start, start_child, terminate_child, which_children, stop

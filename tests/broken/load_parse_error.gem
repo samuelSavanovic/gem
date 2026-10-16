@@ -1,0 +1,5 @@
+# A parse error in a loaded module is reported against that module, and
+# modules loaded after it are still parsed normally.
+load "./modules/parse_error"
+load "./modules/clean"
+print(clean.g())

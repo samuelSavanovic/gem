@@ -1,0 +1,96 @@
+## Finds or starts the destination process for a name; `/queue/...` names are queues, all others topics.
+
+load "std/gen_server"
+load "std/dynamic_supervisor"
+load "std/string"
+
+# destination names come from clients, so they're keys of this server's table, never registered
+# names: a client can't reach "stomp_registry" by subscribing to it
+
+let DESTINATIONS = "stomp_destinations"
+let NAME = "stomp_registry"
+
+fn kind_of(name)
+  if string.starts_with(name, "/queue/")
+    return "queue"
+  end
+  "topic"
+end
+
+fn remember(state, name, pid)
+  monitor(pid)
+  state.by_name[name] = pid
+  state.by_pid["{pid}"] = name
+end
+
+# a failed start is returned, not raised: the caller fails, not the registry
+fn lookup(state, name)
+  let pid = state.by_name[name]
+  if pid != nil
+    return {ok: true, value: pid}
+  end
+  let r = pcall dynamic_supervisor.start_child(DESTINATIONS, {name: name, kind: kind_of(name)})
+  if r.ok
+    remember(state, name, r.value)
+  end
+  r
+end
+
+# destinations outlive a registry crash, so a restarted registry finds them in the supervisor
+fn init()
+  let state = {by_name: {}, by_pid: {}}
+  for child in dynamic_supervisor.which_children(DESTINATIONS)
+    remember(state, child.args.name, child.pid)
+  end
+  {state: state}
+end
+
+let SERVER = {
+  init: init,
+
+  handle_call: fn(msg, from, state)
+    match msg
+    when {op: "lookup_or_create", name: name}
+      {reply: lookup(state, name), state: state}
+    else
+      error("registry: unknown call {msg}")
+    end
+  end,
+
+  handle_cast: fn(msg, state)
+    error("registry: unknown cast {msg}")
+  end,
+
+  handle_info: fn(msg, state)
+    match msg
+    when {tag: "DOWN", pid: pid}
+      let key = "{pid}"
+      let name = state.by_pid[key]
+      if name != nil
+        delete(state.by_pid, key)
+        delete(state.by_name, name)
+      end
+    else
+      nil
+    end
+    {state: state}
+  end
+}
+
+## A supervisor child's `start`.
+fn start()
+  let h = gen_server.start(SERVER)
+  register(NAME, h.pid)
+  h
+end
+
+## Starts the destination if needed. Raises if it can't start or the registry is down.
+fn lookup_or_create(name)
+  let r = gen_server.call(NAME, {op: "lookup_or_create", name: name})
+  if not r.ok
+    error("registry: can't start destination {name}: {r.error}")
+  end
+  r.value
+end
+
+export DESTINATIONS, start, lookup_or_create

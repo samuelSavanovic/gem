@@ -1,0 +1,6 @@
+# a file name that isn't an identifier: loads with `as` or selectively, not as a plain namespace
+fn hello()
+  "hello from my-mod"
+end
+
+export hello

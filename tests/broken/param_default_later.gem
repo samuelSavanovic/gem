@@ -1,0 +1,9 @@
+# A param default sees only the params before it, even when an outer
+# binding has the name of a later one.
+# expect: a parameter's default can use only the parameters before it
+let D = 5
+fn h(x = x) x end
+fn k(a = b, b = 1) a end
+fn f(x = D, D = 1) x end
+fn ok(a, b = a + 1, c = fn(b) b end) b end
+print(h(), k(), f(), ok(1))

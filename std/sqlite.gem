@@ -1,0 +1,79 @@
+## sqlite: SQLite databases, a thin layer over the sqlite_* builtins.
+##
+##   let db = sqlite.open("app.db")          # or ":memory:"
+##   sqlite.exec(db, "CREATE TABLE IF NOT EXISTS notes(id INTEGER PRIMARY KEY, text TEXT)")
+##   sqlite.query(db, "SELECT id, text FROM notes WHERE id = ?", [1])
+##
+## A handle is an owned resource: it closes when a process that claimed it exits, or when its opener crashes.
+## It's one connection shared by every process holding it, so don't yield inside a transaction on it.
+## `exec` and `query` run on the scheduler thread and block every process while they run.
+
+load "std/string"
+
+fn raise_as(name, msg)
+  if string.starts_with(msg, "sqlite_")
+    let colon = find(msg, ": ")
+    if colon >= 0
+      msg = substr(msg, colon + 2)
+    end
+  end
+  error("sqlite.{name}: {msg}")
+end
+
+## Opens (creating if needed) the database at `path`, with foreign keys on and WAL.
+## No busy timeout: a locked write raises at once.
+fn open(path)
+  let r = pcall sqlite_open(path)
+  if not r.ok
+    raise_as("open", r.error)
+  end
+  r.value
+end
+
+## Closes `db` for every process. Closing it twice is fine.
+fn close(db)
+  let r = pcall sqlite_close(db)
+  if not r.ok
+    raise_as("close", r.error)
+  end
+  r.value
+end
+
+## Runs `;`-separated statements without parameters (DDL, migrations) and discards any rows.
+fn exec(db, sql)
+  let r = pcall sqlite_exec(db, sql)
+  if not r.ok
+    raise_as("exec", r.error)
+  end
+  r.value
+end
+
+## Runs one statement and returns its rows as records keyed by column name.
+## `params`: an array (`?`, `?N`) or a record (`:name`, `@name`, `$name`); bools go in as 1/0, BLOBs come back as strings.
+fn query(db, sql, params = [])
+  let r = pcall sqlite_query(db, sql, params)
+  if not r.ok
+    raise_as("query", r.error)
+  end
+  r.value
+end
+
+## Rowid of the last row inserted through `db`, or 0.
+fn last_id(db)
+  let r = pcall sqlite_last_insert_id(db)
+  if not r.ok
+    raise_as("last_id", r.error)
+  end
+  r.value
+end
+
+## Rows changed by the last INSERT, UPDATE or DELETE through `db`.
+fn changes(db)
+  let r = pcall sqlite_changes(db)
+  if not r.ok
+    raise_as("changes", r.error)
+  end
+  r.value
+end
+
+export open, close, exec, query, last_id, changes

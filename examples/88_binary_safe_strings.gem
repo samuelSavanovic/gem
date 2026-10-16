@@ -1,0 +1,33 @@
+# strings carry a byte length, so embedded NULs survive build_string, len, substr, == and concat
+
+let s = build_string() do |add|
+  add("hello")
+  add("\0")
+  add("world")
+  add("\0")
+end
+
+print(len(s))
+print(ord(s, 5))
+print(ord(s, 11))
+
+let mid = substr(s, 5, 6)
+print(len(mid))
+print(ord(mid, 0))
+
+# == compares the whole byte range, not strcmp
+let a = build_string() do |add| add("x\0y") end
+let b = build_string() do |add| add("x\0y") end
+let c = build_string() do |add| add("x\0z") end
+print(a == b)
+print(a == c)
+
+let cat = a + "\0tail"
+print(len(cat))
+
+let bin_path = "/tmp/gem_88_binsafe_{epoch_ms()}_{random(1000000)}.bin"
+write_file(bin_path, s)
+let back = read_file(bin_path)
+print(len(back))
+print(back == s)
+remove_file(bin_path)

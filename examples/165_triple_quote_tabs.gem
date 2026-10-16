@@ -1,0 +1,58 @@
+# the closing delimiter may be indented with tabs, spaces or a mix. Its exact prefix is stripped
+# from each content line; a line that doesn't start with it loses only the part that matches.
+
+fn show(label, s)
+  let t = str_replace(str_replace(s, "\t", "\\t"), "\n", "\\n")
+  print("{label}: [{t}]")
+end
+
+fn tabs()
+	let a = """
+		hello
+			nested
+		"""
+	a
+end
+show("tabs", tabs())
+
+let b = """
+	  one
+	    two
+	  """
+show("mixed", b)
+
+# a line not starting with the closing prefix: only the matching part goes (none here, then one tab)
+let c = """
+    spaces
+	tab-only
+		full
+		"""
+show("mismatch", c)
+
+let d = """
+	x
+
+	y
+	"""
+show("blank", d)
+
+let name = "gem"
+let e = """
+	hi {name}
+	  {"""
+		inner
+		"""} done
+	"""
+show("interp", e)
+
+let f = '''
+		{literal}
+			deeper
+		'''
+show("single", f)
+
+let g = """
+    plain
+      indented
+    """
+show("spaces", g)

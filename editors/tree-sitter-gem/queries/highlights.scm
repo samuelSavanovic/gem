@@ -1,0 +1,129 @@
+; Keywords
+"fn" @keyword.function
+"end" @keyword
+"let" @keyword
+"do" @keyword
+"then" @keyword
+"extern" @keyword
+"blocking" @keyword
+
+"load" @keyword.control.import
+"include" @keyword.control.import
+"export" @keyword.control.import
+"as" @keyword.control.import
+
+(load_statement alias: (identifier) @namespace)
+
+"if" @keyword.control.conditional
+"elif" @keyword.control.conditional
+"else" @keyword.control.conditional
+"match" @keyword.control.conditional
+"when" @keyword.control.conditional
+
+"while" @keyword.control.repeat
+"for" @keyword.control.repeat
+"in" @keyword.control.repeat
+(break_statement) @keyword.control.repeat
+(continue_statement) @keyword.control.repeat
+
+"return" @keyword.control.return
+
+"receive" @keyword
+"after" @keyword
+
+"and" @keyword.operator
+"or" @keyword.operator
+"not" @keyword.operator
+
+; Literals
+(true) @constant.builtin.boolean
+(false) @constant.builtin.boolean
+(nil) @constant.builtin
+(integer) @constant.numeric.integer
+(float) @constant.numeric.float
+
+; Strings
+(single_string) @string
+(double_string) @string
+(triple_single_string) @string
+(triple_double_string) @string
+(string_content) @string
+(escape_sequence) @constant.character.escape
+(interpolation
+  "{" @punctuation.special
+  "}" @punctuation.special)
+
+; Types (in extern declarations)
+(type) @type.builtin
+
+; Functions
+(function_definition
+  name: (identifier) @function)
+
+(extern_fn
+  name: (identifier) @function)
+
+(lambda "fn" @keyword.function)
+
+(call_expression
+  function: (identifier) @function.call)
+
+(call_expression
+  function: (member_expression
+    property: (identifier) @function.method))
+
+(call_with_block
+  function: (identifier) @function.call)
+
+; `pcall <expr>`
+(pcall_expression "pcall" @function.builtin)
+
+; Builtin functions
+((call_expression
+  function: (identifier) @function.builtin)
+  (#match? @function.builtin "^(print|error|len|type|to_string|to_int|to_float|push|pcall|keys|str_replace|has_key|substr|find|chr|ord|buf_new|buf_push|spawn|send|receive|self|monitor|demonitor|spawn_monitor|register|whereis|time_ms|kill|sleep|link|unlink|spawn_link|process_flag|make_ref|send_after|cancel_timer|processes|process_info|runtime_stats|read_file|write_file|delete|pop|values|eprint|exit|argv|sort|floor|ceil|round|abs|pow|sqrt|random|append_file|getenv|setenv|input|read_stdin|write_stdout|insert|remove_at|band|bor|bxor|bnot|bshl|bshr|file_exists|dirname|path_join|normalize_path|remove_file|mkdir|list_dir|is_dir|rename|stat|exec|exec_capture|tcp_connect|tcp_listen|tcp_accept|tcp_read|tcp_write|tcp_close|tcp_peer|tcp_local_port|tcp_fd|tcp_from_fd|tls_connect|claim|epoch_ms|format_time|format_time_local|sqlite_open|sqlite_close|sqlite_exec|sqlite_query|sqlite_last_insert_id|sqlite_changes|build_string)$"))
+
+((call_with_block
+  function: (identifier) @function.builtin)
+  (#match? @function.builtin "^(spawn|spawn_link|send|receive|monitor|spawn_monitor|register|build_string|pcall)$"))
+
+; Parameters
+(parameter_list (identifier) @variable.parameter)
+(default_param name: (identifier) @variable.parameter)
+(spread_param (identifier) @variable.parameter)
+(typed_param name: (identifier) @variable.parameter)
+(block_parameters (identifier) @variable.parameter)
+(destructure_param (table_destructure (identifier) @variable.parameter))
+(destructure_param (table_destructure (destructure_default name: (identifier) @variable.parameter)))
+
+"..." @punctuation.special
+
+; Variable declarations
+(let_declaration
+  name: (identifier) @variable)
+
+; Comments. `##` doc comments get their own scope; Helix takes the first
+; pattern that matches, so this one comes first.
+((comment) @comment.line.documentation
+  (#match? @comment.line.documentation "^##"))
+(comment) @comment.line
+
+; Operators
+(binary_expression operator: _ @operator)
+(unary_expression operator: _ @operator)
+(assignment operator: _ @operator)
+"->" @operator
+(pin_pattern "^" @operator)
+
+; Punctuation
+"(" @punctuation.bracket
+")" @punctuation.bracket
+"[" @punctuation.bracket
+"]" @punctuation.bracket
+"{" @punctuation.bracket
+"}" @punctuation.bracket
+
+"." @punctuation.delimiter
+"," @punctuation.delimiter
+":" @punctuation.delimiter
+"|" @punctuation.delimiter

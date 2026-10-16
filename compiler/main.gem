@@ -1,0 +1,1728 @@
+# Compiler driver: parse, lower, emit C, cc, then run or write the binary. Also gem new/test/build and `gem lsp`.
+
+load "std/string"
+load "./parser" (parse_source, collect_pattern_names)
+load "./codegen" (make_codegen)
+load "./lower" (lower)
+load "./fold" (fold_constants)
+load "./errors" (make_error_sink, print_all_errors)
+load "./loader" (resolve_load_path, load_target_problem, find_project_root, find_install_root, compute_stdlib_root, make_show_path, normalize_load_path)
+load "./builtins" (BUILTIN_FNS)
+load "./lexer" (build_keyword_set, normalize_newlines)
+load "../lsp/main" (run_lsp)
+
+let install_root = find_install_root()
+
+let KEYWORDS = build_keyword_set()
+
+fn is_node(node, tag)
+  type(node) == "table" and node.tag == tag
+end
+
+fn make_program(stmts)
+  {tag: "program", stmts: stmts}
+end
+
+fn make_let(name, value, line)
+  {tag: "let", name: name, value: value, line: line}
+end
+
+fn make_nil_node()
+  {tag: "nil"}
+end
+
+fn make_var(name, line = nil, col = nil)
+  {tag: "var", name: name, line: line, col: col}
+end
+
+fn make_table(entries)
+  {tag: "table", entries: entries}
+end
+
+fn make_table_entry(key, value)
+  {key: key, value: value}
+end
+
+fn module_name_from_path(path)
+  let plen = len(path)
+  let last_slash = -1
+  let i = 0
+  while i < plen
+    if ord(path, i) == 47
+      last_slash = i
+    end
+    i += 1
+  end
+  let name = substr(path, last_slash + 1, plen - last_slash - 1)
+  let nlen = len(name)
+  if nlen > 4
+    if string.ends_with(name, ".gem")
+      name = substr(name, 0, nlen - 4)
+    end
+  end
+  name
+end
+
+# a module's namespace is its base name, so that must be an identifier (`my-utils` isn't) and not a keyword
+fn is_identifier_name(name)
+  if name == "" or KEYWORDS[name] == true
+    return false
+  end
+  let i = 0
+  while i < len(name)
+    let c = ord(name, i)
+    let alpha = (c >= 65 and c <= 90) or (c >= 97 and c <= 122) or c == 95
+    if not alpha and (i == 0 or c < 48 or c > 57)
+      return false
+    end
+    i += 1
+  end
+  true
+end
+
+fn c_safe_name(name)
+  let parts = []
+  for i = 0, len(name)
+    let c = ord(name, i)
+    if (c >= 65 and c <= 90) or (c >= 97 and c <= 122) or (c >= 48 and c <= 57) or c == 95
+      push(parts, chr(c))
+    else
+      push(parts, "_")
+    end
+  end
+  string.join(parts, "")
+end
+
+# The <mangle> in a module's `__mod_<mangle>_<name>` symbols: the base name, plus `_2`, `_3`... when another
+# file has that name or a symbol would collide (`a` + `b_c` vs `a_b` + `c`).
+# registry = {prefixes: mangle -> path, symbols: symbol -> path}, one per program.
+fn module_mangle(full_path, mod_name, top_names, registry)
+  let base = c_safe_name(mod_name)
+  if base == ""
+    base = "m"
+  end
+  let cand = base
+  let n = 1
+  while true
+    let ok = registry.prefixes[cand] == nil
+    if ok
+      for name, _ in top_names
+        let owner = registry.symbols["__mod_" + cand + "_" + name]
+        if owner != nil and owner != full_path
+          ok = false
+          break
+        end
+      end
+    end
+    if ok
+      break
+    end
+    n += 1
+    cand = base + "_" + to_string(n)
+  end
+  registry.prefixes[cand] = full_path
+  for name, _ in top_names
+    registry.symbols["__mod_" + cand + "_" + name] = full_path
+  end
+  cand
+end
+
+# all top-level `export`s merged in order (checked_exports reports duplicates), or nil
+fn find_export_node(stmts)
+  let found = []
+  for stmt in stmts
+    if is_node(stmt, "export")
+      push(found, stmt)
+    end
+  end
+  if len(found) == 0
+    return nil
+  elif len(found) == 1
+    return found[0]
+  end
+  let merged = {tag: "export", names: [], name_pos: [], line: found[0].line, col: found[0].col}
+  for node in found
+    for name in node.names
+      push(merged.names, name)
+    end
+    for pos in node.name_pos
+      push(merged.name_pos, pos)
+    end
+  end
+  merged
+end
+
+fn collect_module_top_names(stmts)
+  let names = {}
+  for stmt in stmts
+    if is_node(stmt, "fn_def") or is_node(stmt, "extern_fn")
+      if not string.starts_with(stmt.name, "__mod_")
+        names[stmt.name] = true
+      end
+    elif is_node(stmt, "let")
+      if not string.starts_with(stmt.name, "__mod_")
+        names[stmt.name] = true
+      end
+    elif is_node(stmt, "block")
+      # a destructuring let at module scope
+      for s in stmt.stmts
+        if is_node(s, "let") and not string.starts_with(s.name, "__mod_")
+          names[s.name] = true
+        end
+      end
+    end
+  end
+  names
+end
+
+fn build_rename_map(top_names, prefix)
+  let rmap = {}
+  for name, _ in top_names
+    rmap[name] = prefix + name
+  end
+  rmap
+end
+
+fn copy_set(s)
+  let result = {}
+  for k, v in s
+    result[k] = v
+  end
+  result
+end
+
+# a module-level builtin-named let is "pending" until reached; fn bodies run later, so they see the binding
+fn fn_body_scope(shadowed)
+  let result = {}
+  for k, v in shadowed
+    if v != "pending"
+      result[k] = v
+    end
+  end
+  result
+end
+
+# defaults see the fn's params
+fn rename_defaults(defaults, rmap, inner)
+  if defaults == nil
+    return nil
+  end
+  for d in defaults
+    if d != nil
+      rename_node(d, rmap, inner)
+    end
+  end
+end
+
+fn rename_pattern(pat, rmap, shadowed)
+  if pat == nil
+    return nil
+  end
+  match pat
+  when {tag: "pat_pin", var: v}
+    rename_node(v, rmap, shadowed)
+  when {tag: "pat_table", entries: entries}
+    for e in entries
+      rename_pattern(e.value, rmap, shadowed)
+    end
+  when {tag: "pat_array", elements: elements}
+    for el in elements
+      rename_pattern(el, rmap, shadowed)
+    end
+  else
+    nil
+  end
+end
+
+fn arm_shadowed(arm, shadowed)
+  if arm.pattern == nil
+    return shadowed
+  end
+  let bound = {}
+  collect_pattern_names(arm.pattern, bound, [])
+  let inner = copy_set(shadowed)
+  for name, _ in bound
+    inner[name] = true
+  end
+  inner
+end
+
+fn rename_node(node, rmap, shadowed)
+  if node == nil
+    return nil
+  end
+  if type(node) != "table"
+    return nil
+  end
+  if node.tag == nil
+    return nil
+  end
+
+  match node
+  when {tag: "var", name: name}
+    if has_key(rmap, name) and not has_key(shadowed, name)
+      node.name = rmap[name]
+    end
+  when {tag: "fn_def", name: name, params: params, body: body}
+    if has_key(rmap, name)
+      node.name = rmap[name]
+    end
+    let inner = fn_body_scope(shadowed)
+    for p in params
+      inner[p] = true
+    end
+    if node.rest_param != nil
+      inner[node.rest_param] = true
+    end
+    rename_defaults(node.defaults, rmap, inner)
+    rename_stmts(body, rmap, inner)
+  when {tag: "extern_fn", name: name}
+    # c_name keeps the C symbol
+    if has_key(rmap, name)
+      if node.c_name == nil
+        node.c_name = name
+      end
+      node.name = rmap[name]
+    end
+  when {tag: "anon_fn", params: params, body: body}
+    let inner = fn_body_scope(shadowed)
+    for p in params
+      inner[p] = true
+    end
+    if node.rest_param != nil
+      inner[node.rest_param] = true
+    end
+    rename_defaults(node.defaults, rmap, inner)
+    rename_stmts(body, rmap, inner)
+  when {tag: "let", name: name, value: value}
+    rename_node(value, rmap, shadowed)
+    if has_key(rmap, name) and not has_key(shadowed, name)
+      node.name = rmap[name]
+    end
+  when {tag: "assign", name: name, value: value}
+    rename_node(value, rmap, shadowed)
+    if has_key(rmap, name) and not has_key(shadowed, name)
+      node.name = rmap[name]
+    end
+  when {tag: "call", func: func, args: args}
+    rename_node(func, rmap, shadowed)
+    for a in args
+      rename_node(a, rmap, shadowed)
+    end
+  when {tag: "binop", left: left, right: right}
+    rename_node(left, rmap, shadowed)
+    rename_node(right, rmap, shadowed)
+  when {tag: "unop", expr: expr}
+    rename_node(expr, rmap, shadowed)
+  when {tag: "dot", object: object}
+    rename_node(object, rmap, shadowed)
+  when {tag: "index", object: object, key: key}
+    rename_node(object, rmap, shadowed)
+    rename_node(key, rmap, shadowed)
+  when {tag: "dot_assign", object: object, value: value}
+    rename_node(object, rmap, shadowed)
+    rename_node(value, rmap, shadowed)
+  when {tag: "index_assign", object: object, key: key, value: value}
+    rename_node(object, rmap, shadowed)
+    rename_node(key, rmap, shadowed)
+    rename_node(value, rmap, shadowed)
+  when {tag: "if", cond: cond}
+    rename_node(cond, rmap, shadowed)
+    rename_stmts(node.then, rmap, shadowed)
+    if node.else != nil
+      rename_stmts(node.else, rmap, shadowed)
+    end
+  when {tag: "while", cond: cond, body: body}
+    rename_node(cond, rmap, shadowed)
+    rename_stmts(body, rmap, shadowed)
+  when {tag: "match", target: target, whens: whens}
+    rename_node(target, rmap, shadowed)
+    # still pre-lower match_arms; the only var refs in a pattern are `^name` pins
+    for arm in whens
+      rename_pattern(arm.pattern, rmap, shadowed)
+      if arm.expr != nil
+        rename_node(arm.expr, rmap, shadowed)
+      end
+      rename_stmts(arm.body, rmap, arm_shadowed(arm, shadowed))
+    end
+    if node.else != nil
+      rename_stmts(node.else, rmap, shadowed)
+    end
+  when {tag: "receive_match", arms: arms}
+    for arm in arms
+      rename_pattern(arm.pattern, rmap, shadowed)
+      if arm.expr != nil
+        rename_node(arm.expr, rmap, shadowed)
+      end
+      rename_stmts(arm.body, rmap, arm_shadowed(arm, shadowed))
+    end
+    if node.after_ms != nil
+      rename_node(node.after_ms, rmap, shadowed)
+    end
+    if node.after_body != nil
+      rename_stmts(node.after_body, rmap, shadowed)
+    end
+  when {tag: "for_in", items: items, body: body}
+    rename_node(items, rmap, shadowed)
+    let inner = copy_set(shadowed)
+    inner[node.var_name] = true
+    if node.val_name != nil
+      inner[node.val_name] = true
+    end
+    rename_stmts(body, rmap, inner)
+  when {tag: "for_range", start: start, end_: end_, body: body}
+    rename_node(start, rmap, shadowed)
+    rename_node(end_, rmap, shadowed)
+    let inner = copy_set(shadowed)
+    inner[node.var_name] = true
+    rename_stmts(body, rmap, inner)
+  when {tag: "return", value: value}
+    if value != nil
+      rename_node(value, rmap, shadowed)
+    end
+  when {tag: "table", entries: entries}
+    for e in entries
+      rename_node(e.value, rmap, shadowed)
+    end
+  when {tag: "array", elements: elements}
+    for e in elements
+      rename_node(e, rmap, shadowed)
+    end
+  when {tag: "interp", parts: parts}
+    for p in parts
+      rename_node(p, rmap, shadowed)
+    end
+  when {tag: "block", stmts: stmts}
+    rename_stmts(stmts, rmap, shadowed)
+  else
+    nil
+  end
+end
+
+# `current` is mutated: a nested let binds into it. At top level a let of a module name is the module binding
+# and gets renamed; in a nested block it shadows the module name for the rest of the block.
+fn rename_stmt_in_scope(stmt, rmap, current, top)
+  if is_node(stmt, "block") and top
+    # module-scope destructuring let: the initializer (first let in the block) still sees the builtins it binds
+    let init_scope = copy_set(current)
+    for s in stmt.stmts
+      if is_node(s, "let") and current[s.name] == "pending"
+        init_scope[s.name] = true
+      end
+    end
+    # The field lets follow in order like separate lets, so a default sees earlier fields.
+    # In a field's default (its let's initializer) its own name still means the builtin.
+    let stmts = stmt.stmts
+    for k = 0, len(stmts)
+      let s = stmts[k]
+      if k == 0
+        rename_stmt_in_scope(s, rmap, init_scope, top)
+      elif is_node(s, "let") and current[s.name] == "pending"
+        rename_stmt_in_scope(s, rmap, current, top)
+      else
+        # a default's statements belong to the next field let that reads the temp (`let name = _dMv`)
+        let scope = current
+        let j = k + 1
+        while j < len(stmts)
+          let f = stmts[j]
+          if is_node(f, "let") and is_node(f.value, "var")
+            if current[f.name] == "pending"
+              scope = copy_set(current)
+              scope[f.name] = true
+            end
+            break
+          end
+          j += 1
+        end
+        rename_stmt_in_scope(s, rmap, scope, top)
+      end
+    end
+  elif is_node(stmt, "block")
+    for s in stmt.stmts
+      rename_stmt_in_scope(s, rmap, current, top)
+    end
+  elif is_node(stmt, "let") and not top
+    rename_node(stmt.value, rmap, current)
+    current[stmt.name] = true
+  elif is_node(stmt, "let") and current[stmt.name] == "pending"
+    # first module-scope let of a builtin's name: its initializer and everything before it still call the builtin
+    let init_scope = copy_set(current)
+    init_scope[stmt.name] = true
+    rename_node(stmt.value, rmap, init_scope)
+    delete(current, stmt.name)
+    stmt.name = rmap[stmt.name]
+  else
+    rename_node(stmt, rmap, current)
+    if is_node(stmt, "let") and not has_key(rmap, stmt.name)
+      current[stmt.name] = true
+    end
+  end
+end
+
+# builtin names a module let binds are "pending" until that let; a fn or extern fn binds its name module-wide
+fn pending_builtin_lets(stmts, rmap)
+  let lets = {}
+  let fns = {}
+  for stmt in stmts
+    if is_node(stmt, "fn_def") or is_node(stmt, "extern_fn")
+      fns[stmt.name] = true
+    elif is_node(stmt, "let")
+      lets[stmt.name] = true
+    elif is_node(stmt, "block")
+      for s in stmt.stmts
+        if is_node(s, "let")
+          lets[s.name] = true
+        end
+      end
+    end
+  end
+  let scope = {}
+  for name, _ in lets
+    if has_key(rmap, name) and has_key(BUILTIN_FNS, name) and not has_key(fns, name)
+      scope[name] = "pending"
+    end
+  end
+  scope
+end
+
+fn rename_stmts(stmts, rmap, shadowed)
+  let current = copy_set(shadowed)
+  for stmt in stmts
+    rename_stmt_in_scope(stmt, rmap, current, false)
+  end
+end
+
+fn is_from_load(stmt)
+  type(stmt) == "table" and stmt.from_load == true
+end
+
+# Entry-file top-level names aren't prefixed, so the ones shadowing a builtin become `__main_<name>`, with
+# the same pending-let rules as a module. Skips spliced-in loads; runs before lower(), so lower's builtin calls stay.
+fn shadow_entry_builtins(stmts, module_bindings)
+  let own = []
+  for stmt in stmts
+    if not is_from_load(stmt)
+      push(own, stmt)
+    end
+  end
+  let rmap = {}
+  let any = false
+  for name, _ in collect_module_top_names(own)
+    if has_key(BUILTIN_FNS, name)
+      rmap[name] = "__main_" + name
+      any = true
+    end
+  end
+  if not any
+    return nil
+  end
+  let scope = pending_builtin_lets(own, rmap)
+  for stmt in own
+    rename_stmt_in_scope(stmt, rmap, scope, true)
+  end
+  for name, renamed in rmap
+    if has_key(module_bindings, name)
+      module_bindings[renamed] = module_bindings[name]
+      delete(module_bindings, name)
+    end
+  end
+end
+
+fn transform_module(stmts, mangle, top_names)
+  let prefix = "__mod_" + mangle + "_"
+  let rmap = build_rename_map(top_names, prefix)
+
+  # statements spliced in from this module's loads are already renamed: a `fn len` here mustn't capture theirs
+  let own = []
+  for stmt in stmts
+    if not is_from_load(stmt)
+      push(own, stmt)
+    end
+  end
+  let module_scope = pending_builtin_lets(own, rmap)
+  for stmt in stmts
+    if not is_from_load(stmt)
+      rename_stmt_in_scope(stmt, rmap, module_scope, true)
+    end
+  end
+
+  let result = []
+  for stmt in stmts
+    if not is_node(stmt, "export")
+      stmt.from_load = true
+      push(result, stmt)
+    end
+  end
+  result
+end
+
+# Exported names the module defines. Undefined ones are reported here and go in `bad` (so a selective import
+# of them reports nothing more); a module that failed to parse already has its error.
+fn checked_exports(export_node, top_names, mod_name, file, parse_failed, sources_by_file, sink, bad)
+  let result = []
+  let seen = {}
+  let i = 0
+  for name in export_node.names
+    let pos = export_node.name_pos[i]
+    i += 1
+    if seen[name] != nil
+      sink.report(sources_by_file[file], file, pos.line, pos.col, len(name), "module `{mod_name}` exports `{name}` twice", "remove the second `{name}` from the `export` list")
+    elif top_names[name] == nil
+      if not parse_failed
+        sink.report(sources_by_file[file], file, pos.line, pos.col, len(name), "module `{mod_name}` exports `{name}`, which it doesn't define", "define `{name}` at the top level of the module, or remove it from the `export` list")
+      end
+      bad[name] = true
+    else
+      push(result, name)
+    end
+    seen[name] = true
+  end
+  result
+end
+
+# A let per selective import, or one frozen namespace table. A selective name that isn't exported is
+# reported once and bound to nil, so its uses don't also report as undeclared.
+fn import_bindings(load_node, mod_name, mangle, exported, bad, module_bindings, sources_by_file, sink)
+  let prefix = "__mod_" + mangle + "_"
+  let result = []
+  if load_node.selective != nil
+    let is_exported = {}
+    for ename in exported
+      is_exported[ename] = true
+    end
+    let i = 0
+    for sel_name in load_node.selective
+      let pos = load_node.selective_pos[i]
+      i += 1
+      if is_exported[sel_name] != nil
+        let imported = make_let(sel_name, make_var(prefix + sel_name), 0)
+        imported.selective_import = true
+        push(result, imported)
+      else
+        if bad[sel_name] == nil
+          let hint = if len(exported) > 0
+            "the module exports: " + string.join(exported, ", ")
+          end
+          sink.report(sources_by_file[load_node.file], load_node.file, pos.line, pos.col, len(sel_name), "module `{mod_name}` has no export `{sel_name}`", hint)
+        end
+        push(result, make_let(sel_name, make_nil_node(), 0))
+      end
+    end
+  else
+    let binding_name = if load_node.alias != nil then load_node.alias else mod_name end
+    let entries = []
+    for ename in exported
+      push(entries, make_table_entry(ename, make_var(prefix + ename)))
+    end
+    let mod_tbl = make_table(entries)
+    mod_tbl.frozen = true
+    push(result, make_let(binding_name, mod_tbl, 0))
+    module_bindings[binding_name] = exported
+  end
+  result
+end
+
+# every node gets its file, so errors in a loaded module point there
+fn tag_source_file(node, file)
+  if type(node) != "table" then return end
+  if node.tag != nil and node.file == nil
+    node.file = file
+  end
+  for k in keys(node)
+    let v = node[k]
+    if type(v) == "table"
+      if v.tag != nil
+        tag_source_file(v, file)
+      else
+        for _, elem in v
+          if type(elem) == "table"
+            tag_source_file(elem, file)
+          end
+        end
+      end
+    end
+  end
+end
+
+# visit(child, in_fn) on every tagged node below `node`, walking through untagged tables (lists, entries)
+fn walk_ast(node, in_fn, visit)
+  for _, v in node
+    if type(v) == "table"
+      if v.tag != nil
+        let child_in_fn = in_fn or v.tag == "fn_def" or v.tag == "anon_fn"
+        visit(v, child_in_fn)
+        walk_ast(v, child_in_fn, visit)
+      else
+        walk_ast(v, in_fn, visit)
+      end
+    end
+  end
+end
+
+# `let total = total + x` in a loop never changes the outer `total`. Warn when nothing in the loop assigns
+# the name and code after the loop reads it.
+fn reads_name(node, name)
+  let found = false
+  walk_ast({tag: "wrap", n: node}, false, fn(n, in_fn)
+    if n.tag == "var" and n.name == name
+      found = true
+    end
+  end)
+  found
+end
+
+fn first_read_line(stmts, name)
+  for st in stmts
+    let line = nil
+    walk_ast({tag: "wrap", n: st}, false, fn(n, in_fn)
+      if line == nil and n.tag == "var" and n.name == name
+        line = n.line
+        if line == nil
+          line = st.line
+        end
+      end
+    end)
+    if line != nil
+      return line
+    end
+  end
+  nil
+end
+
+fn add_pattern_names(pat, declared)
+  if type(pat) != "table"
+    return nil
+  end
+  if pat.tag == "pat_name"
+    declared[pat.name] = true
+  end
+  walk_ast({tag: "wrap", p: pat}, false, fn(n, in_fn)
+    if n.tag == "pat_name"
+      declared[n.name] = true
+    end
+  end)
+end
+
+fn find_shadowed_accumulators(ast, changed_by_fns, report)
+  # `declared`: names bound in the loop so far; `following`: statements after the loop
+  let check_body = nil
+  let check_node = nil
+  check_body = fn(stmts, declared, loop, following)
+    let d = {}
+    for k, _ in declared
+      d[k] = true
+    end
+    for st in stmts
+      if type(st) != "table" or st.tag == nil
+        continue
+      end
+      if st.tag == "let" and d[st.name] == nil and st.value != nil and reads_name(st.value, st.name) and changed_by_fns[st.name] == nil
+        let assigned = false
+        walk_ast({tag: "wrap", n: loop.body}, false, fn(n, in_fn)
+          if n.tag == "assign" and n.name == st.name
+            assigned = true
+          end
+        end)
+        let in_cond = loop.tag == "while" and reads_name(loop.cond, st.name)
+        let use_line = first_read_line(following, st.name)
+        if not assigned and not in_cond and use_line != nil
+          report(st, loop, st.name, use_line)
+        end
+      end
+      check_node(st, d, loop, following)
+      if st.tag == "let"
+        d[st.name] = true
+      end
+    end
+  end
+  check_node = fn(node, declared, loop, following)
+    let tag = node.tag
+    if tag == "fn_def" or tag == "anon_fn"
+      return nil
+    end
+    if tag == "for_in" or tag == "for_range"
+      let d = {}
+      for k, _ in declared
+        d[k] = true
+      end
+      d[node.var_name] = true
+      if node.val_name != nil
+        d[node.val_name] = true
+      end
+      check_body(node.body, d, loop, following)
+      return nil
+    end
+    if tag == "match_arm"
+      let d = {}
+      for k, _ in declared
+        d[k] = true
+      end
+      add_pattern_names(node.pattern, d)
+      check_body(node.body, d, loop, following)
+      return nil
+    end
+    for k, v in node
+      if type(v) == "table"
+        if v.tag == nil and len(v) > 0 and type(v[0]) == "table" and v[0].tag != nil
+          check_body(v, declared, loop, following)
+        else
+          check_node(v, declared, loop, following)
+        end
+      end
+    end
+  end
+  # `outer`: statements after the enclosing blocks, up to the fn body
+  let scan = nil
+  let scan_block = fn(stmts, outer)
+    for i = 0, len(stmts)
+      let st = stmts[i]
+      if type(st) != "table" or st.tag == nil
+        continue
+      end
+      let following = []
+      for j = i + 1, len(stmts)
+        push(following, stmts[j])
+      end
+      for o in outer
+        push(following, o)
+      end
+      if st.tag == "while" or st.tag == "for_in" or st.tag == "for_range"
+        let d = {}
+        if st.tag != "while"
+          d[st.var_name] = true
+          if st.val_name != nil
+            d[st.val_name] = true
+          end
+        end
+        check_body(st.body, d, st, following)
+      end
+      scan(st, following)
+    end
+  end
+  scan = fn(node, following)
+    for k, v in node
+      if type(v) == "table"
+        if v.tag == "fn_def" or v.tag == "anon_fn"
+          scan(v, [])
+        elif v.tag == nil and len(v) > 0 and type(v[0]) == "table" and v[0].tag != nil
+          let inner = if node.tag == "fn_def" or node.tag == "anon_fn" then [] else following end
+          scan_block(v, inner)
+        else
+          scan(v, following)
+        end
+      end
+    end
+  end
+  scan_block(ast.stmts, [])
+end
+
+# Parser warnings plus the shadowed-let loop warnings, in line order. A `while i < n` whose body does
+# `let i = ...` and never assigns `i` reads the outer `i` forever.
+fn print_file_warnings(ast, file, show_path, sink)
+  let warned = {}
+  let by_line = {}
+  let lines = []
+  for e in sink.warnings()
+    if e.file == file and e.line != nil
+      if by_line[e.line] == nil
+        by_line[e.line] = []
+        push(lines, e.line)
+      end
+      let hint = if e.hint != nil then ". Hint: {e.hint}." else "." end
+      push(by_line[e.line], "warning: {show_path(file)}:{e.line}: {e.msg}{hint}")
+    end
+  end
+  # a module-level let some fn assigns can change through a call in the loop
+  let changed_by_fns = {}
+  let module_lets = {}
+  for st in ast.stmts
+    if st.tag == "let"
+      module_lets[st.name] = true
+    end
+  end
+  walk_ast(ast, false, fn(n, in_fn)
+    if n.tag == "assign" and in_fn and module_lets[n.name] == true
+      changed_by_fns[n.name] = true
+    end
+  end)
+  let check_while = fn(w)
+    let reads = {}
+    walk_ast({tag: "wrap", cond: w.cond}, false, fn(n, in_fn)
+      if n.tag == "var"
+        reads[n.name] = true
+      end
+    end)
+    let assigned = {}
+    let shadows = {}
+    walk_ast({tag: "wrap", body: w.body}, false, fn(n, in_fn)
+      if n.tag == "assign"
+        assigned[n.name] = true
+      elif n.tag == "let" and not in_fn and reads[n.name] == true
+        let prev = shadows[n.name]
+        if prev == nil or (n.line != nil and prev.line != nil and n.line < prev.line)
+          shadows[n.name] = n
+        end
+      end
+    end)
+    for name in sort(keys(shadows))
+      let l = shadows[name]
+      let key = "{l.line}:{name}"
+      if assigned[name] == nil and changed_by_fns[name] == nil and warned[key] == nil
+        warned[key] = true
+        if by_line[l.line] == nil
+          by_line[l.line] = []
+          push(lines, l.line)
+        end
+        push(by_line[l.line], "warning: {show_path(file)}:{l.line}: `let {name}` declares a new `{name}` that hides the one this loop's condition reads (while at line {w.line}); nothing in the loop assigns the outer `{name}`, so the condition can't change through it. To update it, write `{name} = ...` without `let`.")
+      end
+    end
+  end
+  walk_ast(ast, false, fn(n, in_fn)
+    if n.tag == "while"
+      check_while(n)
+    end
+  end)
+  find_shadowed_accumulators(ast, changed_by_fns, fn(l, loop, name, use_line)
+    let key = "{l.line}:{name}"
+    if warned[key] == nil
+      warned[key] = true
+      if by_line[l.line] == nil
+        by_line[l.line] = []
+        push(lines, l.line)
+      end
+      push(by_line[l.line], "warning: {show_path(file)}:{l.line}: `let {name}` declares a new `{name}` in each iteration of the loop at line {loop.line}, computed from the outer `{name}`, which nothing in the loop assigns; the outer `{name}` read at line {use_line} still has its value from before the loop. To update it, write `{name} = ...` without `let`.")
+    end
+  end)
+  for ln in sort(lines)
+    for msg in by_line[ln]
+      eprint(msg)
+    end
+  end
+end
+
+# `full_path` is still on the load stack: report the cycle, following `parent` links from stmt's file back
+fn report_load_cycle(stmt, full_path, show_path, loaded, sources_by_file, sink)
+  let chain = [full_path]
+  let cur = normalize_path(stmt.file)
+  while cur != full_path and cur != nil
+    insert(chain, 1, cur)
+    cur = loaded[cur].parent
+  end
+  let msg = "load cycle: "
+  for p in chain
+    msg = msg + show_path(p) + " → "
+  end
+  msg = msg + show_path(full_path)
+  let hint = if len(chain) == 1
+    "a file cannot load itself; remove this `load`"
+  else
+    "move the code these modules share into a module that loads none of them"
+  end
+  sink.report(sources_by_file[stmt.file], stmt.file, stmt.line, stmt.col, len("load"), msg, hint)
+end
+
+# the namespace (alias or base name) must be an identifier unique in the file; false, reported, if not
+fn check_namespace_name(stmt, full_path, seen, sources_by_file, sink)
+  if stmt.selective != nil
+    return true
+  end
+  let ns = stmt.alias
+  if ns == nil
+    ns = module_name_from_path(stmt.path)
+    if not is_identifier_name(ns)
+      let msg = "module file name `{ns}` is not an identifier, so it can't name the module's namespace"
+      let hint = "rename it to {c_safe_name(ns)}.gem, or load it with `load \"{stmt.path}\" as name`"
+      if KEYWORDS[ns] == true
+        msg = "module file name `{ns}` is a keyword, so it can't name the module's namespace"
+        hint = "rename the file, or load it with `load \"{stmt.path}\" as name`"
+      end
+      sink.report(sources_by_file[stmt.file], stmt.file, stmt.line, stmt.col, len("load"), msg, hint)
+      return false
+    end
+  end
+  let prev = seen[ns]
+  if prev != nil and prev.path != full_path
+    sink.report(sources_by_file[stmt.file], stmt.file, stmt.line, stmt.col, len("load"), "module name `{ns}` is already used by `load \"{prev.stmt.path}\"` at line {prev.stmt.line}", "rename one of the files, or load one with `load \"{stmt.path}\" as name`")
+    return false
+  end
+  if prev == nil
+    seen[ns] = {path: full_path, stmt: stmt}
+  end
+  true
+end
+
+fn resolve_loads(ast, base_dir, project_root, stdlib_root, loaded, module_bindings, sources_by_file, sink, show_path, registry)
+  let new_stmts = []
+  let count = 0
+  let ns_seen = {}
+  for stmt in ast.stmts
+    if is_node(stmt, "load")
+      let full_path = resolve_load_path(stmt.path, base_dir, project_root, stdlib_root)
+
+      let cached = loaded[full_path]
+      if cached != nil and cached.loading
+        report_load_cycle(stmt, full_path, show_path, loaded, sources_by_file, sink)
+        continue
+      end
+      # missing file first, before checks that assume it's a module
+      if cached == nil
+        let problem = load_target_problem(stmt.path, full_path, show_path)
+        if problem != nil
+          sink.report(sources_by_file[stmt.file], stmt.file, stmt.line, stmt.col, len("load"), problem.msg, problem.hint)
+          continue
+        end
+      end
+      if not check_namespace_name(stmt, full_path, ns_seen, sources_by_file, sink)
+        continue
+      end
+      if cached != nil
+        if cached.exported != nil
+          for b in import_bindings(stmt, cached.mod_name, cached.mangle, cached.exported, cached.bad_exports, module_bindings, sources_by_file, sink)
+            new_stmts[count] = b
+            count += 1
+          end
+        end
+        continue
+      end
+
+      # loading: on the load stack; parent: who loaded it (for cycles)
+      let entry = {exported: nil, loading: true, parent: normalize_path(stmt.file)}
+      loaded[full_path] = entry
+
+      # exists but unreadable (permissions, a race)
+      let read_res = pcall read_file(full_path)
+      if not read_res.ok
+        entry.loading = false
+        sink.report(sources_by_file[stmt.file], stmt.file, stmt.line, stmt.col, len("load"), "cannot read module `{stmt.path}` ({show_path(full_path)})", nil)
+        continue
+      end
+      let source = normalize_newlines(read_res.value)
+      sources_by_file[full_path] = source
+      let errors_before = sink.count()
+      let loaded_ast = parse_source(source, full_path, sink)
+      let parse_failed = sink.count() > errors_before or sink.suppressed()
+      tag_source_file(loaded_ast, full_path)
+      if not parse_failed
+        print_file_warnings(loaded_ast, full_path, show_path, sink)
+      end
+      let loaded_dir = dirname(full_path)
+      let resolved = resolve_loads(loaded_ast, loaded_dir, project_root, stdlib_root, loaded, module_bindings, sources_by_file, sink, show_path, registry)
+
+      entry.loading = false
+
+      let export_node = find_export_node(resolved.stmts)
+      if export_node == nil
+        # don't pile this onto a parse error
+        if not parse_failed
+          sink.report(sources_by_file[stmt.file], stmt.file, stmt.line, stmt.col, len("load"), "loaded file has no export statement: {stmt.path}", "end the module with `export name, ...`")
+        end
+        continue
+      end
+
+      let mod_name = module_name_from_path(stmt.path)
+      let top_names = collect_module_top_names(resolved.stmts)
+      let mangle = module_mangle(full_path, mod_name, top_names, registry)
+      let bad_exports = {}
+      let exported = checked_exports(export_node, top_names, mod_name, full_path, parse_failed, sources_by_file, sink, bad_exports)
+      loaded[full_path] = {mod_name: mod_name, mangle: mangle, exported: exported, bad_exports: bad_exports, top_names: top_names}
+      let mod_stmts = transform_module(resolved.stmts, mangle, top_names)
+      for b in import_bindings(stmt, mod_name, mangle, exported, bad_exports, module_bindings, sources_by_file, sink)
+        push(mod_stmts, b)
+      end
+      for ms in mod_stmts
+        new_stmts[count] = ms
+        count += 1
+      end
+    else
+      new_stmts[count] = stmt
+      count += 1
+    end
+  end
+  make_program(new_stmts)
+end
+
+# `__mod_<mangle>_<name>` -> `<mod>.<name>` for messages, from the loaded table since names can contain `_`
+fn build_global_display(loaded)
+  let display = {}
+  for _, info in loaded
+    if info.top_names != nil
+      for name, _ in info.top_names
+        display["__mod_" + info.mangle + "_" + name] = info.mod_name + "." + name
+      end
+    end
+  end
+  display
+end
+
+let USAGE = """
+  usage: gem <file.gem> [options] [args...]
+         gem new <name> | gem test [args...] | gem build
+         gem lsp
+
+  Compiles <file.gem> to C, builds it with cc and runs it. Arguments after
+  the file that are not options below are passed to the program.
+
+  options:
+    -c, --compile-only   compile to ./<file>, don't run
+    -o <name>            compile to <name> (implies -c)
+    --emit-c             print the generated C to stdout
+    --check              parse and analyze only; exit 1 on errors
+    --run                run after compiling (the default)
+    -h, --help           print this help
+    --                   after <file.gem>: the rest goes to the program,
+                         options included
+  C compiler flags, before <file.gem> only:
+    -l<lib>, -l <lib>    link the library (after the runtime)
+    -L<dir>, -L <dir>    search <dir> for libraries
+    -I<dir>, -I <dir>    search <dir> for the headers of `extern include`
+  environment:
+    CC                   the C compiler (default cc)
+    CFLAGS, LDFLAGS      more flags for it, split at spaces
+    GEM_RUNTIME          release (default), debug or asan: the runtime to
+                         link (make debug, make asan build the other two)
+  subcommands:
+    lsp                  start the language server on stdin/stdout
+    new <name>           make a project: <name>/ with gem.toml, main.gem, test.gem
+    test [args...]       run the project's test.gem (the project: the nearest
+                         directory with a gem.toml, here or above)
+    build [cc flags]     build the project's main (gem.toml `main`, default
+                         main.gem) at -O2 into build/<name>
+  run mode (gem <file.gem>) builds at -O0 and caches the binary by a hash of
+  the C, the runtime and the cc flags, in $GEM_CACHE_DIR (else
+  $XDG_CACHE_HOME/gem, else ~/.cache/gem); -o and -c build at -O2.
+  GEM_CACHE=off turns the cache off.
+  """
+
+# user's mistake: message + usage line, exit 2, no stack trace
+fn usage_error(msg)
+  eprint("gem: " + msg)
+  eprint("usage: gem <file.gem> [options] [args...]   (gem --help for more)")
+  exit(2)
+end
+
+fn parse_args(args)
+  let result = {
+    src_path: nil,
+    out_name: nil,
+    emit_c: false,
+    check: false,
+    run: true,
+    compile_only: false,
+    run_args: [],
+    cc_flags: []
+  }
+
+  let argc = len(args)
+  let i = 1
+
+  while i < argc
+    let arg = args[i]
+    if result.src_path != nil and arg == "--"
+      i += 1
+      while i < argc
+        push(result.run_args, args[i])
+        i += 1
+      end
+      break
+    elif arg == "--emit-c"
+      result.emit_c = true
+    elif arg == "--check"
+      result.check = true
+    elif arg == "--run"
+      # the default anyway
+    elif arg == "-c" or arg == "--compile-only"
+      result.compile_only = true
+    elif arg == "-o"
+      i += 1
+      if i >= argc
+        usage_error("-o requires an argument")
+      end
+      result.out_name = args[i]
+    elif result.src_path == nil and (arg == "-h" or arg == "--help")
+      print(USAGE)
+      exit(0)
+    elif result.src_path == nil and len(arg) >= 2 and (substr(arg, 0, 2) == "-l" or substr(arg, 0, 2) == "-L" or substr(arg, 0, 2) == "-I")
+      # cc flags only before the file; after it `-l` belongs to the program
+      let flag = substr(arg, 0, 2)
+      let value = substr(arg, 2)
+      if value == ""
+        i += 1
+        if i >= argc or args[i] == ""
+          usage_error(flag + " requires an argument")
+        end
+        value = args[i]
+      end
+      push(result.cc_flags, flag + value)
+    elif result.src_path == nil and len(arg) > 1 and substr(arg, 0, 1) == "-"
+      usage_error("unknown option '" + arg + "'")
+    elif result.src_path == nil
+      result.src_path = arg
+    else
+      push(result.run_args, arg)
+    end
+    i += 1
+  end
+
+  if result.compile_only or result.out_name != nil or result.emit_c or result.check
+    result.run = false
+  end
+
+  result
+end
+
+fn basename_no_ext(path)
+  let plen = len(path)
+  let last_slash = -1
+  let i = 0
+  while i < plen
+    if ord(path, i) == 47  # '/'
+      last_slash = i
+    end
+    i += 1
+  end
+  let name = substr(path, last_slash + 1, plen - last_slash - 1)
+  let nlen = len(name)
+  if nlen > 4
+    let maybe_ext = substr(name, nlen - 4, 4)
+    if maybe_ext == ".gem"
+      name = substr(name, 0, nlen - 4)
+    end
+  end
+  name
+end
+
+fn shell_quote(s)
+  "'" + str_replace(s, "'", "'\\''") + "'"
+end
+
+# runtime helpers, not builtins, so an older compiler can build this; each compile gets its own work dir
+extern fn gem_temp_dir() -> String
+extern fn gem_rmdir(path: String) -> Int
+extern fn gem_hash_hex(data: Bytes) -> String
+extern fn gem_file_hash(path: String) -> String
+extern fn gem_mkdirs(path: String) -> Int
+extern fn gem_temp_dir_in(parent: String) -> String
+extern fn gem_link(from: String, to: String) -> Int
+extern fn gem_rename(from: String, to: String) -> Int
+extern fn gem_file_age(path: String) -> Int
+extern fn gem_run_program(path: String, args: Bytes, replace: Int) -> Int
+
+# Run-mode binary cache: <cache>/<key>/<basename>. The key hashes the C, the cc flags, the runtime's headers
+# and library (and sources when built from them) and the `extern include` headers; not `-l` libs or -I headers.
+#
+# cc writes into a run dir under <cache>/.tmp and the result is hard-linked into the entry, so nobody sees a
+# half-written binary; if the entry vanished meanwhile it's a miss. Emptying the cache moves entries into .tmp
+# instead of deleting them: macOS kills a process whose binary loses its last link while execve is loading it.
+let CACHE_MAX_ENTRIES = 256
+# on a new key, drop .tmp run dirs untouched for a day (left by a killed gem) and entries moved there over a minute ago
+let CACHE_STALE_SECONDS = 86400
+let CACHE_MOVED_SECONDS = 60
+
+fn cache_root()
+  let set = getenv("GEM_CACHE_DIR")
+  if set != nil and set != ""
+    return set
+  end
+  let xdg = getenv("XDG_CACHE_HOME")
+  if xdg != nil and xdg != ""
+    return path_join(xdg, "gem")
+  end
+  let home = getenv("HOME")
+  if home == nil or home == ""
+    return nil
+  end
+  path_join(home, ".cache/gem")
+end
+
+fn runtime_file_hashes(runtime_dir, with_sources)
+  if not is_dir(runtime_dir)
+    return ""
+  end
+  build_string do |add|
+    for name in sort(list_dir(runtime_dir))
+      if string.ends_with(name, ".h") or (with_sources and string.ends_with(name, ".c"))
+        add("{name} {gem_file_hash(path_join(runtime_dir, name))}\n")
+      end
+    end
+  end
+end
+
+# {bin, staging}, or nil when the cache is off or not writable
+fn cache_slot(c_code, c_file, parts, base)
+  if getenv("GEM_CACHE") == "off"
+    return nil
+  end
+  let root = cache_root()
+  if root == nil
+    return nil
+  end
+  # the C's own path (in #line) differs every run
+  let key_text = build_string do |add|
+    add(if c_file != nil then str_replace(c_code, c_file, "") else c_code end)
+    for p in parts
+      add("\n|part| ")
+      add(p)
+    end
+    for line in string.split(c_code, "\n")
+      if string.starts_with(line, "#include \"/")
+        let path = substr(line, 10, len(line) - 11)
+        add("\n|header| {path} {gem_file_hash(path)}")
+      end
+    end
+  end
+  let key = gem_hash_hex(key_text)
+  let staging = path_join(root, ".tmp")
+  if gem_mkdirs(staging) != 1
+    return nil
+  end
+  if not file_exists(path_join(root, key))
+    prune_cache(root, staging)
+    remove_stale_runs(staging)
+  end
+  {bin: path_join(path_join(root, key), base), staging: staging}
+end
+
+# best effort: another run may remove or move it first
+fn remove_flat_dir(dir)
+  let listed = pcall list_dir(dir)
+  if not listed.ok
+    return nil
+  end
+  for f in listed.value
+    remove_file(path_join(dir, f))
+  end
+  gem_rmdir(dir)
+end
+
+# Past CACHE_MAX_ENTRIES, empty the cache by moving every entry into staging as <entry>.<suffix>.
+# The suffix comes from a mkdtemp dir we hold, so no concurrent prune picks the same names.
+fn prune_cache(root, staging)
+  if not is_dir(root)
+    return nil
+  end
+  let entries = []
+  for e in list_dir(root)
+    if not string.starts_with(e, ".")
+      push(entries, e)
+    end
+  end
+  if len(entries) < CACHE_MAX_ENTRIES
+    return nil
+  end
+  let claim = gem_temp_dir_in(staging)
+  if claim == nil
+    return nil
+  end
+  let suffix = substr(claim, len(claim) - 6, 6)
+  for e in entries
+    let dir = path_join(root, e)
+    if is_dir(dir)
+      gem_rename(dir, path_join(staging, e + "." + suffix))
+    end
+  end
+  gem_rmdir(claim)
+end
+
+fn remove_stale_runs(staging)
+  if not is_dir(staging)
+    return nil
+  end
+  for d in list_dir(staging)
+    let dir = path_join(staging, d)
+    let max_age = if string.starts_with(d, "gem-") then CACHE_STALE_SECONDS else CACHE_MOVED_SECONDS end
+    if is_dir(dir) and gem_file_age(dir) > max_age
+      remove_flat_dir(dir)
+    end
+  end
+end
+
+# gem.toml is just `key = "value"` lines and `#` comments; anything else (`[sections]`) is ignored. Keys: name, main.
+fn read_toml(path)
+  let out = {}
+  if not file_exists(path)
+    return out
+  end
+  for raw in string.split(read_file(path), "\n")
+    let line = string.trim(raw)
+    let eq = find(line, "=")
+    if line != "" and not string.starts_with(line, "#") and eq > 0
+      let key = string.trim(substr(line, 0, eq))
+      let value = string.trim(substr(line, eq + 1))
+      let close = if string.starts_with(value, "\"") then find(value, "\"", 1) else -1 end
+      if close > 0
+        value = substr(value, 1, close - 1)
+      elif find(value, "#") >= 0
+        value = string.trim(substr(value, 0, find(value, "#")))
+      end
+      out[key] = value
+    end
+  end
+  out
+end
+
+fn project_root_or_exit(cmd)
+  let root = find_project_root(".")
+  if root == nil
+    eprint("gem {cmd}: no gem.toml in this directory or above it (`gem new <name>` makes a project)")
+    exit(1)
+  end
+  root
+end
+
+# why `name` can't be build/<name>, or nil
+fn project_name_problem(name)
+  if name == ""
+    return "it is empty"
+  end
+  if find(name, "/") >= 0 or find(name, "..") >= 0
+    return "it holds `/` or `..`"
+  end
+  if string.starts_with(name, ".") or string.starts_with(name, "-")
+    return "it starts with `.` or `-`"
+  end
+  nil
+end
+
+fn new_project(name)
+  if name == nil or name == "" or string.starts_with(name, "-")
+    usage_error("gem new needs a project name: gem new <name>")
+  end
+  while len(name) > 1 and string.ends_with(name, "/")
+    name = substr(name, 0, len(name) - 1)
+  end
+  let problem = project_name_problem(basename_no_ext(name))
+  if problem != nil
+    eprint("gem new: '{basename_no_ext(name)}' can't be a project name: {problem}")
+    exit(1)
+  end
+  if file_exists(name)
+    eprint("gem new: '{name}' already exists")
+    exit(1)
+  end
+  if not mkdir(name)
+    eprint("gem new: cannot create '{name}'")
+    exit(1)
+  end
+  let base = basename_no_ext(name)
+  write_file(path_join(name, "gem.toml"), "name = \"{base}\"\nmain = \"main.gem\"\n")
+  write_file(path_join(name, "main.gem"), "# {base}: run with `gem main.gem`, test with `gem test`, build with `gem build`.\n\nfn greeting(who)\n  \"hello, \{who}\"\nend\n\nfn main()\n  print(greeting(\"world\"))\nend\n\nexport greeting\n")
+  write_file(path_join(name, "test.gem"), "load \"std/test\"\nload \"./main\"\n\ntest.case(\"greeting\") do\n  test.assert_eq(main.greeting(\"gem\"), \"hello, gem\")\nend\n\ntest.run()\n")
+  write_file(path_join(name, ".gitignore"), "build/\n")
+  print("created {name}/ (gem.toml, main.gem, test.gem); in it:")
+  print("  gem main.gem   runs it")
+  print("  gem test       runs test.gem")
+  print("  gem build      builds build/{base}")
+end
+
+# `gem new` runs here; test and build turn into ordinary run/build args
+fn project_command_args(args)
+  if len(args) < 2
+    return args
+  end
+  let cmd = args[1]
+  if cmd == "new"
+    new_project(if len(args) > 2 then args[2] else nil end)
+    exit(0)
+  end
+  if cmd == "test"
+    let root = project_root_or_exit("test")
+    let test_file = path_join(root, "test.gem")
+    if not file_exists(test_file)
+      eprint("gem test: no test.gem in {root}")
+      exit(1)
+    end
+    let out = [args[0], test_file, "--"]
+    for i = 2, len(args)
+      push(out, args[i])
+    end
+    return out
+  end
+  if cmd == "build"
+    let root = project_root_or_exit("build")
+    let conf = read_toml(path_join(root, "gem.toml"))
+    let name = if conf.name != nil and conf.name != "" then conf.name else basename_no_ext(root) end
+    let problem = project_name_problem(name)
+    if problem != nil
+      eprint("gem build: '{name}' can't name the binary build/<name>: {problem} (set `name` in gem.toml)")
+      exit(1)
+    end
+    let entry = path_join(root, if conf.main != nil and conf.main != "" then conf.main else "main.gem" end)
+    if not file_exists(entry)
+      eprint("gem build: no {entry} (set `main` in gem.toml)")
+      exit(1)
+    end
+    let out_dir = path_join(root, "build")
+    if not is_dir(out_dir) and not mkdir(out_dir)
+      eprint("gem build: cannot create {out_dir}")
+      exit(1)
+    end
+    let out = [args[0]]
+    for i = 2, len(args)
+      push(out, args[i])
+    end
+    push(out, entry)
+    push(out, "-o")
+    push(out, path_join(out_dir, name))
+    return out
+  end
+  args
+end
+
+let argc = len(argv())
+if argc < 2
+  usage_error("no source file given")
+end
+
+if argv()[1] == "lsp"
+  run_lsp()
+  exit(0)
+end
+
+let cli = parse_args(project_command_args(argv()))
+
+if cli.src_path == nil
+  usage_error("no source file given")
+end
+
+let src_path = cli.src_path
+if is_dir(src_path)
+  eprint("gem: '" + src_path + "' is a directory, not a source file")
+  exit(1)
+end
+if not file_exists(src_path)
+  eprint("gem: cannot open '" + src_path + "'")
+  exit(1)
+end
+let source = normalize_newlines(read_file(src_path))
+
+let sink = make_error_sink()
+
+let ast = parse_source(source, src_path, sink)
+tag_source_file(ast, src_path)
+let base_dir = dirname(src_path)
+let project_root = find_project_root(base_dir)
+if project_root != nil
+  project_root = normalize_path(project_root)
+end
+let stdlib_root = compute_stdlib_root(install_root, project_root)
+let show_path = make_show_path(src_path, project_root)
+let loaded = {}
+let module_bindings = {}
+let sources_by_file = {}
+sources_by_file[src_path] = source
+# the entry file is on the load stack too: loading it back is a cycle
+loaded[normalize_path(src_path)] = {exported: nil, loading: true, parent: nil}
+
+# a failed parse may not have well-formed `load` nodes, so stop here
+let resolved_ast = nil
+if not sink.has_any()
+  print_file_warnings(ast, src_path, show_path, sink)
+  resolved_ast = resolve_loads(ast, base_dir, project_root, stdlib_root, loaded, module_bindings, sources_by_file, sink, show_path, {prefixes: {}, symbols: {}})
+  let entry_export = find_export_node(resolved_ast.stmts)
+  if entry_export != nil
+    checked_exports(entry_export, collect_module_top_names(resolved_ast.stmts), module_name_from_path(src_path), src_path, false, sources_by_file, sink, {})
+  end
+end
+
+if sink.has_any()
+  print_all_errors(sink, show_path)
+  exit(1)
+end
+
+shadow_entry_builtins(resolved_ast.stmts, module_bindings)
+resolved_ast = lower(resolved_ast)
+
+fold_constants(resolved_ast)
+
+let cg = make_codegen(src_path, module_bindings, show_path, sources_by_file, sink, build_global_display(loaded), normalize_load_path(path_join(stdlib_root, "std")))
+# codegen's `#line` directives name c_file, so it's picked before compiling
+let work_dir = nil
+let c_file = nil
+if not cli.check and not cli.emit_c
+  work_dir = gem_temp_dir()
+  if work_dir == nil
+    eprint("gem: cannot create a work directory under $TMPDIR (or /tmp)\n")
+    exit(1)
+  end
+  c_file = work_dir + "/" + basename_no_ext(src_path) + ".c"
+end
+let c_code = cg.compile(resolved_ast, c_file)
+
+# codegen reports errors too (undeclared names and such)
+if sink.has_any()
+  print_all_errors(sink, show_path)
+  exit(1)
+end
+
+if cli.check
+  exit(0)
+end
+
+if cli.emit_c
+  print(c_code)
+else
+  let base = basename_no_ext(src_path)
+  let tmp_c = c_file
+
+  let out_name = cli.out_name
+  if out_name == nil
+    if cli.run
+      out_name = work_dir + "/" + base
+    else
+      out_name = "./" + base
+    end
+  end
+
+  let runtime_dir = path_join(install_root, "runtime")
+
+  # GEM_RUNTIME=debug|asan: the program gets that runtime's flags too, so gem.h's inline code checks its asserts
+  let runtime_kind = getenv("GEM_RUNTIME")
+  let runtime_lib = path_join(install_root, "build/libgem_runtime.a")
+  # run mode: -O0 compiles several times faster, and the result is cached
+  let c_flags = if cli.run then " -std=gnu11 -O0 -pthread" else " -std=gnu11 -O2 -pthread" end
+  if runtime_kind == "debug" or runtime_kind == "asan"
+    runtime_lib = path_join(install_root, "build/" + runtime_kind + "/libgem_runtime.a")
+    if not file_exists(runtime_lib)
+      eprint("gem: GEM_RUNTIME=" + runtime_kind + " needs " + runtime_lib + ": run 'make " + runtime_kind + "' first")
+      exit(2)
+    end
+    c_flags = " -std=gnu11 -O1 -g -fno-omit-frame-pointer -DGEM_DEBUG -pthread"
+    if runtime_kind == "asan"
+      c_flags = c_flags + " -fsanitize=address,undefined -fno-sanitize-recover=undefined"
+    end
+  elif runtime_kind != nil and runtime_kind != "" and runtime_kind != "release"
+    usage_error("GEM_RUNTIME must be release, debug or asan, not '" + runtime_kind + "'")
+  end
+  let q_rt = shell_quote(runtime_dir)
+  # -I before the runtime's own; -L/-l after the runtime lib, which may need them. CFLAGS/LDFLAGS go unquoted.
+  let cc = getenv("CC")
+  if cc == nil or cc == ""
+    cc = "cc"
+  end
+  let env_cflags = getenv("CFLAGS")
+  let env_ldflags = getenv("LDFLAGS")
+  let inc_flags = ""
+  let lib_flags = ""
+  for f in cli.cc_flags
+    if substr(f, 0, 2) == "-I"
+      inc_flags = inc_flags + " " + shell_quote(f)
+    else
+      lib_flags = lib_flags + " " + shell_quote(f)
+    end
+  end
+  if env_ldflags != nil and env_ldflags != ""
+    lib_flags = " " + env_ldflags + lib_flags
+  end
+  # OpenSSL only for programs that reference gem_tls_connect_fn (runtime/tls_config.sh writes build/tls_libs)
+  let tls_libs_file = path_join(install_root, "build/tls_libs")
+  if find(c_code, "gem_tls_connect_fn") >= 0 and file_exists(tls_libs_file)
+    let tls_libs = string.trim(read_file(tls_libs_file))
+    if tls_libs != ""
+      lib_flags = lib_flags + " " + tls_libs
+    end
+  end
+  if env_cflags != nil and env_cflags != ""
+    c_flags = c_flags + " " + env_cflags
+  end
+  let have_runtime_lib = file_exists(runtime_lib)
+
+  # on a cc failure: exit with its status and leave the C file for reading
+  let build = fn(out, run_dir)
+    write_file(tmp_c, c_code)
+    let q_out = shell_quote(out)
+    let q_c = shell_quote(tmp_c)
+    let cc_cmd = if have_runtime_lib
+      cc + " -o " + q_out + " " + q_c + inc_flags + " -I " + q_rt + c_flags + " " + shell_quote(runtime_lib) + lib_flags + " -lm"
+    else
+      cc + " -o " + q_out + " " + q_c + " " + q_rt + "/gem_*.c " + q_rt + "/sqlite3.c" + inc_flags + " -I " + q_rt + c_flags + lib_flags + " -lm"
+    end
+    let cc_ret = exec(cc_cmd)
+    if cc_ret != 0
+      if run_dir != nil
+        if file_exists(out)
+          remove_file(out)
+        end
+        gem_rmdir(run_dir)
+      end
+      # not error(): cc already printed its diagnostics, a trace is just noise
+      eprint("gem: compilation failed (cc exited with " + to_string(cc_ret) + "); the C is in " + tmp_c + "\n")
+      exit(cc_ret)
+    end
+    remove_file(tmp_c)
+  end
+
+  if not cli.run
+    build(out_name, nil)
+    gem_rmdir(work_dir)
+    exit(0)
+  end
+
+  # A cached binary replaces this process (execve), so status and signals are the program's own; otherwise
+  # it runs as a child and we pass its status on. Either way it inherits our fds (`<(cmd)` paths work).
+  let run_args = build_string do |add|
+    for a in cli.run_args
+      add(a, chr(0))
+    end
+  end
+
+  # if another run empties the cache under us, rebuild; after two misses run outside the cache
+  let runtime_hash = if have_runtime_lib then gem_file_hash(runtime_lib) else "" end
+  let slot = cache_slot(c_code, tmp_c, [cc, inc_flags, c_flags, lib_flags, runtime_lib, runtime_hash, runtime_file_hashes(runtime_dir, not have_runtime_lib)], base)
+  let vanished = 0
+  while slot != nil
+    if file_exists(slot.bin)
+      gem_rmdir(work_dir)
+      gem_run_program(slot.bin, run_args, 1)
+      if file_exists(slot.bin)
+        eprint("gem: cannot run " + slot.bin)
+        exit(1)
+      end
+      # entry gone: new work dir, and fix the path the C names itself by
+      vanished += 1
+      work_dir = gem_temp_dir()
+      if work_dir == nil
+        eprint("gem: cannot create a work directory under $TMPDIR (or /tmp)\n")
+        exit(1)
+      end
+      let new_c = work_dir + "/" + base + ".c"
+      c_code = str_replace(c_code, tmp_c, new_c)
+      tmp_c = new_c
+      out_name = work_dir + "/" + base
+      if vanished >= 2
+        break
+      end
+    end
+    let run_dir = gem_temp_dir_in(slot.staging)
+    if run_dir == nil
+      break
+    end
+    let run_bin = path_join(run_dir, base)
+    build(run_bin, run_dir)
+    # another run may have linked the same key meanwhile
+    gem_mkdirs(dirname(slot.bin))
+    if gem_link(run_bin, slot.bin) == 1 or file_exists(slot.bin)
+      remove_file(run_bin)
+      gem_rmdir(run_dir)
+    else
+      let run_ret = gem_run_program(run_bin, run_args, 0)
+      remove_file(run_bin)
+      gem_rmdir(run_dir)
+      gem_rmdir(work_dir)
+      if run_ret < 0
+        eprint("gem: cannot run " + run_bin)
+        run_ret = 1
+      end
+      exit(run_ret)
+    end
+  end
+
+  build(out_name, nil)
+  let run_ret = gem_run_program(out_name, run_args, 0)
+  remove_file(out_name)
+  gem_rmdir(work_dir)
+  if run_ret < 0
+    eprint("gem: cannot run " + out_name)
+    run_ret = 1
+  end
+  exit(run_ret)
+end

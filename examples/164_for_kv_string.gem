@@ -1,0 +1,71 @@
+# `for i, ch in s` walks bytes: i the 0-based index, ch the one-byte string, same as `s[i]`
+
+for i, ch in "abc"
+  print("{i} {ch}")
+end
+
+let n = 0
+for i, ch in ""
+  n = n + 1
+end
+print("empty: {n}")
+
+# bytes, not characters
+let s = "a\0é"
+let parts = []
+for i, ch in s
+  push(parts, "{i}:{len(ch)}:{ord(ch)}")
+end
+print(parts)
+
+let word = "gem!"
+let same = true
+let j = 0
+for ch in word
+  if ch != word[j]
+    same = false
+  end
+  j = j + 1
+end
+for i, ch in word
+  if ch != word[i] or type(i) != "int"
+    same = false
+  end
+end
+print("consistent: {same}")
+
+let text = "hello"
+for i, ch in text
+  text = "xx"
+  if ch == "e"
+    continue
+  end
+  if i == 3
+    break
+  end
+  print("{i}={ch}")
+end
+
+for k, w in {first: "ab", second: "c"}
+  for i, ch in w
+    print("{k}[{i}] = {ch}")
+  end
+end
+
+fn count_bytes(str)
+  let len = 99
+  let c = 0
+  for i, ch in str
+    c = c + 1
+  end
+  c
+end
+print("count: {count_bytes("four")}")
+
+# anything else raises at the `for`, in both forms
+for v in [5, nil, 1.5, true, buf_new()]
+  let r1 = pcall(fn() for x in v print(x) end end)
+  let r2 = pcall(fn() for k, x in v print(k) end end)
+  print(r1.error)
+  print(r2.error)
+end

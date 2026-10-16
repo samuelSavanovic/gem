@@ -1,0 +1,90 @@
+## A job queue with a supervised worker pool: the public API. One system runs at a time: the queue
+## and worker supervisor are registered under fixed names.
+
+load "std/gen_server"
+load "std/supervisor"
+load "std/dynamic_supervisor"
+load "./queue"
+load "./worker"
+
+let QUEUE = "jobqueue"
+let WORKERS = "jobqueue_workers"
+
+## Options: `pool` (most workers at once, 8), `backoff_ms` (first retry's delay, 10, doubled after),
+## `backoff_max_ms` (1000), `idle_ms` (an idle worker exits after this, 200), `max_restarts` /
+## `restart_window_ms` (worker supervisor intensity, 1000 per 1000 ms), and the fault schedule:
+## `seed`, `crash`, `hang`, `slow`, `kill` (probabilities per attempt) and `slow_ms`.
+fn start(opts = {})
+  let {
+    pool = 8, backoff_ms = 10, backoff_max_ms = 1000, idle_ms = 200,
+    max_restarts = 1000, restart_window_ms = 1000,
+    seed = 1, crash = 0.0, hang = 0.0, slow = 0.0, kill = 0.0, slow_ms = 20
+  } = opts
+  let worker_config = {
+    queue: QUEUE, idle_ms: idle_ms, slow_ms: slow_ms,
+    seed: seed, crash: crash, hang: hang, slow: slow, kill: kill
+  }
+  let queue_opts = {
+    name: QUEUE, workers_name: WORKERS, worker_config: worker_config,
+    pool: pool, backoff_ms: backoff_ms, backoff_max_ms: backoff_max_ms
+  }
+  # the worker supervisor comes first: the queue's init looks it up
+  supervisor.start({
+    strategy: "one_for_one",
+    name: "jobqueue_sup",
+    max_restarts: 20,
+    max_seconds: 10000,
+    children: [
+      {id: "workers", start: fn()
+        dynamic_supervisor.start({
+          name: WORKERS,
+          child: {start: worker.start, restart: "transient", shutdown: 100},
+          max_restarts: max_restarts,
+          max_seconds: restart_window_ms
+        })
+      end},
+      {id: "queue", start: fn() queue.start(queue_opts) end}
+    ]
+  })
+end
+
+fn stop(sys)
+  supervisor.stop(sys)
+end
+
+## `job` is `{id, kind, payload, max_retries, deadline_ms}` with a unique int `id` (`deadline_ms` nil for
+## none). Returns `{ok: true}` or `{ok: false, error}`. `notify` (default the caller) gets
+## `{tag: "job_done", id, status, attempts, result, submitted_at, finished_at}` once the job completes
+## (`status` "completed") or is dead-lettered ("dead").
+fn submit(job, notify = self())
+  gen_server.call(QUEUE, {tag: "submit", job: job, notify: notify})
+end
+
+## `{id, status, attempts, result, error, submitted_at, finished_at}`, or nil for an unknown id.
+## `status` is "queued", "running", "retrying", "completed" or "dead"; `attempts` holds each
+## attempt's outcome, "ok" or why it failed.
+fn status(id)
+  gen_server.call(QUEUE, {tag: "status", id: id})
+end
+
+## Counters: submitted, completed, dead, attempts, retries, late_results, worker_starts, sup_restarts,
+## and pending, busy, idle and slots (workers the supervisor holds) right now.
+fn stats()
+  gen_server.call(QUEUE, {tag: "stats"})
+end
+
+## Oldest first.
+fn dead_letters()
+  gen_server.call(QUEUE, {tag: "dead_letters"})
+end
+
+fn report()
+  gen_server.call(QUEUE, {tag: "report"}, 60000)
+end
+
+## The worker supervisor's pid is nil while it restarts.
+fn pids()
+  {queue: whereis(QUEUE), workers: whereis(WORKERS)}
+end
+
+export start, stop, submit, status, stats, dead_letters, report, pids

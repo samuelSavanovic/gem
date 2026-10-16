@@ -1,0 +1,83 @@
+let r1 = pcall 10 / 0
+print(r1.ok)
+print(r1.error)
+
+let r2 = pcall 10 % 0
+print(r2.ok)
+print(r2.error)
+
+let r3 = pcall 10.0 / 0.0
+print(r3.ok)
+print(r3.error)
+
+let r4 = pcall "a" + 1
+print(r4.ok)
+
+let r5 = pcall "a" - "b"
+print(r5.ok)
+
+let r6 = pcall "a" * 2
+print(r6.ok)
+
+print(1 + 2.0)
+print(2.0 + 1)
+print(10 - 2.5)
+print(2.5 - 1)
+print(3 * 2.0)
+print(2.0 * 3)
+print(7 / 2)                 # integer division
+print(7.0 / 2)
+
+print(-0)
+print(-0.0)
+
+let r7 = pcall "abc"[5]
+print(r7.ok)
+
+let r8 = pcall "abc"[-1]
+print(r8.ok)                 # negative indexes are allowed
+print(r8.value)
+
+let t = {a: 1}
+print(t.b)
+print(t[99])
+
+let mixed = {}
+mixed[0] = "int_zero"
+mixed["0"] = "str_zero"
+print(mixed[0])
+print(mixed["0"])
+
+let arr = []
+push(arr, "x")
+push(arr, "y")
+print(len(arr))
+print(arr[0])
+print(arr[1])
+
+print(len(""))
+print(len([]))
+
+let ht = {name: "gem"}
+print(has_key(ht, "name"))
+print(has_key(ht, "nope"))
+
+let at = [10, 20, 30]
+print(has_key(at, 0))
+print(has_key(at, 5))
+
+let r9 = pcall 42
+print(r9.ok)
+print(r9.value)
+
+let r10 = pcall(fn()
+  let inner = pcall error("inner")
+  inner.error
+end)
+print(r10.ok)
+print(r10.value)
+
+print(substr("hello", 0, 0))
+print(substr("hello", 5))
+print(str_replace("aaa", "a", "bb"))
+print(str_replace("abc", "", "x"))    # an empty pattern returns the original

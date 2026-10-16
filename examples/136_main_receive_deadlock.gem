@@ -1,0 +1,75 @@
+# when main waits in a receive (no `after`) that nothing can ever satisfy, the runtime reports a
+# deadlock and exits non-zero. Anything that could still wake a process keeps the program running.
+
+let main = self()
+
+spawn(fn()
+  sleep(20)
+  send(main, "from sleeper")
+end)
+receive
+  when x
+    print(x)
+end
+
+send_after(main, "from timer", 10)
+receive
+  when x
+    print(x)
+end
+
+receive
+  when x
+    print("unexpected {x}")
+  after 10
+    print("receive timed out")
+end
+
+spawn(fn()
+  receive
+    when x
+      print("unexpected {x}")
+    after 10
+      send(main, "child timed out")
+  end
+end)
+receive
+  when x
+    print(x)
+end
+
+spawn(fn()
+  let r = exec("true")
+  send(main, "exec finished")
+end)
+receive
+  when x
+    print(x)
+end
+
+let c = spawn(fn()
+  sleep(5)
+  error("crashed")
+end)
+monitor(c)
+receive
+  when {tag: "DOWN", reason: r}
+    print("got DOWN")
+end
+
+cancel_timer(send_after(main, "never", 10))
+
+# the child exits without sending and main waits for something that never comes: deadlock
+spawn(fn()
+  print("child exits without sending")
+end)
+send(main, "unmatched")
+
+fn wait_for_reply()
+  receive
+    when ["reply", v]
+      print(v)
+  end
+end
+wait_for_reply()
+print("not reached")

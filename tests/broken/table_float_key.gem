@@ -1,0 +1,8 @@
+# A float key in a table literal or pattern is reported, not turned into
+# a string key.
+# expect: a float can't be a table key in a literal or pattern
+let t = {1.5: "e"}
+match t
+when {2.5: v} then print(v)
+end
+let u = {-1.5: 2}

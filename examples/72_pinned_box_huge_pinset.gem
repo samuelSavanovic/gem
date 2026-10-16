@@ -1,0 +1,34 @@
+# lots of pinned boxes between resets: 2000 make_pinned calls per message
+
+fn make_pinned()
+  let n = 0
+  let inc = fn() n = n + 1 end
+  inc()
+  n
+end
+
+let main_pid = self()
+
+let w = spawn(fn()
+  let total = 0
+  while true
+    let msg = receive()
+    if msg == "done"
+      send(main_pid, {tag: "result", total: total})
+      return
+    end
+    let i = 0
+    while i < 2000
+      total = total + make_pinned()
+      i = i + 1
+    end
+  end
+end)
+
+let n = 200
+for i = 0, n
+  send(w, 1)
+end
+send(w, "done")
+let r = receive()
+print("total: " + to_string(r.total))

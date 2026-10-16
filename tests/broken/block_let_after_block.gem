@@ -1,0 +1,66 @@
+# A `let` is visible to the end of its block only. Each use below comes
+# after the block that declared the name ended: one error per use, with a
+# hint naming the declaration line.
+
+fn after_if(c)
+  if c then let x = 2 end
+  print(x)                                  # 1
+end
+
+fn every_branch(c)
+  if c then let y = 2 else let y = 3 end
+  print(y)                                  # 2
+end
+
+fn loop_body()
+  let i = 0
+  while i < 3
+    let w = i
+    i += 1
+  end
+  for k in [1, 2]
+    let fk = k
+  end
+  print(w, fk, k)                           # 3, 4, 5
+end
+
+fn arms(v)
+  match v
+  when {a}
+    let ma = a
+  else
+    let ma = 0
+  end
+  print(ma, a)                              # 6, 7
+end
+
+fn assigns(c)
+  if c then let z = 1 end
+  z = 5                                     # 8
+  z += 1                                    # 9 (one error, not two)
+end
+
+fn later_iteration()
+  let i = 0
+  while i < 3
+    if i == 0 then let x = 5 end
+    if i == 2 then print(x) end             # 10
+    i = i + 1
+  end
+end
+
+fn cond_reads_body_let()
+  let n = 0
+  while n < 1 or not stop                   # 11
+    let stop = n > 2
+    n += 1
+  end
+end
+
+after_if(true)
+every_branch(true)
+loop_body()
+arms({a: 1})
+assigns(true)
+later_iteration()
+cond_reads_body_let()

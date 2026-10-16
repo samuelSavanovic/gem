@@ -1,0 +1,110 @@
+load "std/json"
+
+fn err(f)
+  let r = pcall f()
+  if r.ok
+    return "ok"
+  end
+  r.error
+end
+
+print("-- for with one variable needs an array or a string")
+print(err(fn() for x in {a: 1, b: 2} print(x) end end))
+let sparse = {}
+sparse[5] = "x"
+print(err(fn() for x in sparse print(x) end end))
+let tagged = [1, 2]
+tagged.name = "t"
+print(err(fn() for x in tagged print(x) end end))
+let reversed = {}
+reversed[2] = "c"
+reversed[1] = "b"
+reversed[0] = "a"
+for x in reversed
+  print(x)
+end
+for x in {}
+  print("never")
+end
+
+print("-- sort comparators return numbers")
+print(err(fn() sort([3, 1, 2], fn(a, b) a < b end) end))
+print(err(fn() sort([3, 1], fn(a, b) nil end) end))
+print(sort([3, 1, 2], fn(a, b) a - b end))
+
+print("-- error with a non-string value")
+print(err(fn() error({code: 1}) end))
+print(err(fn() error(42) end))
+print(err(fn() error() end))
+
+print("-- tcp_listen resolves host names")
+let s = tcp_listen("localhost", 0)
+print(type(s))
+tcp_close(s)
+
+print('-- json: {} stays an object')
+print(json.encode({}), json.encode([]), json.encode(json.parse('{}')), json.encode({a: {}, b: []}))
+let emptied = {k: 1}
+delete(emptied, "k")
+print(json.encode(emptied), json.encode(keys(emptied)))
+
+print("-- int, float and ref keys are indexed")
+let t = {}
+let n = 20000
+let i = n - 1
+while i >= 0
+  t[i * 7] = i
+  i -= 1
+end
+let bad = 0
+for j = 0, n
+  if t[j * 7] != j or has_key(t, j * 7 + 1)
+    bad += 1
+  end
+end
+for j = 0, n / 2
+  delete(t, j * 14)
+end
+for j = 0, n
+  let want = nil
+  if j % 2 == 1
+    want = j
+  end
+  if t[j * 7] != want
+    bad += 1
+  end
+end
+let f = {}
+for j = 0, 50
+  f[j + 0.5] = j
+end
+f[0.0] = "zero"
+let r = make_ref()
+f[r] = "ref"
+print(len(t), bad, f[-0.0], f[10.5], f[r], has_key(f, 10))
+
+print("-- a captured let assigned inside an if in a loop, after another loop")
+fn each(xs, g)
+  for x in xs
+    g(x)
+  end
+end
+fn flagged(items)
+  for k in [1]
+    nil
+  end
+  let out = []
+  for it in items
+    if it > 0
+      let seen = false
+      each([1, 2], fn(v)
+        if v == it
+          seen = true
+        end
+      end)
+      push(out, seen)
+    end
+  end
+  out
+end
+print(flagged([1, 3]))

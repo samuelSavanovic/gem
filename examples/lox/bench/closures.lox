@@ -1,0 +1,64 @@
+// Closures: counters, adders, composition, and a list made of closures.
+//   lox closures.lox [n]     (default 100000)
+
+var n = arg(0) or 100000;
+
+fun makeCounter() {
+  var count = 0;
+  fun next() {
+    count = count + 1;
+    return count;
+  }
+  return next;
+}
+
+fun makeAdder(k) {
+  fun add(x) { return x + k; }
+  return add;
+}
+
+fun compose(f, g) {
+  fun both(x) { return f(g(x)); }
+  return both;
+}
+
+// A cons cell is a closure that answers "head" or "tail".
+fun cons(head, tail) {
+  fun cell(which) {
+    if (which == "head") return head;
+    return tail;
+  }
+  return cell;
+}
+
+fun sumList(list) {
+  var total = 0;
+  while (list != nil) {
+    total = total + list("head");
+    list = list("tail");
+  }
+  return total;
+}
+
+fun mapList(list, f) {
+  if (list == nil) return nil;
+  return cons(f(list("head")), mapList(list("tail"), f));
+}
+
+var counter = makeCounter();
+var total = 0;
+for (var i = 0; i < n; i = i + 1) {
+  var addBoth = compose(makeAdder(i), makeAdder(counter()));
+  total = total + addBoth(1);
+}
+print "adders: " + str(total);
+print "counter: " + str(counter());
+
+var rounds = n / 100;
+var sum = 0;
+for (var r = 0; r < rounds; r = r + 1) {
+  var list = nil;
+  for (var i = 0; i < 100; i = i + 1) list = cons(i, list);
+  sum = sum + sumList(mapList(list, makeAdder(r)));
+}
+print "lists: " + str(sum);

@@ -1,0 +1,197 @@
+# AST node constructors. Nodes have a `tag`, except make_table_entry, make_pat_table_entry, make_extern_param.
+
+fn make_program(stmts)
+  {tag: "program", stmts: stmts}
+end
+
+fn make_int(value)
+  {tag: "int", value: value}
+end
+
+fn make_float(value)
+  {tag: "float", value: value}
+end
+
+fn make_string(value)
+  {tag: "string", value: value}
+end
+
+fn make_bool(value)
+  {tag: "bool", value: value}
+end
+
+fn make_nil_node()
+  {tag: "nil"}
+end
+
+fn make_var(name, line = nil, col = nil)
+  {tag: "var", name: name, line: line, col: col}
+end
+
+fn make_binop(op, left, right, line = nil)
+  {tag: "binop", op: op, left: left, right: right, line: line}
+end
+
+fn make_unop(op, expr, line = nil)
+  {tag: "unop", op: op, expr: expr, line: line}
+end
+
+fn make_call(func, args, line)
+  {tag: "call", func: func, args: args, line: line}
+end
+
+fn make_dot(object, field, line = nil)
+  {tag: "dot", object: object, field: field, line: line}
+end
+
+fn make_index(object, key, line = nil)
+  {tag: "index", object: object, key: key, line: line}
+end
+
+fn make_anon_fn(params, rest_param, body, defaults, line = nil)
+  {tag: "anon_fn", params: params, rest_param: rest_param, defaults: defaults, body: body, line: line}
+end
+
+fn make_table(entries)
+  {tag: "table", entries: entries}
+end
+
+fn make_table_entry(key, value)
+  {key: key, value: value}
+end
+
+fn make_array(elements)
+  {tag: "array", elements: elements}
+end
+
+fn make_interp(parts)
+  {tag: "interp", parts: parts}
+end
+
+fn make_let(name, value, line)
+  {tag: "let", name: name, value: value, line: line}
+end
+
+fn make_assign(name, value, line)
+  {tag: "assign", name: name, value: value, line: line}
+end
+
+fn make_dot_assign(object, field, value, line)
+  {tag: "dot_assign", object: object, field: field, value: value, line: line}
+end
+
+fn make_index_assign(object, key, value, line)
+  {tag: "index_assign", object: object, key: key, value: value, line: line}
+end
+
+fn make_fn_def(name, params, rest_param, body, line, defaults)
+  {tag: "fn_def", name: name, params: params, rest_param: rest_param, defaults: defaults, body: body, line: line}
+end
+
+fn make_if(cond, then_body, else_body, line)
+  {tag: "if", cond: cond, then: then_body, else: else_body, line: line}
+end
+
+fn make_while(cond, body, line)
+  {tag: "while", cond: cond, body: body, line: line}
+end
+
+fn make_match(target, whens, else_body, line, target_var)
+  {tag: "match", target: target, whens: whens, else: else_body, line: line, target_var: target_var}
+end
+
+fn make_when(value, body, bindings)
+  {tag: "when_clause", value: value, body: body, bindings: bindings}
+end
+
+# pre-lower forms: lower.gem desugars these before fold and codegen
+
+# `for x in items` has val_name nil, `for k, v in tbl` has val_name "v"
+fn make_for_in(var_name, val_name, items_expr, body, line)
+  {tag: "for_in", var_name: var_name, val_name: val_name, items: items_expr, body: body, line: line}
+end
+
+# `for i = start, end_` (end_ exclusive)
+fn make_for_range(var_name, start_expr, end_expr, body, line)
+  {tag: "for_range", var_name: var_name, start: start_expr, end_: end_expr, body: body, line: line}
+end
+
+# a pattern arm (`when {a, b}`, `when ^v`) or an expr arm (`when 42`, compared with ==); one of the two is set
+fn make_match_arm(pattern, expr, body)
+  {tag: "match_arm", pattern: pattern, expr: expr, body: body}
+end
+
+fn make_pat_table(entries)
+  {tag: "pat_table", entries: entries}
+end
+
+# value nil is the shorthand `{name}`
+fn make_pat_table_entry(key, value)
+  {key: key, value: value}
+end
+
+fn make_pat_array(elements)
+  {tag: "pat_array", elements: elements}
+end
+
+fn make_pat_literal(literal)
+  {tag: "pat_literal", literal: literal}
+end
+
+fn make_pat_name(name)
+  {tag: "pat_name", name: name}
+end
+
+# `^name`: equal to name's current value
+fn make_pat_pin(name, line = nil, col = nil)
+  {tag: "pat_pin", var: make_var(name, line, col)}
+end
+
+# a pattern that failed to parse; never matches
+fn make_pat_error()
+  {tag: "pat_error"}
+end
+
+fn make_receive_match(arms, after_ms, after_body, line, recv_var)
+  {tag: "receive_match", arms: arms, after_ms: after_ms, after_body: after_body, line: line, recv_var: recv_var}
+end
+
+fn make_return(value, line)
+  {tag: "return", value: value, line: line}
+end
+
+fn make_break()
+  {tag: "break"}
+end
+
+fn make_continue()
+  {tag: "continue"}
+end
+
+fn make_export(names)
+  {tag: "export", names: names}
+end
+
+fn make_extern_fn(name, params, ret_type, is_blocking, line = nil, col = nil)
+  {tag: "extern_fn", name: name, params: params, ret_type: ret_type, blocking: is_blocking, line: line, col: col}
+end
+
+fn make_extern_param(name, type_name)
+  {name: name, type: type_name}
+end
+
+fn make_extern_include(path)
+  {tag: "extern_include", path: path}
+end
+
+# stand-ins for code that failed to parse; codegen never runs once the sink has errors, other passes skip them
+
+fn make_error_expr(line, col)
+  {tag: "error_expr", line: line, col: col}
+end
+
+fn make_error_stmt(line, col)
+  {tag: "error_stmt", line: line, col: col}
+end
+
+export make_program, make_int, make_float, make_string, make_bool, make_nil_node, make_var, make_binop, make_unop, make_call, make_dot, make_index, make_anon_fn, make_table, make_table_entry, make_array, make_interp, make_let, make_assign, make_dot_assign, make_index_assign, make_fn_def, make_if, make_while, make_match, make_when, make_for_in, make_for_range, make_match_arm, make_pat_table, make_pat_table_entry, make_pat_array, make_pat_literal, make_pat_name, make_pat_pin, make_pat_error, make_receive_match, make_return, make_break, make_continue, make_export, make_extern_fn, make_extern_param, make_extern_include, make_error_expr, make_error_stmt

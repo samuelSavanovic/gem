@@ -1,0 +1,57 @@
+# a pid names one process for good: once it exits, the pid never reaches a process reusing its slot.
+# Slots are found by pid modulo the 262,144-slot table and reused once 1,024 have been handed out.
+
+let old = spawn(fn() 1 end)
+sleep(5)
+let fresh = []
+let reused = nil
+for i = 0, 2000
+  let p = spawn(fn() receive() end)
+  push(fresh, p)
+  if p % 262144 == old % 262144
+    reused = p
+    break
+  end
+end
+print("slot reused, new pid differs: {reused != nil and reused != old}")
+print("stale process_info: {process_info(old)}")
+print("stale kill: {kill(old, "x")}")
+print("bystander alive: {process_info(reused) != nil}")
+send(old, "dropped")
+print("bystander mailbox: {process_info(reused).mailbox_len}")
+monitor(old)
+receive
+when {tag: "DOWN", pid: p, reason: r}
+  print("stale monitor: DOWN {r} for the stale pid: {p == old}")
+end
+for p in fresh
+  kill(p, "cleanup")
+end
+
+# a dead watcher's monitor must not deliver DOWN to the slot's next occupant
+let target = spawn(fn() receive() end)
+let watcher = spawn(fn() monitor(target) end)
+sleep(5)
+let parent = self()
+let heir = nil
+let spares = []
+for i = 0, 2000
+  let p = spawn(fn()
+    receive
+    when {tag: "DOWN"}
+      send(parent, "heir got a DOWN it never asked for")
+    after 50
+      send(parent, "heir got no DOWN")
+    end
+  end)
+  if p % 262144 == watcher % 262144
+    heir = p
+    break
+  end
+  push(spares, p)
+end
+for p in spares
+  kill(p, "cleanup")
+end
+kill(target, "bye")
+print(receive())

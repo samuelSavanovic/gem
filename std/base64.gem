@@ -1,0 +1,30 @@
+## base64: encode bytes as base64 text and back (RFC 4648).
+
+extern fn gem_base64_encode(s: Bytes, url: Int) -> Table
+extern fn gem_base64_decode(s: Bytes) -> Table
+
+fn check(fname, s)
+  if type(s) != "string"
+    error("base64.{fname}: s must be a string, got {type(s)}")
+  end
+end
+
+## Standard base64 (`+` and `/`, padded).
+fn encode(s)
+  check("encode", s)
+  gem_base64_encode(s, 0)
+end
+
+## URL-safe base64 (`-` and `_`, no padding), as JWTs use.
+fn encode_url(s)
+  check("encode_url", s)
+  gem_base64_encode(s, 1)
+end
+
+## Decodes `s` (either alphabet, padding optional, whitespace skipped), or nil if it isn't base64.
+fn decode(s)
+  check("decode", s)
+  gem_base64_decode(s)
+end
+
+export encode, encode_url, decode

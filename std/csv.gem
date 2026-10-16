@@ -1,0 +1,200 @@
+## csv: read and write RFC 4180 CSV. Fields come back as strings, never converted.
+## Malformed input raises `csv.parse: line <n>: <what>`.
+
+fn check_sep(fname, sep)
+  if type(sep) != "string" or len(sep) != 1 or sep == "\"" or sep == "\n" or sep == "\r"
+    error("csv.{fname}: sep must be one byte other than a quote or a line break, got {sep}")
+  end
+end
+
+## Parses `text` into rows of field strings, or with `header` into records keyed by the first row (`sep`: one byte).
+fn parse(text, {sep = ",", header = false} = {})
+  if type(text) != "string"
+    error("csv.parse: text must be a string, got {type(text)}")
+  end
+  check_sep("parse", sep)
+  let s = ord(sep, 0)
+  let rows = []
+  let row = []
+  # the line each row starts on, for the header check's errors
+  let starts = []
+  let n = len(text)
+  let i = 0
+  let line = 1
+  let field_start = 0
+  let row_line = 1
+  while i <= n
+    if i == n
+      if not (len(row) == 0 and field_start == n)
+        push(row, substr(text, field_start, n - field_start))
+        push(rows, row)
+        push(starts, row_line)
+      end
+      break
+    end
+    let c = ord(text, i)
+    if c == 34 and i == field_start
+      let out = buf_new()
+      let j = i + 1
+      let start_line = line
+      let closed = false
+      while j < n
+        let q = find(text, "\"", j)
+        if q < 0
+          break
+        end
+        let piece = substr(text, j, q - j)
+        line += count_newlines(piece)
+        buf_push(out, piece)
+        if q + 1 < n and ord(text, q + 1) == 34
+          buf_push(out, "\"")
+          j = q + 2
+        else
+          j = q + 1
+          closed = true
+          break
+        end
+      end
+      if not closed
+        error("csv.parse: line {start_line}: a quoted field is never closed")
+      end
+      push(row, to_string(out))
+      if j == n
+        push(rows, row)
+        push(starts, row_line)
+        row = []
+        field_start = n
+        break
+      end
+      let d = ord(text, j)
+      if d == s
+        i = j + 1
+        field_start = i
+      elif d == 10
+        push(rows, row)
+        push(starts, row_line)
+        row = []
+        line += 1
+        row_line = line
+        i = j + 1
+        field_start = i
+      elif d == 13 and j + 1 < n and ord(text, j + 1) == 10
+        push(rows, row)
+        push(starts, row_line)
+        row = []
+        line += 1
+        row_line = line
+        i = j + 2
+        field_start = i
+      else
+        error("csv.parse: line {line}: text after a closing quote")
+      end
+      continue
+    end
+    if c == s
+      push(row, substr(text, field_start, i - field_start))
+      i += 1
+      field_start = i
+    elif c == 10
+      let stop = if i > field_start and ord(text, i - 1) == 13 then i - 1 else i end
+      push(row, substr(text, field_start, stop - field_start))
+      push(rows, row)
+      push(starts, row_line)
+      row = []
+      line += 1
+      row_line = line
+      i += 1
+      field_start = i
+    elif c == 34
+      error("csv.parse: line {line}: a quote inside an unquoted field")
+    else
+      i += 1
+    end
+  end
+  if not header
+    return rows
+  end
+  records(rows, starts)
+end
+
+fn count_newlines(s)
+  let k = 0
+  let p = find(s, "\n")
+  while p >= 0
+    k += 1
+    p = find(s, "\n", p + 1)
+  end
+  k
+end
+
+fn records(rows, starts)
+  let out = []
+  if len(rows) == 0
+    return out
+  end
+  let names = rows[0]
+  for r = 1, len(rows)
+    let row = rows[r]
+    if len(row) == 1 and row[0] == ""
+      continue
+    end
+    if len(row) > len(names)
+      error("csv.parse: line {starts[r]}: {len(row)} fields, but the header has {len(names)}")
+    end
+    let rec = {}
+    for k = 0, len(row)
+      rec[names[k]] = row[k]
+    end
+    push(out, rec)
+  end
+  out
+end
+
+fn field(v, sep)
+  let t = if v == nil then "" elif type(v) == "string" then v else to_string(v) end
+  let n = len(t)
+  if n == 0
+    return t
+  end
+  let quote = find(t, sep) >= 0 or find(t, "\"") >= 0 or find(t, "\n") >= 0 or find(t, "\r") >= 0 or ord(t, 0) == 32 or ord(t, n - 1) == 32
+  if quote
+    return "\"" + str_replace(t, "\"", "\"\"") + "\""
+  end
+  t
+end
+
+## One CSV line for the array `row`, no line break. nil is an empty field.
+fn encode_row(row, {sep = ","} = {})
+  check_sep("encode_row", sep)
+  build_string do |add|
+    for i = 0, len(row)
+      if i > 0
+        add(sep)
+      end
+      add(field(row[i], sep))
+    end
+  end
+end
+
+## CSV text for `rows`, one `\n`-ended line each. With `columns`, rows are records written under a header line.
+fn encode(rows, {sep = ",", columns = nil} = {})
+  check_sep("encode", sep)
+  build_string do |add|
+    if columns != nil
+      add(encode_row(columns, {sep: sep}), "\n")
+    end
+    for r in rows
+      if columns != nil
+        let line = []
+        for c in columns
+          push(line, r[c])
+        end
+        add(encode_row(line, {sep: sep}), "\n")
+      else
+        add(encode_row(r, {sep: sep}), "\n")
+      end
+    end
+  end
+end
+
+export parse, encode, encode_row

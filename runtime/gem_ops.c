@@ -1,0 +1,121 @@
+
+#include "gem.h"
+
+GemVal gem_add_slow(GemVal a, GemVal b) {
+    /* int + - * and unary - wrap on overflow, done in uint64_t since signed overflow is UB */
+    if (a.type == VAL_INT && b.type == VAL_INT) return gem_int((int64_t)((uint64_t)a.ival + (uint64_t)b.ival));
+    if (a.type == VAL_FLOAT && b.type == VAL_FLOAT) return gem_float(a.fval + b.fval);
+    if (a.type == VAL_INT && b.type == VAL_FLOAT) return gem_float((double)a.ival + b.fval);
+    if (a.type == VAL_FLOAT && b.type == VAL_INT) return gem_float(a.fval + (double)b.ival);
+    if (a.type == VAL_STRING && b.type == VAL_STRING) {
+        size_t la = (size_t)a.slen, lb = (size_t)b.slen;
+        int len = gem_strlen_check(la + lb, "+");
+        char *s = (char *)gem_alloc(la + lb + 1);
+        memcpy(s, a.sval, la);
+        memcpy(s + la, b.sval, lb);
+        s[la + lb] = '\0';
+        GemVal r; r.type = VAL_STRING; r.magic = GEM_MAGIC; r.sval = s; r.slen = len; return r;
+    }
+    { char buf[128]; snprintf(buf, sizeof(buf), "type error in +: got %s and %s", gem_type_str(a), gem_type_str(b)); gem_error(buf); } return GEM_NIL;
+}
+
+GemVal gem_sub_slow(GemVal a, GemVal b) {
+    if (a.type == VAL_INT && b.type == VAL_INT) return gem_int((int64_t)((uint64_t)a.ival - (uint64_t)b.ival));
+    if (a.type == VAL_FLOAT || b.type == VAL_FLOAT) {
+        double fa = a.type == VAL_INT ? (double)a.ival : a.fval;
+        double fb = b.type == VAL_INT ? (double)b.ival : b.fval;
+        return gem_float(fa - fb);
+    }
+    { char buf[128]; snprintf(buf, sizeof(buf), "type error in -: got %s and %s", gem_type_str(a), gem_type_str(b)); gem_error(buf); } return GEM_NIL;
+}
+
+GemVal gem_mul_slow(GemVal a, GemVal b) {
+    if (a.type == VAL_INT && b.type == VAL_INT) return gem_int((int64_t)((uint64_t)a.ival * (uint64_t)b.ival));
+    if (a.type == VAL_FLOAT || b.type == VAL_FLOAT) {
+        double fa = a.type == VAL_INT ? (double)a.ival : a.fval;
+        double fb = b.type == VAL_INT ? (double)b.ival : b.fval;
+        return gem_float(fa * fb);
+    }
+    { char buf[128]; snprintf(buf, sizeof(buf), "type error in *: got %s and %s", gem_type_str(a), gem_type_str(b)); gem_error(buf); } return GEM_NIL;
+}
+
+GemVal gem_div(GemVal a, GemVal b) {
+    if (a.type == VAL_INT && b.type == VAL_INT) {
+        if (b.ival == 0) gem_error("division by zero");
+        /* INT64_MIN / -1 traps on x86-64; wrap like + - * */
+        if (b.ival == -1) return gem_int((int64_t)(0 - (uint64_t)a.ival));
+        return gem_int(a.ival / b.ival);
+    }
+    if (a.type == VAL_FLOAT || b.type == VAL_FLOAT) {
+        double fb = b.type == VAL_INT ? (double)b.ival : b.fval;
+        if (fb == 0.0) gem_error("division by zero");
+        double fa = a.type == VAL_INT ? (double)a.ival : a.fval;
+        return gem_float(fa / fb);
+    }
+    { char buf[128]; snprintf(buf, sizeof(buf), "type error in /: got %s and %s", gem_type_str(a), gem_type_str(b)); gem_error(buf); } return GEM_NIL;
+}
+
+GemVal gem_mod(GemVal a, GemVal b) {
+    if (a.type == VAL_INT && b.type == VAL_INT) {
+        if (b.ival == 0) gem_error("division by zero");
+        if (b.ival == -1) return gem_int(0);   /* INT64_MIN % -1 traps on x86-64 */
+        return gem_int(a.ival % b.ival);
+    }
+    { char buf[128]; snprintf(buf, sizeof(buf), "type error in %%: got %s and %s", gem_type_str(a), gem_type_str(b)); gem_error(buf); } return GEM_NIL;
+}
+
+GemVal gem_lt_slow(GemVal a, GemVal b) {
+    if (a.type == VAL_INT && b.type == VAL_INT) return gem_bool(a.ival < b.ival);
+    if (a.type == VAL_FLOAT || b.type == VAL_FLOAT) {
+        double fa = a.type == VAL_INT ? (double)a.ival : a.fval;
+        double fb = b.type == VAL_INT ? (double)b.ival : b.fval;
+        return gem_bool(fa < fb);
+    }
+    if (a.type == VAL_STRING && b.type == VAL_STRING) {
+        size_t la = (size_t)a.slen, lb = (size_t)b.slen;
+        size_t n = la < lb ? la : lb;
+        int cmp = memcmp(a.sval, b.sval, n);
+        if (cmp != 0) return gem_bool(cmp < 0);
+        return gem_bool(la < lb);
+    }
+    { char buf[128]; snprintf(buf, sizeof(buf), "type error in <: got %s and %s", gem_type_str(a), gem_type_str(b)); gem_error(buf); } return GEM_NIL;
+}
+
+GemVal gem_neg(GemVal a) {
+    if (a.type == VAL_INT) return gem_int((int64_t)(0 - (uint64_t)a.ival));
+    if (a.type == VAL_FLOAT) return gem_float(-a.fval);
+    { char buf[128]; snprintf(buf, sizeof(buf), "type error in unary -: got %s", gem_type_str(a)); gem_error(buf); } return GEM_NIL;
+}
+
+void gem_string_append_to(GemVal *accum, GemVal rhs, int *built) {
+    if (!*built) {
+        if (accum->type != VAL_STRING || rhs.type != VAL_STRING) {
+            *accum = gem_add(*accum, rhs);
+            return;
+        }
+        GemBuffer *b = gem_buffer_alloc(64);
+        gem_buffer_reserve(b, (size_t)accum->slen + (size_t)rhs.slen, "+");
+        memcpy(b->data, accum->sval, (size_t)accum->slen);
+        b->len = accum->slen;
+        accum->type = VAL_BUFFER;
+        accum->buffer = b;
+        *built = 1;
+    } else if (rhs.type != VAL_STRING) {
+        char buf[128];
+        snprintf(buf, sizeof(buf), "type error in +: got string and %s", gem_type_str(rhs));
+        gem_error(buf);
+    }
+    GemBuffer *b = accum->buffer;
+    gem_buffer_reserve(b, (size_t)rhs.slen, "+");
+    memcpy(b->data + b->len, rhs.sval, (size_t)rhs.slen);
+    b->len += rhs.slen;
+}
+
+GemVal gem_string_finish(GemVal val) {
+    if (val.type == VAL_BUFFER) {
+        GemVal args[1] = {val};
+        return gem_to_string_fn(NULL, args, 1);
+    }
+    return val;
+}
+

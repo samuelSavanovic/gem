@@ -1,0 +1,5 @@
+# The string is never closed, but its interpolation is: reported as an
+# unterminated string at the opening quote, not at the closed `{`.
+# expect: unterminated string
+let x = 1
+print("a {x} b)

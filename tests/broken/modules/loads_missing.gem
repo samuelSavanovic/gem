@@ -1,0 +1,5 @@
+load "./nope"
+
+fn f() 1 end
+
+export f

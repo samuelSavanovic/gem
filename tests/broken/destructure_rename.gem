@@ -1,0 +1,12 @@
+# Destructuring has no renaming: each `{key: name}` below is one error.
+let {pid: s} = {pid: 5}
+let {
+  a: x,
+  b = 2
+} = {a: 1}
+let {c: y = 3, d: {e}} = {}
+fn f({p: q}, r) r end
+let g = fn({k: [v]} = {}) v end
+
+# expect: destructuring can't rename `pid`: write `let {pid} = ...`
+# expect: destructuring can't rename `k`: write `{k}`

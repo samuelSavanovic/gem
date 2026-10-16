@@ -1,0 +1,178 @@
+## url: percent-encoding, query strings and request targets.
+##
+##   url.encode("a b/é")                     # "a%20b%2F%C3%A9"
+##   url.parse("/search?q=gem&page=2").query # {q: "gem", page: "2"}
+##   url.build_query({q: "a b", page: 2})    # "q=a%20b&page=2"
+##
+## Strings are bytes, so UTF-8 encodes byte by byte. Buffers work too.
+
+load "std/string"
+
+fn text(fname, what, v)
+  let t = type(v)
+  if t == "string"
+    return v
+  end
+  if t == "buffer"
+    return to_string(v)
+  end
+  error("url.{fname}: {what} must be a string, got {t}")
+end
+
+fn is_unreserved(c)
+  (c >= 65 and c <= 90) or (c >= 97 and c <= 122) or (c >= 48 and c <= 57) or c == 45 or c == 95 or c == 46 or c == 126
+end
+
+fn hex_val(c)
+  if c >= 48 and c <= 57
+    return c - 48
+  end
+  if c >= 65 and c <= 70
+    return c - 55
+  end
+  if c >= 97 and c <= 102
+    return c - 87
+  end
+  -1
+end
+
+## Percent-encodes every byte but A-Z a-z 0-9 - _ . ~ (so `/` and space too): safe as one path segment or query part.
+fn encode(s)
+  s = text("encode", "s", s)
+  let slen = len(s)
+  let hex = "0123456789ABCDEF"
+  let run = 0                      # start of the pending unreserved run
+  let out = build_string() do |add|
+    for i = 0, slen
+      let c = ord(s, i)
+      if not is_unreserved(c)
+        if i > run
+          add(substr(s, run, i - run))
+        end
+        add("%", hex[c / 16], hex[c % 16])
+        run = i + 1
+      end
+    end
+    if run > 0 and run < slen
+      add(substr(s, run, slen - run))
+    end
+  end
+  if run == 0
+    return s
+  end
+  out
+end
+
+## Decodes `%XX` and `+` as a space (query/form rules, not for paths). A malformed `%` stays as is.
+fn decode(s)
+  s = text("decode", "s", s)
+  unescape(s)
+end
+
+fn unescape(s)
+  let t = str_replace(s, "+", " ")
+  let tlen = len(t)
+  if len(str_replace(t, "%", "")) == tlen     # no `%`: no copy, all in C
+    return t
+  end
+  build_string() do |add|
+    let start = 0                  # first byte not yet added
+    let at = string.index_of(t, "%")
+    while at >= 0
+      let hi = -1
+      let lo = -1
+      if at + 2 < tlen
+        hi = hex_val(ord(t, at + 1))
+        lo = hex_val(ord(t, at + 2))
+      end
+      if hi >= 0 and lo >= 0
+        add(substr(t, start, at - start), chr(hi * 16 + lo))
+        start = at + 3
+        if start < tlen and ord(t, start) == 37    # adjacent `%XX`: skip the search
+          at = start
+        else
+          at = string.index_of(t, "%", start)
+        end
+      else
+        at = string.index_of(t, "%", at + 1)
+      end
+    end
+    add(substr(t, start, tlen - start))
+  end
+end
+
+# eq: the pair's first `=`, or -1
+fn add_pair(result, s, start, eq, stop)
+  let key_end = stop
+  let v = ""
+  if eq >= 0
+    key_end = eq
+    v = unescape(substr(s, eq + 1, stop - eq - 1))
+  end
+  let k = unescape(substr(s, start, key_end - start))
+  if len(k) > 0
+    result[k] = v
+  end
+end
+
+## Parses a query string (no `?`) into decoded strings. `c` alone gives {c: ""}; a repeated key keeps the last.
+fn parse_query(s)
+  s = text("parse_query", "s", s)
+  let result = {}
+  let slen = len(s)
+  let start = 0
+  let eq = -1
+  for i = 0, slen
+    let c = ord(s, i)
+    if c == 38
+      add_pair(result, s, start, eq, i)
+      start = i + 1
+      eq = -1
+    elif c == 61 and eq < 0
+      eq = i
+    end
+  end
+  add_pair(result, s, start, eq, slen)
+  result
+end
+
+## The query string (no `?`) for `tbl` in insertion order, nil values left out.
+## No multi-value form: a table value goes as its `to_string` text.
+fn build_query(tbl)
+  if type(tbl) != "table"
+    error("url.build_query: tbl must be a table, got {type(tbl)}")
+  end
+  let sep = ""
+  build_string() do |add|
+    for k, v in tbl
+      if v != nil
+        add(sep, encode(to_string(k)), "=", encode(to_string(v)))
+        sep = "&"
+      end
+    end
+  end
+end
+
+## Splits a request target ("/p?q=1#top", not a full URL) into `{path, query_string, query}`; path not decoded.
+fn parse(target)
+  target = text("parse", "target", target)
+  let tlen = len(target)
+  let qmark = -1
+  let stop = tlen                  # before any `#`
+  for i = 0, tlen
+    let c = ord(target, i)
+    if c == 35
+      stop = i
+      break
+    elif c == 63 and qmark < 0
+      qmark = i
+    end
+  end
+  if qmark < 0
+    return {path: substr(target, 0, stop), query_string: "", query: {}}
+  end
+  let qs = substr(target, qmark + 1, stop - qmark - 1)
+  {path: substr(target, 0, qmark), query_string: qs, query: parse_query(qs)}
+end
+
+export encode, decode, parse_query, build_query, parse

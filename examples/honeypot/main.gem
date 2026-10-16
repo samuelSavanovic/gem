@@ -1,0 +1,60 @@
+# telnet honeypot: a fake BusyBox device that records what clients try. Defaults: port 2323 on
+# 127.0.0.1, data in honeypot_data/.
+
+load "std/string"
+load "./server"
+
+let INT_FLAGS = {
+  "--keep-weeks": "keep_weeks", "--max-sessions": "max_sessions", "--max-per-ip": "max_per_ip",
+  "--max-session-ms": "max_session_ms", "--max-bytes": "max_bytes", "--max-logins": "max_logins",
+  "--max-commands": "max_commands", "--max-backlog": "max_backlog", "--idle-ms": "idle_ms",
+  "--accept-on": "accept_on", "--metrics-ms": "metrics_ms"
+}
+
+fn usage()
+  eprint("usage: honeypot [--port N] [--bind ADDRESS] [--data DIR] [--log] [--commit ID]")
+  eprint("                [{string.join(sort(keys(INT_FLAGS)), " N] [")} N]")
+  exit(2)
+end
+
+fn int_arg(value)
+  let r = pcall to_int(value)
+  if not r.ok or r.value < 1 then usage() end
+  r.value
+end
+
+fn main()
+  let args = argv()
+  let port = 2323
+  let host = "127.0.0.1"
+  let opts = {}
+  let i = 1
+  while i < len(args)
+    if args[i] == "--log"
+      opts.log = true
+      i += 1
+      continue
+    end
+    if i + 1 >= len(args)
+      usage()
+    end
+    let value = args[i + 1]
+    if args[i] == "--port"
+      port = int_arg(value)
+    elif args[i] == "--bind"
+      host = value
+    elif args[i] == "--data"
+      opts.data = value
+    elif args[i] == "--commit"
+      opts.commit = value
+    elif has_key(INT_FLAGS, args[i])
+      opts[INT_FLAGS[args[i]]] = int_arg(value)
+    else
+      usage()
+    end
+    i += 2
+  end
+  let listener = tcp_listen(host, port)
+  server.start(listener, opts)
+  eprint("honeypot listening on {host}:{port}")
+end

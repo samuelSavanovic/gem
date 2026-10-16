@@ -1,0 +1,58 @@
+## A set of strings with O(1) add, remove, membership and random pick. Backs Redis sets and expiry.
+
+# `items` holds the members and `pos` maps each to its index; removing moves the last into the hole
+
+fn new()
+  {items: [], pos: {}}
+end
+
+fn size(s)
+  len(s.items)
+end
+
+fn has(s, m)
+  has_key(s.pos, m)
+end
+
+## True when `m` wasn't a member yet.
+fn add(s, m)
+  if has_key(s.pos, m)
+    return false
+  end
+  s.pos[m] = len(s.items)
+  push(s.items, m)
+  true
+end
+
+## True when `m` was a member.
+fn remove(s, m)
+  if not has_key(s.pos, m)
+    return false
+  end
+  let i = s.pos[m]
+  let last = pop(s.items)
+  if last != m
+    s.items[i] = last
+    s.pos[last] = i
+  end
+  delete(s.pos, m)
+  true
+end
+
+## nil when the set is empty.
+fn pick(s)
+  let n = len(s.items)
+  if n == 0 then return nil end
+  s.items[random(n)]
+end
+
+## A copy the caller may keep, in no particular order.
+fn members(s)
+  let out = []
+  for m in s.items
+    push(out, m)
+  end
+  out
+end
+
+export new, size, has, add, remove, pick, members

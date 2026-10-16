@@ -1,0 +1,892 @@
+# Desugars what the parser keeps as written, before fold and codegen:
+#   for_in / for_range       -> block of let / while / assign
+#   if/match/receive as value -> moved into statements before it, value in a temp
+#   match_arm + patterns     -> when_clause {value, bindings}
+#   receive arms             -> {pattern: {condition, bindings}, body}
+
+load "./ast" (make_program, make_int, make_float, make_string, make_bool, make_nil_node, make_var, make_binop, make_unop, make_call, make_dot, make_index, make_anon_fn, make_table, make_table_entry, make_array, make_interp, make_let, make_assign, make_dot_assign, make_index_assign, make_fn_def, make_if, make_while, make_match, make_when, make_receive_match, make_return, make_break, make_continue, make_export, make_extern_fn, make_extern_param, make_extern_include, make_error_expr, make_error_stmt)
+
+fn lower(ast)
+  let state = {gensym: 0, assigners: {}, declared: {}, namespaces: {}, nested: {}, scanned: false, scopes: [], fn_id: 0, fn_count: 0}
+  if type(ast) == "table" and ast.tag == "program"
+    scan(ast, state)
+  end
+  lower_node(ast, state)
+end
+
+# copies `file` onto generated nodes that lack one, as tag_source_file does, or their #line points elsewhere
+fn tag_file(node, file)
+  if file == nil
+    return nil
+  end
+  if type(node) != "table"
+    return nil
+  end
+  if node.tag != nil and node.file == nil
+    node.file = file
+  end
+  for k in keys(node)
+    let v = node[k]
+    if type(v) == "table"
+      if v.tag != nil
+        tag_file(v, file)
+      else
+        # untagged: an array or a record like a receive arm's pattern
+        for _, elem in v
+          if type(elem) == "table"
+            tag_file(elem, file)
+          end
+        end
+      end
+    end
+  end
+  nil
+end
+
+fn lower_node(node, state)
+  if node == nil
+    return nil
+  end
+  if type(node) != "table"
+    return node
+  end
+  let tag = node.tag
+  if tag == nil
+    return node
+  end
+
+  if tag == "for_in"
+    return lower_for_in(node, state)
+  end
+  if tag == "for_range"
+    return lower_for_range(node, state)
+  end
+  if tag == "match"
+    return lower_match(node, state)
+  end
+  if tag == "receive_match"
+    return lower_receive(node, state)
+  end
+
+  # everything else is updated in place: rebuilding through the make_* constructors would drop fields like `file`
+
+  if tag == "program"
+    node.stmts = lower_stmts(node.stmts, state)
+    return node
+  end
+  if tag == "binop"
+    node.left = lower_node(node.left, state)
+    node.right = lower_node(node.right, state)
+    return node
+  end
+  if tag == "unop"
+    node.expr = lower_node(node.expr, state)
+    return node
+  end
+  if tag == "call"
+    node.func = lower_node(node.func, state)
+    node.args = lower_nodes(node.args, state)
+    return node
+  end
+  if tag == "dot"
+    node.object = lower_node(node.object, state)
+    return node
+  end
+  if tag == "index"
+    node.object = lower_node(node.object, state)
+    node.key = lower_node(node.key, state)
+    return node
+  end
+  if tag == "anon_fn" or tag == "fn_def"
+    return lower_fn(node, state)
+  end
+  if tag == "table"
+    for e in node.entries
+      e.key = lower_node(e.key, state)
+      e.value = lower_node(e.value, state)
+    end
+    return node
+  end
+  if tag == "array"
+    node.elements = lower_nodes(node.elements, state)
+    return node
+  end
+  if tag == "interp"
+    node.parts = lower_nodes(node.parts, state)
+    return node
+  end
+  if tag == "let"
+    node.value = lower_node(node.value, state)
+    return node
+  end
+  if tag == "assign"
+    node.value = lower_node(node.value, state)
+    return node
+  end
+  if tag == "dot_assign"
+    node.object = lower_node(node.object, state)
+    node.value = lower_node(node.value, state)
+    return node
+  end
+  if tag == "index_assign"
+    node.object = lower_node(node.object, state)
+    node.key = lower_node(node.key, state)
+    node.value = lower_node(node.value, state)
+    return node
+  end
+  if tag == "if"
+    node.cond = lower_node(node.cond, state)
+    node.then = lower_stmts(node.then, state)
+    if node.else != nil
+      node.else = lower_stmts(node.else, state)
+    end
+    return node
+  end
+  if tag == "while"
+    node.cond = lower_node(node.cond, state)
+    node.body = lower_stmts(node.body, state)
+    return node
+  end
+  if tag == "return"
+    node.value = lower_node(node.value, state)
+    return node
+  end
+  if tag == "block"
+    node.stmts = lower_stmts(node.stmts, state)
+    return node
+  end
+
+  node
+end
+
+fn lower_nodes(nodes, state)
+  if nodes == nil
+    return nil
+  end
+  let out = []
+  for n in nodes
+    push(out, lower_node(n, state))
+  end
+  out
+end
+
+# each statement list pushes a frame of the names its lets declare
+fn lower_stmts(stmts, state)
+  if stmts == nil
+    return nil
+  end
+  push(state.scopes, {names: {}, fn_id: state.fn_id})
+  let out = []
+  for s in stmts
+    lower_stmt_into(s, out, state)
+  end
+  pop(state.scopes)
+  out
+end
+
+fn lower_stmt_into(s, out, state)
+  let pre = []
+  let rest = hoist_stmt(s, pre, state)
+  for p in pre
+    lower_stmt_into(p, out, state)
+  end
+  push(out, lower_node(rest, state))
+  if type(rest) == "table" and rest.tag == "let"
+    state.scopes[-1].names[rest.name] = true
+  end
+  nil
+end
+
+fn lower_fn(node, state)
+  let saved_nested = state.nested
+  let saved_fn_id = state.fn_id
+  state.fn_count = state.fn_count + 1
+  state.fn_id = state.fn_count
+  state.nested = {}
+  if node.nested_assigns != nil
+    for name in node.nested_assigns
+      state.nested[name] = true
+    end
+    delete(node, "nested_assigns")
+  end
+  let params = {}
+  for p in node.params
+    params[p] = true
+  end
+  if node.rest_param != nil
+    params[node.rest_param] = true
+  end
+  push(state.scopes, {names: params, fn_id: state.fn_id})
+  node.body = lower_stmts(node.body, state)
+  node.defaults = lower_nodes(node.defaults, state)
+  pop(state.scopes)
+  state.nested = saved_nested
+  state.fn_id = saved_fn_id
+  node
+end
+
+fn lower_stmts_or_nil(stmts, state)
+  if stmts == nil
+    return nil
+  end
+  lower_stmts(stmts, state)
+end
+
+fn lower_for_in(node, state)
+  let line = node.line
+  let body = lower_stmts(node.body, state)
+  if node.val_name != nil
+    state.gensym = state.gensym + 1
+    let g = state.gensym
+    let tbl_var = "__for_tbl_{g}"
+    let len_var = "__for_len_{g}"
+    let idx_var = "__for_i_{g}"
+    let inner = []
+    push(inner, make_let(node.var_name, make_call(make_var("__table_key_at"), [make_var(tbl_var), make_var(idx_var)], 0), line))
+    push(inner, make_let(node.val_name, make_call(make_var("__table_val_at"), [make_var(tbl_var), make_var(idx_var)], 0), line))
+    push(inner, make_assign(idx_var, make_binop("+", make_var(idx_var), make_int(1)), line))
+    for s in body
+      push(inner, s)
+    end
+    let while_node = make_while(
+      make_binop("<", make_var(idx_var), make_var(len_var)),
+      inner,
+      line
+    )
+    let result = {tag: "block", stmts: [
+      make_let(tbl_var, lower_node(node.items, state), line),
+      make_let(len_var, make_call(make_var("__for_len"), [make_var(tbl_var)], 0), line),
+      make_let(idx_var, make_int(0), line),
+      while_node
+    ]}
+    tag_file(result, node.file)
+    return result
+  end
+  state.gensym = state.gensym + 1
+  let g = state.gensym
+  let items_var = "__for_items_{g}"
+  let idx_var = "__for_i_{g}"
+  let inner = []
+  push(inner, make_let(node.var_name, make_index(make_var(items_var), make_var(idx_var)), line))
+  push(inner, make_assign(idx_var, make_binop("+", make_var(idx_var), make_int(1)), line))
+  for s in body
+    push(inner, s)
+  end
+  let while_node = make_while(
+    make_binop("<", make_var(idx_var), make_call(make_var("__for_len"), [make_var(items_var)], 0)),
+    inner,
+    line
+  )
+  let result = {tag: "block", stmts: [
+    make_let(items_var, make_call(make_var("__for_items"), [lower_node(node.items, state)], 0), line),
+    make_let(idx_var, make_int(0), line),
+    while_node
+  ]}
+  tag_file(result, node.file)
+  result
+end
+
+fn lower_for_range(node, state)
+  let line = node.line
+  let body = lower_stmts(node.body, state)
+  state.gensym = state.gensym + 1
+  let g = state.gensym
+  let idx_var = "__for_i_{g}"
+  let limit_var = "__for_limit_{g}"
+  let inner = []
+  push(inner, make_let(node.var_name, make_var(idx_var), line))
+  push(inner, make_assign(idx_var, make_binop("+", make_var(idx_var), make_int(1)), line))
+  for s in body
+    push(inner, s)
+  end
+  let while_node = make_while(
+    make_binop("<", make_var(idx_var), make_var(limit_var)),
+    inner,
+    line
+  )
+  let result = {tag: "block", stmts: [
+    make_let(idx_var, lower_node(node.start, state), line),
+    make_let(limit_var, lower_node(node.end_, state), line),
+    while_node
+  ]}
+  tag_file(result, node.file)
+  result
+end
+
+# if/match/receive used as a value moves to just before its statement, leaving a temp:
+#   print(f(x), if c then a else b end)
+# becomes
+#   let __val_1 = f(x)
+#   let __val_2 = nil
+#   if c then __val_2 = a else __val_2 = b end
+#   print(__val_1, __val_2)
+# Operands to its left go into temps too, for left-to-right order, unless stays_in_place shows the moved code
+# can't change them (this also keeps `let n = if n == nil ...` reading the outer `n`).
+# In and/or's right operand the block goes into an `if` on the left value.
+# A while condition becomes `while true` with the test and a break at the top of the body.
+# `return <block>` returns from each branch, so tail calls stay tail calls.
+# A branch ending in a statement gives nil; stores take the line of the branch's last expression.
+
+fn branch_line(e, fallback)
+  if type(e) == "table" and e.line != nil then e.line else fallback end
+end
+
+fn is_block_value(value)
+  type(value) == "table" and (value.tag == "if" or value.tag == "match" or value.tag == "receive_match")
+end
+
+let STATEMENT_TAGS = {let: true, assign: true, dot_assign: true, index_assign: true, fn_def: true, if: true, while: true, for_in: true, for_range: true, match: true, receive_match: true, return: true, break: true, continue: true, block: true, export: true, extern_fn: true, extern_include: true, error_stmt: true}
+
+# `finish` turns the branch's value expression into the statement that uses it
+fn finish_branch(stmts, finish)
+  let out = []
+  if stmts != nil
+    for s in stmts
+      push(out, s)
+    end
+  end
+  if len(out) == 0
+    push(out, finish(make_nil_node()))
+    return out
+  end
+  let last = out[-1]
+  if is_block_value(last)
+    finish_block(last, finish)
+  elif type(last) != "table" or not has_key(STATEMENT_TAGS, last.tag)
+    out[-1] = finish(last)
+  elif last.tag != "return" and last.tag != "break" and last.tag != "continue" and last.tag != "error_stmt"
+    push(out, finish(make_nil_node()))
+  end
+  out
+end
+
+fn finish_block(node, finish)
+  if node.tag == "if"
+    node.then = finish_branch(node.then, finish)
+    node.else = finish_branch(node.else, finish)
+  elif node.tag == "match"
+    for arm in node.whens
+      arm.body = finish_branch(arm.body, finish)
+    end
+    # leave it for lower_match, whose default else raises
+    if node.else == nil
+      node.no_else = true
+    else
+      node.else = finish_branch(node.else, finish)
+    end
+  else
+    for arm in node.arms
+      arm.body = finish_branch(arm.body, finish)
+    end
+    if node.after_ms != nil
+      node.after_body = finish_branch(node.after_body, finish)
+    end
+  end
+  nil
+end
+
+fn stamp(node, file)
+  if file != nil and node.file == nil
+    node.file = file
+  end
+  node
+end
+
+fn new_temp(state)
+  state.gensym = state.gensym + 1
+  "__val_{state.gensym}"
+end
+
+# does evaluating `e` run a block-as-value? (not counting fn literal bodies)
+fn contains_block(e)
+  if type(e) != "table" or e.tag == nil
+    return false
+  end
+  if is_block_value(e)
+    return true
+  end
+  let tag = e.tag
+  if tag == "binop"
+    return contains_block(e.left) or contains_block(e.right)
+  elif tag == "unop"
+    return contains_block(e.expr)
+  elif tag == "dot"
+    return contains_block(e.object)
+  elif tag == "index"
+    return contains_block(e.object) or contains_block(e.key)
+  elif tag == "call"
+    if contains_block(e.func)
+      return true
+    end
+    for a in e.args
+      if contains_block(a)
+        return true
+      end
+    end
+  elif tag == "table"
+    for en in e.entries
+      if contains_block(en.value)
+        return true
+      end
+    end
+  elif tag == "array"
+    for x in e.elements
+      if contains_block(x)
+        return true
+      end
+    end
+  elif tag == "interp"
+    for x in e.parts
+      if contains_block(x)
+        return true
+      end
+    end
+  end
+  false
+end
+
+# scan() fills, before lowering:
+#   state.assigners[name]: how many fn bodies assign `name` (top level is one)
+#   state.nested: names assigned in nested fns at any depth (lower_fn swaps in each fn's `nested_assigns`)
+#   state.namespaces[m]: {field: binding} for a module namespace `let m` nothing else declares or assigns
+# While lowering, state.scopes has a {names, fn_id} frame per enclosing statement list; state.fn_id is the body.
+
+fn add_count(counts, name)
+  counts[name] = if has_key(counts, name) then counts[name] + 1 else 1 end
+end
+
+# names assigned in this body -> own, in fns inside it -> inner; counts every binding into state.declared
+fn scan_node(node, own, inner, state)
+  if type(node) != "table"
+    return nil
+  end
+  let tag = node.tag
+  if tag == "anon_fn" or tag == "fn_def"
+    if tag == "fn_def"
+      add_count(state.declared, node.name)
+    end
+    for p in node.params
+      add_count(state.declared, p)
+    end
+    if node.rest_param != nil
+      add_count(state.declared, node.rest_param)
+    end
+    let fn_own = {}
+    let fn_inner = {}
+    scan_node(node.body, fn_own, fn_inner, state)
+    scan_node(node.defaults, fn_own, fn_inner, state)
+    node.nested_assigns = keys(fn_inner)
+    for name, _ in fn_own
+      add_count(state.assigners, name)
+      inner[name] = true
+    end
+    for name, _ in fn_inner
+      inner[name] = true
+    end
+    return nil
+  end
+  if tag == "assign"
+    own[node.name] = true
+  elif tag == "let" or tag == "pat_name" or tag == "extern_fn"
+    add_count(state.declared, node.name)
+  elif tag == "pat_table"
+    for e in node.entries
+      if e.value == nil
+        add_count(state.declared, e.key)
+      end
+    end
+  elif tag == "for_in"
+    add_count(state.declared, node.var_name)
+    if node.val_name != nil
+      add_count(state.declared, node.val_name)
+    end
+  elif tag == "for_range"
+    add_count(state.declared, node.var_name)
+  end
+  for _, v in node
+    if type(v) == "table"
+      scan_node(v, own, inner, state)
+    end
+  end
+  nil
+end
+
+fn scan(ast, state)
+  state.assigners = {}
+  state.declared = {}
+  state.namespaces = {}
+  let own = {}
+  let inner = {}
+  scan_node(ast.stmts, own, inner, state)
+  for name, _ in own
+    add_count(state.assigners, name)
+  end
+  state.nested = inner
+  for s in ast.stmts
+    if type(s) == "table" and s.tag == "let" and type(s.value) == "table" and s.value.tag == "table" and s.value.frozen == true and state.declared[s.name] == 1 and not has_key(state.assigners, s.name)
+      let fields = {}
+      for e in s.value.entries
+        if type(e.key) == "string" and type(e.value) == "table" and e.value.tag == "var"
+          fields[e.key] = e.value.name
+        end
+      end
+      state.namespaces[s.name] = fields
+    end
+  end
+  state.scanned = true
+  nil
+end
+
+# assigned names under node, not descending into fns
+fn collect_assigns(node, out)
+  if type(node) != "table" or node.tag == "anon_fn" or node.tag == "fn_def"
+    return nil
+  end
+  if node.tag == "assign"
+    out[node.name] = true
+  end
+  for _, v in node
+    if type(v) == "table"
+      collect_assigns(v, out)
+    end
+  end
+  nil
+end
+
+# is the innermost binding of `name` (lets and params only) in this body? false only moves more operands
+fn resolves_local(name, state)
+  let i = len(state.scopes) - 1
+  while i >= 0
+    let frame = state.scopes[i]
+    if has_key(frame.names, name)
+      return frame.fn_id == state.fn_id
+    end
+    i -= 1
+  end
+  false
+end
+
+# Does the code moved ahead of `e` (`later`) leave its value alone? True for literals, fn literals, never-assigned
+# vars, and locals of this body that no inner fn and nothing in `later` assigns (a recursive call has its own).
+fn stays_in_place(e, later, state)
+  if type(e) != "table"
+    return true
+  end
+  let tag = e.tag
+  if tag == "int" or tag == "float" or tag == "string" or tag == "bool" or tag == "nil" or tag == "anon_fn"
+    return true
+  end
+  if tag != "var"
+    return false
+  end
+  if state.scanned != true
+    return false
+  end
+  if not has_key(state.assigners, e.name)
+    return true
+  end
+  if has_key(state.nested, e.name) or not resolves_local(e.name, state)
+    return false
+  end
+  let inside = {}
+  collect_assigns(later, inside)
+  not has_key(inside, e.name)
+end
+
+# ctx: {state, pre (where moved statements go), line, file}
+fn hoist(e, ctx)
+  if not contains_block(e)
+    return e
+  end
+  let state = ctx.state
+  let file = ctx.file
+  if is_block_value(e)
+    let tmp = new_temp(state)
+    let line = branch_line(e, ctx.line)
+    finish_block(e, fn(v) stamp(make_assign(tmp, v, branch_line(v, line)), file) end)
+    push(ctx.pre, stamp(make_let(tmp, stamp(make_nil_node(), file), line), file))
+    push(ctx.pre, e)
+    return stamp(make_var(tmp), file)
+  end
+  let tag = e.tag
+  if tag == "binop" and (e.op == "and" or e.op == "or")
+    e.left = hoist(e.left, ctx)
+    if not contains_block(e.right)
+      return e
+    end
+    let line = branch_line(e, ctx.line)
+    let tmp = new_temp(state)
+    push(ctx.pre, stamp(make_let(tmp, e.left, line), file))
+    let inner = []
+    let right = hoist(e.right, {state: state, pre: inner, line: line, file: file})
+    push(inner, stamp(make_assign(tmp, right, line), file))
+    let test = stamp(make_var(tmp), file)
+    if e.op == "or"
+      test = stamp(make_unop("not", test, line), file)
+    end
+    push(ctx.pre, stamp(make_if(test, inner, nil, line), file))
+    return stamp(make_var(tmp), file)
+  end
+  if tag == "binop"
+    let r = hoist_operands([e.left, e.right], false, ctx)
+    e.left = r[0]
+    e.right = r[1]
+  elif tag == "unop"
+    e.expr = hoist(e.expr, ctx)
+  elif tag == "dot"
+    e.object = hoist(e.object, ctx)
+  elif tag == "index"
+    let r = hoist_operands([e.object, e.key], false, ctx)
+    e.object = r[0]
+    e.key = r[1]
+  elif tag == "call"
+    let func = e.func
+    let ops = [func]
+    for a in e.args
+      push(ops, a)
+    end
+    # `m.f` on an unassigned module namespace can't change
+    let ns_callee = false
+    if state.scanned == true and type(func) == "table" and func.tag == "dot" and type(func.object) == "table" and func.object.tag == "var" and has_key(state.namespaces, func.object.name)
+      let target = state.namespaces[func.object.name][func.field]
+      ns_callee = target != nil and not has_key(state.assigners, target)
+    end
+    let r = hoist_operands(ops, ns_callee, ctx)
+    if func.tag == "dot" and r[0].tag == "var"
+      # callee went into a temp; keep the field name for the not-callable error
+      e.callee_field = func.field
+    end
+    e.func = r[0]
+    let args = []
+    for i = 1, len(r)
+      push(args, r[i])
+    end
+    e.args = args
+  elif tag == "table"
+    let vals = []
+    for en in e.entries
+      push(vals, en.value)
+    end
+    let r = hoist_operands(vals, false, ctx)
+    for i = 0, len(r)
+      e.entries[i].value = r[i]
+    end
+  elif tag == "array"
+    e.elements = hoist_operands(e.elements, false, ctx)
+  elif tag == "interp"
+    e.parts = hoist_operands(e.parts, false, ctx)
+  end
+  e
+end
+
+# ops in evaluation order; each one before the last block-holding operand goes into a temp unless it stays
+# in place (the first never does when fixed_first)
+fn hoist_operands(ops, fixed_first, ctx)
+  let last = -1
+  for i = 0, len(ops)
+    if contains_block(ops[i])
+      last = i
+    end
+  end
+  let out = []
+  for i = 0, len(ops)
+    let op = ops[i]
+    if i <= last
+      op = hoist(op, ctx)
+      if i < last and not (i == 0 and fixed_first)
+        let later = []
+        for j = i + 1, last + 1
+          push(later, ops[j])
+        end
+        if not stays_in_place(op, later, ctx.state)
+          let tmp = new_temp(ctx.state)
+          push(ctx.pre, stamp(make_let(tmp, op, branch_line(op, ctx.line)), ctx.file))
+          op = stamp(make_var(tmp), ctx.file)
+        end
+      end
+    end
+    push(out, op)
+  end
+  out
+end
+
+# moves blocks out of s's own expressions (not its nested bodies) onto pre
+fn hoist_stmt(s, pre, state)
+  if type(s) != "table" or s.tag == nil
+    return s
+  end
+  let tag = s.tag
+  let ctx = {state: state, pre: pre, line: s.line, file: s.file}
+  if tag == "let" or tag == "assign"
+    s.value = hoist(s.value, ctx)
+  elif tag == "dot_assign"
+    let r = hoist_operands([s.object, s.value], false, ctx)
+    s.object = r[0]
+    s.value = r[1]
+  elif tag == "index_assign"
+    let r = hoist_operands([s.object, s.key, s.value], false, ctx)
+    s.object = r[0]
+    s.key = r[1]
+    s.value = r[2]
+  elif tag == "return"
+    if is_block_value(s.value)
+      let block = s.value
+      finish_block(block, fn(v) stamp(make_return(v, branch_line(v, s.line)), s.file) end)
+      return hoist_stmt(block, pre, state)
+    end
+    s.value = hoist(s.value, ctx)
+  elif tag == "if"
+    s.cond = hoist(s.cond, ctx)
+  elif tag == "match"
+    s.target = hoist(s.target, ctx)
+  elif tag == "receive_match"
+    s.after_ms = hoist(s.after_ms, ctx)
+  elif tag == "while"
+    if contains_block(s.cond)
+      let body = []
+      let cond = hoist(s.cond, {state: state, pre: body, line: s.line, file: s.file})
+      let exit = stamp(make_if(stamp(make_unop("not", cond, s.line), s.file), [stamp(make_break(), s.file)], nil, s.line), s.file)
+      push(body, exit)
+      for b in s.body
+        push(body, b)
+      end
+      s.cond = stamp(make_bool(true), s.file)
+      s.body = body
+      # so codegen's `while true` reset warning doesn't fire
+      s.cond_moved = true
+    end
+  elif tag == "for_in"
+    s.items = hoist(s.items, ctx)
+  elif tag == "for_range"
+    let r = hoist_operands([s.start, s.end_], false, ctx)
+    s.start = r[0]
+    s.end_ = r[1]
+  elif not has_key(STATEMENT_TAGS, tag)
+    return hoist(s, ctx)
+  end
+  s
+end
+
+fn lower_match(node, state)
+  state.gensym = state.gensym + 1
+  let match_var = "__match_{state.gensym}"
+  let target_var_expr = make_var(match_var)
+  let target_lowered = lower_node(node.target, state)
+  let whens = []
+  for arm in node.whens
+    push(whens, lower_arm(arm, target_var_expr, state))
+  end
+  # no else: falling through every arm raises, like Erlang's case_clause
+  let else_body = if node.else != nil and node.no_else != true
+    lower_stmts_or_nil(node.else, state)
+  else
+    [stamp(make_call(make_var("__match_fail"), [target_var_expr], node.line), node.file)]
+  end
+  let result = make_match(target_lowered, whens, else_body, node.line, match_var)
+  tag_file(result, node.file)
+  result
+end
+
+fn lower_receive(node, state)
+  state.gensym = state.gensym + 1
+  let recv_var = "__recv_{state.gensym}"
+  let recv_var_expr = make_var(recv_var)
+  let arms = []
+  for arm in node.arms
+    let lowered = lower_arm(arm, recv_var_expr, state)
+    push(arms, {pattern: {condition: lowered.value, bindings: lowered.bindings}, body: lowered.body})
+  end
+  let after_ms = if node.after_ms != nil then lower_node(node.after_ms, state) end
+  let after_body = lower_stmts_or_nil(node.after_body, state)
+  let result = make_receive_match(arms, after_ms, after_body, node.line, recv_var)
+  tag_file(result, node.file)
+  result
+end
+
+# an expression arm becomes `target == expr` with no bindings
+fn lower_arm(arm, target_var_expr, state)
+  let body = lower_stmts(arm.body, state)
+  if arm.pattern != nil
+    let pc = pattern_to_cond(arm.pattern, target_var_expr, state)
+    return make_when(pc.condition, body, pc.bindings)
+  end
+  let wval = lower_node(arm.expr, state)
+  make_when(make_binop("==", target_var_expr, wval), body, [])
+end
+
+fn and_chain(conditions)
+  if len(conditions) == 0
+    return make_bool(true)
+  end
+  let result = conditions[0]
+  for i = 1, len(conditions)
+    result = make_binop("and", result, conditions[i])
+  end
+  result
+end
+
+fn is_trivially_true(cond)
+  type(cond) == "table" and cond.tag == "bool" and cond.value == true
+end
+
+fn pattern_to_cond(pat, target_expr, state)
+  let tag = pat.tag
+
+  if tag == "pat_table"
+    let conditions = [make_binop("==", make_call(make_var("__type"), [target_expr], 0), make_string("table"))]
+    let bindings = []
+    for entry in pat.entries
+      let key_str = if entry.int_key != nil then make_int(entry.int_key) else make_string(entry.key) end
+      push(conditions, make_call(make_var("__has_key"), [target_expr, key_str], 0))
+      let sub_target = make_index(target_expr, key_str)
+      if entry.value == nil
+        push(bindings, make_let(entry.key, sub_target, 0))
+      else
+        let sub = pattern_to_cond(entry.value, sub_target, state)
+        if not is_trivially_true(sub.condition)
+          push(conditions, sub.condition)
+        end
+        for b in sub.bindings
+          push(bindings, b)
+        end
+      end
+    end
+    return {condition: and_chain(conditions), bindings: bindings}
+  end
+
+  if tag == "pat_array"
+    # exactly n entries keyed 0..n-1 (n string keys don't match); `[]` matches any empty table
+    let conditions = [make_call(make_var("__is_array_n"), [target_expr, make_int(len(pat.elements))], 0)]
+    let bindings = []
+    let i = 0
+    for sub_pat in pat.elements
+      let sub_target = make_index(target_expr, make_int(i))
+      let sub = pattern_to_cond(sub_pat, sub_target, state)
+      if not is_trivially_true(sub.condition)
+        push(conditions, sub.condition)
+      end
+      for b in sub.bindings
+        push(bindings, b)
+      end
+      i += 1
+    end
+    return {condition: and_chain(conditions), bindings: bindings}
+  end
+
+  if tag == "pat_literal"
+    return {condition: make_binop("==", target_expr, pat.literal), bindings: []}
+  end
+
+  if tag == "pat_pin"
+    return {condition: make_binop("==", target_expr, pat.var), bindings: []}
+  end
+
+  if tag == "pat_name"
+    return {condition: make_bool(true), bindings: [make_let(pat.name, target_expr, 0)]}
+  end
+
+  # pat_error: never matches
+  {condition: make_bool(false), bindings: []}
+end
+
+export lower

@@ -1,0 +1,1785 @@
+## http: HTTP/1.1 server with routing, keep-alive and static files.
+##
+##   let app = http.router()
+##   app.get("/hello/:name") do |req|
+##     http.ok("hello {req.params.name}")
+##   end
+##   http.serve(app, {port: 8080})    # blocks; or http.start, later http.stop
+##
+## A handler gets a request {method, peer, path, query, params, headers, cookies, body}
+## and returns a response {status, headers, body}. Header names are lowercase; `path` isn't percent-decoded.
+## A handler that raises gets a 500, with its error on stderr.
+## Each connection runs in its own process, so a handler's changes to module state stay in that connection.
+
+load "std/string"
+load "std/url"
+load "std/mime"
+load "std/json"
+load "std/time"
+
+# The server process traps exits, owns the listener and tracks each connection process (`_http_conn` from
+# the acceptor, `_http_closing` when one finishes), so killing it kills the acceptor and every connection.
+# Each connection claims its socket, so it closes however the process ends.
+
+# length of the prefix of `s` made of bytes in `accept`, in one C pass (a Gem `ord` loop is far slower)
+extern fn gem_bytes_span(s: Bytes, accept: Bytes) -> Int
+
+let READ_SIZE = 8192
+let MAX_HEADER_BYTES = 65536
+let MAX_LINE = 4096
+let MAX_CHUNK_SIZE_LEN = 64
+let DEFAULT_MAX_BODY = 8388608
+let DEFAULT_IDLE_TIMEOUT_MS = 30000
+let DEFAULT_REQUEST_TIMEOUT_MS = 30000
+let DEFAULT_WRITE_TIMEOUT_MS = 30000
+let ACCEPT_BACKOFF_MS = 50
+let MAX_EMPTY_LINE_HEADS = 16
+let DRAIN_QUIET_MS = 100
+let REFUSE_DRAIN_MS = 50
+let STOP_TIMEOUT_MS = 5000
+let RAW_BYTES = 4096
+let TEXT_PLAIN = "text/plain; charset=utf-8"
+
+# bytes lo..hi inclusive, minus those in `except`
+fn byte_range(lo, hi, except = "")
+  build_string() do |add|
+    for c = lo, hi + 1
+      let b = chr(c)
+      if not has_text(except, b)
+        add(b)
+      end
+    end
+  end
+end
+
+# HTAB, SP, visible ASCII and obs-text (RFC 9112 2.2, 5.5)
+let FIELD_BYTES = "\t{byte_range(32, 126)}{byte_range(128, 255)}"
+# header name bytes: a span of these from a line's start ends at its colon
+let NAME_BYTES = "{byte_range(33, 126, ":")}{byte_range(128, 255)}"
+# a name made only of these needs no lowercasing
+let LOWER_NAME_BYTES = "{byte_range(33, 126, ":ABCDEFGHIJKLMNOPQRSTUVWXYZ")}{byte_range(128, 255)}"
+let TOKEN_BYTES = "!#$%&'*+-.^_`|~0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+# a Connection value that's one lowercase token needs no splitting
+let LOWER_TOKEN_BYTES = "!#$%&'*+-.^_`|~0123456789abcdefghijklmnopqrstuvwxyz"
+let NO_CRLF_BYTES = "{byte_range(0, 9)}{byte_range(11, 12)}{byte_range(14, 255)}"
+let COOKIE_BYTES = "{byte_range(33, 126, ";,")}{byte_range(128, 255)}"
+
+let STATUS_TEXT = {
+  100: "Continue",
+  101: "Switching Protocols",
+  200: "OK",
+  201: "Created",
+  202: "Accepted",
+  204: "No Content",
+  206: "Partial Content",
+  301: "Moved Permanently",
+  302: "Found",
+  303: "See Other",
+  304: "Not Modified",
+  307: "Temporary Redirect",
+  308: "Permanent Redirect",
+  400: "Bad Request",
+  401: "Unauthorized",
+  403: "Forbidden",
+  404: "Not Found",
+  405: "Method Not Allowed",
+  408: "Request Timeout",
+  409: "Conflict",
+  410: "Gone",
+  413: "Content Too Large",
+  415: "Unsupported Media Type",
+  422: "Unprocessable Content",
+  429: "Too Many Requests",
+  431: "Request Header Fields Too Large",
+  500: "Internal Server Error",
+  501: "Not Implemented",
+  502: "Bad Gateway",
+  503: "Service Unavailable",
+  504: "Gateway Timeout",
+  505: "HTTP Version Not Supported"
+}
+
+## A response {status, headers, body} with no headers added; the server sets Content-Length and Connection.
+## Header values may be strings, numbers, bools or arrays (one line each).
+fn response(status, headers, body)
+  {status: status, headers: headers, body: body}
+end
+
+## A 200 with `body`, plain UTF-8 text unless `content_type` is given.
+fn ok(body, content_type = "text/plain; charset=utf-8")
+  {status: 200, headers: {"Content-Type": content_type}, body: body}
+end
+
+## A 200 HTML response. Escape user data with `html_escape`.
+fn html(body)
+  {status: 200, headers: {"Content-Type": "text/html; charset=utf-8"}, body: body}
+end
+
+## A JSON response of `data`, status 200 unless given.
+fn json_response(data, status = 200)
+  {status: status, headers: {"Content-Type": "application/json; charset=utf-8"}, body: json.encode(data)}
+end
+
+## A redirect to `location`, 302 unless given (pass 301, 303, 307 or 308).
+fn redirect(location, status = 302)
+  {status: status, headers: {"Location": location, "Content-Type": TEXT_PLAIN}, body: ""}
+end
+
+## A plain-text 404.
+fn not_found(body = "Not Found")
+  {status: 404, headers: {"Content-Type": TEXT_PLAIN}, body: body}
+end
+
+## A plain-text 400.
+fn bad_request(body = "Bad Request")
+  {status: 400, headers: {"Content-Type": TEXT_PLAIN}, body: body}
+end
+
+## A plain-text 500.
+fn server_error(body = "Internal Server Error")
+  {status: 500, headers: {"Content-Type": TEXT_PLAIN}, body: body}
+end
+
+fn cookie_text_ok(s)
+  gem_bytes_span(s, COOKIE_BYTES) == len(s)
+end
+
+fn check_cookie_text(caller, what, s)
+  if not cookie_text_ok(s)
+    error("{caller}: invalid cookie {what} \"{s}\" (no ;, comma, whitespace or control bytes)")
+  end
+end
+
+# raises on anything that could change the cookie's meaning or inject a header
+fn cookie_line(caller, name, value, path, http_only, secure, same_site, max_age, expires)
+  if value == nil or type(value) == "table"
+    error("{caller}: cookie value must be a string or a number, got {type(value)}")
+  end
+  let n = "{name}"
+  let v = "{value}"
+  if n == "" or has_text(n, "=")
+    error("{caller}: invalid cookie name \"{n}\" (empty or contains =)")
+  end
+  check_cookie_text(caller, "name", n)
+  check_cookie_text(caller, "value", v)
+  check_cookie_text(caller, "path", "{path}")
+  check_cookie_text(caller, "same_site", "{same_site}")
+  if max_age != nil and type(max_age) != "int"
+    error("{caller}: max_age must be an int or nil, got {type(max_age)} {max_age}")
+  end
+  if expires != nil and type(expires) != "int"
+    error("{caller}: expires must be an int (epoch ms), got {type(expires)}")
+  end
+  build_string() do |add|
+    add(n, "=", v)
+    if path != nil
+      add("; Path=", path)
+    end
+    if max_age != nil
+      add("; Max-Age=", max_age)
+    end
+    if expires != nil
+      add("; Expires=", time.http_date(expires))
+    end
+    if http_only
+      add("; HttpOnly")
+    end
+    if secure
+      add("; Secure")
+    end
+    if same_site != nil
+      add("; SameSite=", same_site)
+    end
+  end
+end
+
+# several cookies become an array, sent as one Set-Cookie line each
+fn add_set_cookie(resp, cookie_str)
+  let new_headers = {}
+  if resp.headers != nil
+    for k, v in resp.headers
+      new_headers[k] = v
+    end
+  end
+  let existing = new_headers["Set-Cookie"]
+  if existing == nil
+    new_headers["Set-Cookie"] = cookie_str
+  elif type(existing) == "table"
+    let all = []
+    for c in existing
+      push(all, c)
+    end
+    push(all, cookie_str)
+    new_headers["Set-Cookie"] = all
+  else
+    new_headers["Set-Cookie"] = [existing, cookie_str]
+  end
+  {status: resp.status, headers: new_headers, body: resp.body}
+end
+
+## A copy of `resp` with one more Set-Cookie header. Use `url.encode` for values with `;`, `,` or spaces.
+## Options: `path` ("/"), `http_only` (true), `secure`, `same_site` ("Lax"), `max_age` (s), `expires` (epoch ms).
+fn set_cookie(resp, name, value, {path = "/", http_only = true, secure = false, same_site = "Lax", max_age = nil, expires = nil} = {})
+  add_set_cookie(resp, cookie_line("http.set_cookie", name, value, path, http_only, secure, same_site, max_age, expires))
+end
+
+## A copy of `resp` that deletes cookie `name`. Pass the `path` it was set with.
+fn delete_cookie(resp, name, {path = "/"} = {})
+  add_set_cookie(resp, cookie_line("http.delete_cookie", name, "", path, true, false, "Lax", 0, nil))
+end
+
+fn parse_cookies(cookie_header)
+  let cookies = {}
+  if cookie_header == nil
+    return cookies
+  end
+  for pair in string.split(cookie_header, ";")
+    let eq = string.index_of(pair, "=")
+    if eq > 0
+      let name = string.trim(substr(pair, 0, eq))
+      cookies[name] = string.trim(substr(pair, eq + 1, len(pair) - eq - 1))
+    end
+  end
+  cookies
+end
+
+## The fields of a URL-encoded form body, as by `url.parse_query`.
+fn parse_form(body)
+  if type(body) != "string"
+    error("http.parse_form: body must be a string, got {type(body)}")
+  end
+  url.parse_query(body)
+end
+
+## Escapes `& < > " '` so `s` is safe in HTML text or a quoted attribute.
+fn html_escape(s)
+  if type(s) != "string"
+    error("http.html_escape: s must be a string, got {type(s)}")
+  end
+  let out = str_replace(s, "&", "&amp;")
+  out = str_replace(out, "<", "&lt;")
+  out = str_replace(out, ">", "&gt;")
+  out = str_replace(out, '"', "&quot;")
+  str_replace(out, "'", "&#x27;")
+end
+
+# the route's params, or nil if it doesn't match
+fn match_route(pat_segs, path_segs)
+  if len(pat_segs) != len(path_segs)
+    return nil
+  end
+  let params = {}
+  for i, ps in pat_segs
+    let us = path_segs[i]
+    if len(ps) > 0 and ord(ps, 0) == 58
+      params[substr(ps, 1, len(ps) - 1)] = url.decode(str_replace(us, "+", "%2B"))   # `+` is literal in a path
+    elif ps != us
+      return nil
+    end
+  end
+  params
+end
+
+fn normalize_path(p)
+  let result = []
+  for s in string.split(p, "/")
+    if s == ".."
+      if len(result) > 0
+        pop(result)
+      end
+    elif s != "." and s != ""
+      push(result, s)
+    end
+  end
+  "/{string.join(result, "/")}"
+end
+
+# `/static` matches `/static` and `/static/x`, not `/staticx`
+fn at_segment(path, prefix, plen)
+  plen == 0 or len(path) == plen or ord(path, plen) == 47 or ord(prefix, plen - 1) == 47
+end
+
+fn match_static(static_routes, path)
+  for sr in static_routes
+    let plen = len(sr.prefix)
+    if string.starts_with(path, sr.prefix) and at_segment(path, sr.prefix, plen)
+      # decode before normalize_path's `..` check; a NUL would cut the name short in the file system calls
+      let rel = url.decode(str_replace(substr(path, plen, len(path) - plen), "+", "%2B"))
+      if rel == "" or rel == "/"
+        rel = "/index.html"
+      end
+      let file_path = "{sr.dir}{normalize_path(rel)}"
+      if find(file_path, "\0") < 0 and file_exists(file_path) and not is_dir(file_path)
+        let content = read_file(file_path)
+        let ct = mime.lookup(file_path)
+        let handler = fn(req)
+          {status: 200, headers: {"Content-Type": ct, "Cache-Control": "public, max-age=3600"}, body: content}
+        end
+        return {handler: handler, params: {}}
+      end
+    end
+  end
+  nil
+end
+
+## A new router: `app.get(pattern, handler)` (also post, put, patch, delete), `app.static(url_prefix, dir)`
+## and `app.match(method, path)`. `:name` segments go in `req.params`. The first registered route wins,
+## HEAD runs the GET route, and static files are read whole per request.
+fn router()
+  let routes = []
+  let static_routes = []
+
+  # segs is nil for a pattern with no params: it matches its text as is
+  let add_route = fn(method, pattern, handler)
+    let segs = if has_text(pattern, ":") then string.split(pattern, "/") end
+    push(routes, {method: method, pattern: pattern, segs: segs, handler: handler})
+  end
+
+  let r = {}
+
+  r.get = fn(pattern, handler)
+    add_route("GET", pattern, handler)
+  end
+
+  r.post = fn(pattern, handler)
+    add_route("POST", pattern, handler)
+  end
+
+  r.put = fn(pattern, handler)
+    add_route("PUT", pattern, handler)
+  end
+
+  r.patch = fn(pattern, handler)
+    add_route("PATCH", pattern, handler)
+  end
+
+  r.delete = fn(pattern, handler)
+    add_route("DELETE", pattern, handler)
+  end
+
+  r.static = fn(url_prefix, dir_path)
+    push(static_routes, {prefix: url_prefix, dir: dir_path})
+  end
+
+  r.match = fn(method, path)
+    let path_segs = nil
+    for route in routes
+      if route.method == method
+        if route.segs == nil
+          if route.pattern == path
+            return {handler: route.handler, params: {}}
+          end
+        else
+          if path_segs == nil
+            path_segs = string.split(path, "/")
+          end
+          let params = match_route(route.segs, path_segs)
+          if params != nil
+            return {handler: route.handler, params: params}
+          end
+        end
+      end
+    end
+    if method == "GET"
+      return match_static(static_routes, path)
+    end
+    nil
+  end
+
+  r
+end
+
+# unread bytes are data[pos..]; the rest is per-request state and what on_event reports
+fn new_reader(fd, peer, cfg)
+  {fd: fd, peer: peer, data: "", pos: 0, started: nil, deadline: nil, idle_ms: cfg.idle_ms, request_ms: cfg.request_ms, write_ms: cfg.write_ms, bytes_in: 0, answered: 0, ended: nil, head: nil, req: nil, raw: nil, handler_error: nil}
+end
+
+fn pending(rd)
+  len(rd.data) - rd.pos
+end
+
+fn start_deadline(rd)
+  if rd.started == nil
+    rd.started = time_ms()
+    if rd.request_ms != nil
+      rd.deadline = rd.started + rd.request_ms
+    end
+  end
+end
+
+# waits at most idle_ms, never past the request's deadline; nil if the peer closed or time ran out (see rd.ended)
+fn read_more(rd)
+  let wait = rd.idle_ms
+  if rd.deadline != nil
+    let left = rd.deadline - time_ms()
+    if left <= 0
+      rd.ended = "timeout"
+      return nil
+    end
+    if wait == nil or left < wait
+      wait = left
+    end
+  end
+  let chunk = tcp_read(rd.fd, READ_SIZE, wait)
+  if chunk == nil
+    rd.ended = if rd.started == nil then "idle" else "timeout" end
+    return nil
+  elif chunk == ""
+    rd.ended = "closed"
+    return nil
+  end
+  rd.bytes_in = rd.bytes_in + len(chunk)
+  start_deadline(rd)
+  chunk
+end
+
+fn raw_prefix(s)
+  if len(s) <= RAW_BYTES
+    return s
+  end
+  substr(s, 0, RAW_BYTES)
+end
+
+# for short reads; read_exact takes big bodies without copying them here
+fn fill(rd)
+  let chunk = read_more(rd)
+  if chunk == nil
+    return false
+  end
+  if rd.pos < len(rd.data)
+    chunk = "{substr(rd.data, rd.pos, len(rd.data) - rd.pos)}{chunk}"
+  end
+  rd.data = chunk
+  rd.pos = 0
+  true
+end
+
+fn last_bytes(s, n)
+  if len(s) <= n
+    return s
+  end
+  substr(s, len(s) - n, n)
+end
+
+# The head without its blank line, nil if closed or timed out, or {too_large} / {bare_lf}.
+# Only new bytes are scanned, so a peer sending one byte at a time still costs linear time.
+fn read_head(rd)
+  let found = find(rd.data, "\r\n\r\n", rd.pos)
+  if found < 0 and rd.pos == len(rd.data)
+    # usual case: one read brings the whole head, no buffer needed
+    let chunk = read_more(rd)
+    if chunk == nil
+      return nil
+    end
+    rd.data = chunk
+    rd.pos = 0
+    found = find(chunk, "\r\n\r\n", 0)
+  end
+  if found < 0
+    if find(rd.data, "\n\n", rd.pos) >= 0
+      rd.raw = raw_prefix(substr(rd.data, rd.pos, len(rd.data) - rd.pos))
+      return {bare_lf: true}
+    end
+    let acc = buf_new()
+    let rest = substr(rd.data, rd.pos, len(rd.data) - rd.pos)
+    buf_push(acc, rest)
+    let have = len(rest)
+    let tail = last_bytes(rest, 3)
+    while found < 0
+      let chunk = read_more(rd)
+      if chunk == nil
+        return nil
+      end
+      let window = "{tail}{chunk}"
+      let at = find(window, "\r\n\r\n", 0)
+      if at >= 0
+        found = have - len(tail) + at
+      end
+      buf_push(acc, chunk)
+      have += len(chunk)
+      if found < 0 and (have > MAX_HEADER_BYTES or find(window, "\n\n", 0) >= 0)
+        rd.raw = raw_prefix(to_string(acc))
+        return if find(window, "\n\n", 0) >= 0 then {bare_lf: true} else {too_large: true} end
+      end
+      tail = last_bytes(window, 3)
+    end
+    rd.data = to_string(acc)
+    rd.pos = 0
+  end
+  if found - rd.pos > MAX_HEADER_BYTES
+    rd.raw = substr(rd.data, rd.pos, RAW_BYTES)
+    return {too_large: true}
+  end
+  let head = substr(rd.data, rd.pos, found - rd.pos)
+  rd.pos = found + 4
+  {text: head}
+end
+
+# nil if the peer closed or time ran out first
+fn read_exact(rd, n)
+  let have = pending(rd)
+  if have >= n
+    let s = substr(rd.data, rd.pos, n)
+    rd.pos = rd.pos + n
+    return s
+  end
+  let out = buf_new()
+  buf_push(out, substr(rd.data, rd.pos, have))
+  rd.data = ""
+  rd.pos = 0
+  while have < n
+    let chunk = read_more(rd)
+    if chunk == nil
+      return nil
+    end
+    let need = n - have
+    if len(chunk) > need
+      buf_push(out, substr(chunk, 0, need))
+      rd.data = chunk
+      rd.pos = need
+      have = n
+    else
+      buf_push(out, chunk)
+      have += len(chunk)
+    end
+  end
+  to_string(out)
+end
+
+# for chunked bodies: {line}, {closed}, or {bad} for a bare LF or overlong line
+fn read_line(rd)
+  let scan = rd.pos
+  while true
+    let nl = find(rd.data, "\n", scan)
+    if nl >= 0
+      if nl == rd.pos or ord(rd.data, nl - 1) != 13 or nl - rd.pos - 1 > MAX_LINE
+        return {bad: true}
+      end
+      let line = substr(rd.data, rd.pos, nl - rd.pos - 1)
+      rd.pos = nl + 1
+      return {line: line}
+    end
+    let before = pending(rd)
+    if before > MAX_LINE
+      return {bad: true}
+    end
+    if not fill(rd)
+      return {closed: true}
+    end
+    scan = rd.pos + before
+  end
+end
+
+# leading zeros allowed, at most 15 significant digits
+fn parse_hex(s)
+  let n_len = len(s)
+  if n_len == 0 or n_len > MAX_CHUNK_SIZE_LEN
+    return nil
+  end
+  let start = 0
+  while start < n_len - 1 and ord(s, start) == 48
+    start += 1
+  end
+  if n_len - start > 15
+    return nil
+  end
+  let n = 0
+  for i = start, n_len
+    let c = ord(s, i)
+    let d = if c >= 48 and c <= 57
+      c - 48
+    elif c >= 97 and c <= 102
+      c - 87
+    elif c >= 65 and c <= 70
+      c - 55
+    else
+      -1
+    end
+    if d < 0
+      return nil
+    end
+    n = n * 16 + d
+  end
+  n
+end
+
+# {body}, {status: 400 or 413}, or nil if closed. Extensions and trailers are dropped.
+fn read_chunked(rd, max_body)
+  let out = buf_new()
+  let total = 0
+  while true
+    let r = read_line(rd)
+    if r.closed
+      return nil
+    elif r.bad
+      return {status: 400}
+    end
+    let size_str = r.line
+    if not line_bytes_ok(size_str)
+      return {status: 400}
+    end
+    let semi = find(size_str, ";", 0)
+    if semi >= 0
+      size_str = substr(size_str, 0, semi)
+    end
+    let size = parse_hex(string.trim(size_str))
+    if size == nil
+      return {status: 400}
+    end
+    if size == 0
+      break
+    end
+    total += size
+    if total > max_body
+      return {status: 413}
+    end
+    let piece = read_exact(rd, size)
+    if piece == nil
+      return nil
+    end
+    buf_push(out, piece)
+    let end_r = read_line(rd)
+    if end_r.closed
+      return nil
+    elif end_r.bad or end_r.line != ""
+      return {status: 400}
+    end
+  end
+  let trailer_bytes = 0
+  while true
+    let r = read_line(rd)
+    if r.closed
+      return nil
+    elif r.bad
+      return {status: 400}
+    end
+    if r.line == ""
+      break
+    end
+    if not line_bytes_ok(r.line)
+      return {status: 400}
+    end
+    trailer_bytes += len(r.line)
+    if trailer_bytes > MAX_HEADER_BYTES
+      return {status: 400}
+    end
+  end
+  {body: to_string(out)}
+end
+
+# lines are split at CRLF, so any CR or LF left here is bare
+fn line_bytes_ok(line)
+  gem_bytes_span(line, FIELD_BYTES) == len(line)
+end
+
+fn is_digit(c)
+  c >= 48 and c <= 57
+end
+
+# {method, target, http10}, or the status to reject with (400, 505)
+fn parse_request_line(line)
+  if not line_bytes_ok(line)
+    return 400
+  end
+  let sp1 = find(line, " ", 0)
+  if sp1 <= 0
+    return 400
+  end
+  let sp2 = find(line, " ", sp1 + 1)
+  if sp2 <= sp1 + 1 or len(line) - sp2 - 1 != 8
+    return 400
+  end
+  let version = substr(line, sp2 + 1, 8)
+  if version != "HTTP/1.1" and version != "HTTP/1.0"
+    if substr(version, 0, 5) == "HTTP/" and is_digit(ord(version, 5)) and ord(version, 6) == 46 and is_digit(ord(version, 7))
+      return 505
+    end
+    return 400
+  end
+  {method: substr(line, 0, sp1), target: substr(line, sp1 + 1, sp2 - sp1 - 1), http10: version == "HTTP/1.0"}
+end
+
+# str_replace returns its input unchanged when nothing matches
+fn has_text(s, t)
+  len(str_replace(s, t, "")) != len(s)
+end
+
+fn lower_name(name)
+  let n = len(name)
+  let i = gem_bytes_span(name, LOWER_NAME_BYTES)
+  if i == n
+    return name
+  end
+  let out = buf_new()
+  let run = 0                     # bytes from here on not copied yet
+  while i < n
+    # name[i] is an uppercase letter
+    if i > run
+      buf_push(out, substr(name, run, i - run))
+    end
+    buf_push(out, chr(ord(name, i) + 32))
+    run = i + 1
+    # next uppercase letter, 32 bytes at a time
+    i = run
+    while i < n
+      let w = n - i
+      if w > 32
+        w = 32
+      end
+      let k = gem_bytes_span(substr(name, i, w), LOWER_NAME_BYTES)
+      i += k
+      if k < w
+        break
+      end
+    end
+  end
+  if run < n
+    buf_push(out, substr(name, run, n - run))
+  end
+  to_string(out)
+end
+
+fn is_ows(c)
+  c == 32 or c == 9
+end
+
+fn trimmed_from(s, from)
+  let stop = len(s)
+  let start = from + gem_bytes_span(substr(s, from, stop - from), " \t")
+  while stop > start and is_ows(ord(s, stop - 1))
+    stop -= 1
+  end
+  substr(s, start, stop - start)
+end
+
+# {method, target, http10, headers}, or 400.
+# Any control byte but HTAB is rejected (a bare CR or LF is a smuggling risk); HTTP/1.1 needs exactly one Host.
+fn parse_head(head)
+  let n = len(head)
+  let eol = find(head, "\r\n", 0)
+  if eol < 0
+    eol = n
+  end
+  let info = parse_request_line(substr(head, 0, eol))
+  if type(info) == "int"
+    # a bad byte anywhere in the head makes it a 400, not a 505
+    if info == 505
+      let lines = str_replace(head, "\r\n", "")
+      if gem_bytes_span(lines, FIELD_BYTES) != len(lines)
+        return 400
+      end
+    end
+    return info
+  end
+  let headers = {}
+  let repeated = nil              # key -> its values, for repeated headers
+  let pos = eol + 2
+  while pos <= n
+    let stop = find(head, "\r\n", pos)
+    if stop < 0
+      stop = n
+    end
+    let line = substr(head, pos, stop - pos)
+    pos = stop + 2
+    let colon = gem_bytes_span(line, NAME_BYTES)
+    if colon == 0 or colon == len(line) or ord(line, colon) != 58 or not line_bytes_ok(line)
+      return 400
+    end
+    let key = lower_name(substr(line, 0, colon))
+    let value = trimmed_from(line, colon + 1)
+    let prev = headers[key]
+    if prev == nil
+      headers[key] = value
+    else
+      if repeated == nil
+        repeated = {}
+      end
+      let parts = repeated[key]
+      if parts == nil
+        parts = [prev]
+        repeated[key] = parts
+      end
+      push(parts, value)
+    end
+  end
+  if not info.http10 and (headers.host == nil or (repeated != nil and repeated.host != nil))
+    return 400
+  end
+  if repeated != nil
+    for key, parts in repeated
+      let sep = if key == "cookie" then "; " else ", " end
+      headers[key] = string.join(parts, sep)
+    end
+  end
+  info.headers = headers
+  info
+end
+
+# 0 when absent, nil when not a plain decimal
+fn content_length(value)
+  if value == nil
+    return 0
+  end
+  if len(value) == 0 or len(value) > 15 or gem_bytes_span(value, "0123456789") != len(value)
+    return nil
+  end
+  to_int(value)
+end
+
+fn token_list(value)
+  let out = []
+  if value == nil
+    return out
+  end
+  let n = len(value)
+  if n > 0 and gem_bytes_span(value, LOWER_TOKEN_BYTES) == n
+    push(out, value)              # one lowercase token: nothing to split
+    return out
+  end
+  for part in string.split(value, ",")
+    let t = string.lower(string.trim(part))
+    if t != ""
+      push(out, t)
+    end
+  end
+  out
+end
+
+fn has_token(tokens, t)
+  for x in tokens
+    if x == t
+      return true
+    end
+  end
+  false
+end
+
+fn status_text(code)
+  if code == 200
+    return "OK"  # skip STATUS_TEXT: a new process would copy the table on first read
+  end
+  let text = STATUS_TEXT[code]
+  if text == nil
+    return "Unknown"
+  end
+  text
+end
+
+# the server writes these itself; a handler's own are dropped
+fn is_framing_header(name)
+  let l = len(name)
+  if l != 10 and l != 14 and l != 17
+    return false
+  end
+  let n = lower_name(name)
+  n == "content-length" or n == "transfer-encoding" or n == "connection"
+end
+
+fn has_cr_or_lf(s)
+  gem_bytes_span(s, NO_CRLF_BYTES) != len(s)
+end
+
+fn is_token(s)
+  len(s) > 0 and gem_bytes_span(s, TOKEN_BYTES) == len(s)
+end
+
+# nil when `resp` can be sent, else what's wrong with it
+fn response_problem(resp)
+  if type(resp) != "table"
+    return "handler returned {resp}, not a response table"
+  end
+  let status = resp.status
+  if type(status) != "int"
+    return "invalid response: status must be an int, got {type(status)} {status}"
+  end
+  if status < 200 or status > 999
+    return "invalid response: status {status} is not from 200 to 999 (1xx responses are not supported)"
+  end
+  if resp.body != nil and type(resp.body) != "string"
+    return "invalid response: body must be nil or a string, got {type(resp.body)}"
+  end
+  let headers = resp.headers
+  if headers == nil
+    return nil
+  end
+  if type(headers) != "table"
+    return "invalid response: headers must be nil or a table, got {type(headers)}"
+  end
+  for name, value in headers
+    if type(name) != "string" or not is_token(name)
+      return "invalid response: header name \"{name}\" is not an HTTP token"
+    end
+    let values = if type(value) == "table"
+      # what array patterns compile to
+      if not __is_array_n(value, len(value))
+        return "invalid response: header {name} must be a string, number, bool or array of them, got a table with keys other than 0 .. n-1"
+      end
+      value
+    else
+      [value]
+    end
+    for v in values
+      let t = type(v)
+      if t != "string" and t != "int" and t != "float" and t != "bool"
+        return "invalid response: header {name} must be a string, number, bool or array of them, got {t}"
+      end
+      if t == "string" and has_cr_or_lf(v)
+        return "invalid response: header {name} has a CR or LF in its value"
+      end
+    end
+  end
+  nil
+end
+
+# HEAD keeps Content-Length but drops the body; 1xx, 204, 304 have neither
+fn serialize_response(resp, keep_alive, head_only = false)
+  let body = resp.body
+  if body == nil
+    body = ""
+  end
+  let status = resp.status
+  let bodiless = status < 200 or status == 204 or status == 304
+  build_string() do |add|
+    add("HTTP/1.1 ", status, " ", status_text(status), "\r\n")
+    if not bodiless
+      add("Content-Length: ", len(body), "\r\n")
+    end
+    add("Connection: ", if keep_alive then "keep-alive" else "close" end, "\r\n")
+    if resp.headers != nil
+      for k, v in resp.headers
+        if not is_framing_header(k)
+          if type(v) == "table"
+            for part in v
+              add(k, ": ", part, "\r\n")
+            end
+          else
+            add(k, ": ", v, "\r\n")
+          end
+        end
+      end
+    end
+    add("\r\n")
+    if not bodiless and not head_only
+      add(body)
+    end
+  end
+end
+
+fn response_closes(resp)
+  if resp.headers == nil
+    return false
+  end
+  for k, v in resp.headers
+    if len(k) == 10 and lower_name(k) == "connection" and has_token(token_list("{v}"), "close")
+      return true
+    end
+  end
+  false
+end
+
+fn dir_of(file)
+  let i = len(file) - 1
+  while i >= 0 and ord(file, i) != 47
+    i -= 1
+  end
+  substr(file, 0, i + 1)
+end
+
+fn probe()
+  error("probe")
+end
+
+# std's directory as stack frames show it; depends on the install root
+fn std_dir()
+  let r = pcall probe()
+  if r.ok or len(r.stack) == 0 or type(r.stack[0].file) != "string"
+    return nil
+  end
+  let d = dir_of(r.stack[0].file)
+  if d == ""
+    return nil
+  end
+  d
+end
+
+# a handler error's stack minus pcall's closure and any std frames on top (a builder like set_cookie that raised)
+fn handler_frames(stack)
+  let dir = std_dir()
+  let frames = []
+  for f in stack
+    let std_frame = if dir == nil
+      string.starts_with(f.name, "http.")
+    else
+      type(f.file) == "string" and string.starts_with(f.file, dir)
+    end
+    if len(frames) > 0 or not std_frame
+      push(frames, f)
+    end
+  end
+  if len(frames) > 0
+    pop(frames)
+  end
+  frames
+end
+
+fn report_error(what, stack)
+  let frames = handler_frames(stack)
+  let out = build_string() do |add|
+    add("http: ", what)
+    if len(frames) > 0
+      add("\nStack trace:")
+      for f in frames
+        add("\n  at ", f.name, " (", f.file, ":", f.line, ")")
+      end
+    end
+  end
+  eprint(out)
+end
+
+# a 500 if the handler raised or returned something invalid
+fn call_handler(handler, req, rd)
+  let r = pcall handler(req)
+  if not r.ok
+    report_error("{req.method} {req.path}: {r.error}", r.stack)
+    rd.handler_error = r.error
+    return server_error()
+  end
+  let problem = response_problem(r.value)
+  if problem != nil
+    report_error("{req.method} {req.path}: {problem}", [])
+    rd.handler_error = problem
+    return server_error()
+  end
+  r.value
+end
+
+# an error in on_event only goes to stderr
+fn notify(cfg, ev)
+  let r = pcall cfg.on_event(ev)
+  if not r.ok
+    eprint("http: on_event: {r.error}")
+  end
+end
+
+fn request_event(cfg, rd, status, bytes_out, raw = nil)
+  let req = rd.req
+  let ms = if rd.started == nil then 0 else time_ms() - rd.started end
+  let ev = {kind: "request", peer: rd.peer, status: status, ms: ms, bytes_out: bytes_out}
+  if req != nil
+    ev.method = req.method
+    ev.path = req.path
+    ev.headers = req.headers
+  end
+  if rd.handler_error != nil
+    ev.error = rd.handler_error
+  end
+  if raw != nil
+    ev.raw = raw
+  end
+  notify(cfg, ev)
+end
+
+fn raw_of(rd)
+  if rd.raw != nil
+    return rd.raw
+  elif rd.head != nil
+    return raw_prefix(rd.head)
+  end
+  raw_prefix(substr(rd.data, rd.pos, pending(rd)))
+end
+
+# reads and drops what the peer still sends: closing with unread bytes would reset before it read the response
+fn drain(fd, total_ms = 1000)
+  let until = time_ms() + total_ms
+  let n = 0
+  while time_ms() < until
+    let chunk = tcp_read(fd, READ_SIZE, DRAIN_QUIET_MS)
+    if chunk == nil or chunk == ""
+      return n
+    end
+    n += len(chunk)
+  end
+  n
+end
+
+fn reject(rd, cfg, status, head_only = false)
+  let resp = response(status, {"Content-Type": TEXT_PLAIN}, status_text(status))
+  let out = serialize_response(resp, false, head_only)
+  tcp_write(rd.fd, out, rd.write_ms)
+  rd.answered = rd.answered + 1
+  rd.ended = "rejected"
+  if cfg.on_event != nil
+    request_event(cfg, rd, status, len(out), raw_of(rd))
+  end
+  rd.bytes_in = rd.bytes_in + drain(rd.fd)
+  false
+end
+
+# spawn failed (process table or memory full); in the acceptor, so no waiting: a fresh socket takes a short reply
+fn refuse(fd)
+  let resp = response(503, {"Content-Type": TEXT_PLAIN}, status_text(503))
+  tcp_write(fd, serialize_response(resp, false), 0)
+  drain(fd, REFUSE_DRAIN_MS)
+  tcp_close(fd)
+end
+
+# over a connection cap; reading what the client already sent makes a reset (losing the 503) less likely
+fn refuse_now(fd)
+  let resp = response(503, {"Content-Type": TEXT_PLAIN}, status_text(503))
+  tcp_write(fd, serialize_response(resp, false), 0)
+  tcp_read(fd, READ_SIZE, 0)
+  tcp_close(fd)
+end
+
+# nil when read, a status to reject with, or false if closed or timed out
+fn read_body(rd, cfg, head, req)
+  let headers = head.headers
+  let te = headers["transfer-encoding"]
+  let chunked = false
+  let n = 0
+  if te != nil
+    if headers["content-length"] != nil or head.http10
+      return 400
+    end
+    let codings = token_list(te)
+    if len(codings) != 1 or codings[0] != "chunked"
+      return 501
+    end
+    chunked = true
+  else
+    n = content_length(headers["content-length"])
+    if n == nil
+      return 400
+    end
+    if n > cfg.max_body
+      return 413
+    end
+    if n == 0
+      return nil
+    end
+  end
+  let expect = headers["expect"]
+  if expect != nil and string.lower(expect) == "100-continue" and not head.http10
+    if not send_all(rd, "HTTP/1.1 100 Continue\r\n\r\n")
+      rd.ended = "write_failed"
+      return false
+    end
+  end
+  if chunked
+    let r = read_chunked(rd, cfg.max_body)
+    if r == nil
+      return false
+    elif r.status != nil
+      return r.status
+    end
+    req.body = r.body
+  else
+    let body = read_exact(rd, n)
+    if body == nil
+      return false
+    end
+    req.body = body
+  end
+  nil
+end
+
+fn skip_crlfs(text)
+  let i = 0
+  let n = len(text)
+  while i + 1 < n and ord(text, i) == 13 and ord(text, i + 1) == 10
+    i += 2
+  end
+  substr(text, i, n - i)
+end
+
+# ignores empty lines before the request line (RFC 9112 2.2)
+fn read_request_head(rd)
+  for attempt = 0, MAX_EMPTY_LINE_HEADS
+    let raw = read_head(rd)
+    if raw == nil or raw.too_large or raw.bare_lf
+      return raw
+    end
+    let text = raw.text
+    if len(text) > 0 and ord(text, 0) == 13
+      text = skip_crlfs(text)
+    end
+    if text != ""
+      return {text: text}
+    end
+  end
+  {only_empty: true}
+end
+
+# `http://host/x?y` -> `/x?y`; other targets unchanged
+fn origin_target(target)
+  if len(target) == 0 or ord(target, 0) == 47
+    return target
+  end
+  let scheme_end = string.index_of(target, "://")
+  if scheme_end < 0
+    return target
+  end
+  let scheme = string.lower(substr(target, 0, scheme_end))
+  if scheme != "http" and scheme != "https"
+    return target
+  end
+  let host_start = scheme_end + 3
+  let n = len(target)
+  for i = host_start, n
+    let c = ord(target, i)
+    if c == 47
+      return substr(target, i, n - i)
+    elif c == 63
+      return "/{substr(target, i, n - i)}"
+    end
+  end
+  "/"
+end
+
+# url.parse, skipping its byte loop when there's no `?` or `#`
+fn parse_target(target)
+  if find(target, "?", 0) < 0 and find(target, "#", 0) < 0
+    return {path: target, query: {}}
+  end
+  url.parse(target)
+end
+
+# turns trap_exit back off (a handler may set it) so `stop` can kill us; true if told to exit or the server is gone
+fn stop_requested(server)
+  if not process_flag("trap_exit", false)
+    return false
+  end
+  let asked = receive
+  when {tag: "EXIT", pid: ^server} then true
+  after 0 then false
+  end
+  let info = process_info(server)
+  asked or info == nil or info.state == "dead"
+end
+
+# true to keep the connection open
+fn process_one_request(rd, cfg)
+  rd.started = nil
+  rd.deadline = nil
+  rd.head = nil
+  rd.req = nil
+  rd.raw = nil
+  rd.handler_error = nil
+  if pending(rd) > 0
+    start_deadline(rd)
+  end
+  let raw = read_request_head(rd)
+  if raw == nil
+    return false
+  end
+  if raw.too_large
+    return reject(rd, cfg, 431)
+  elif raw.only_empty or raw.bare_lf
+    return reject(rd, cfg, 400)
+  end
+  rd.head = raw.text
+  let head = parse_head(raw.text)
+  if type(head) == "int"
+    return reject(rd, cfg, head)
+  end
+  let head_only = head.method == "HEAD"
+  let headers = head.headers
+  let parsed = parse_target(origin_target(head.target))
+  let req = {
+    method: head.method,
+    path: parsed.path,
+    query: parsed.query,
+    headers: headers,
+    body: "",
+    cookies: parse_cookies(headers["cookie"]),
+    params: {},
+    peer: {ip: rd.peer.ip, port: rd.peer.port}
+  }
+  rd.req = req
+  let bad = read_body(rd, cfg, head, req)
+  if bad == false
+    return false
+  elif bad != nil
+    return reject(rd, cfg, bad, head_only)
+  end
+
+  let tokens = token_list(headers["connection"])
+  let keep_alive = not has_token(tokens, "close")
+  if head.http10
+    keep_alive = keep_alive and has_token(tokens, "keep-alive")
+  end
+
+  let route_method = if head_only then "GET" else req.method end
+  let matched = cfg.router.match(route_method, req.path)
+  let resp = nil
+  if matched != nil
+    req.params = matched.params
+    resp = call_handler(matched.handler, req, rd)
+    if stop_requested(cfg.server)
+      keep_alive = false
+    end
+  else
+    resp = not_found()
+  end
+  if response_closes(resp)
+    keep_alive = false
+  end
+  let out = serialize_response(resp, keep_alive, head_only)
+  rd.answered = rd.answered + 1
+  if not send_all(rd, out)
+    keep_alive = false
+    rd.ended = "write_failed"
+  elif not keep_alive
+    rd.ended = "done"
+  end
+  if cfg.on_event != nil
+    request_event(cfg, rd, resp.status, len(out))
+  end
+  keep_alive
+end
+
+# false if cut short. write_ms bounds each wait for progress, not the whole response: a slow reader gets it all
+fn send_all(rd, out)
+  let rest = out
+  while true
+    let t0 = time_ms()
+    let n = tcp_write(rd.fd, rest, rd.write_ms)
+    if n == len(rest)
+      return true
+    elif n == 0
+      if rd.write_ms != nil and time_ms() - t0 >= rd.write_ms
+        eprint("http: closing a connection: the client took no bytes of a {len(out)}-byte response for {rd.write_ms} ms")
+      end
+      return false
+    end
+    rest = substr(rest, n)
+  end
+end
+
+# keep-alive loop; an error in std/http itself (not a handler) answers 500, closes, and goes to on_event as a "crash"
+fn handle_connection(fd, peer, cfg)
+  claim(fd)
+  let opened = if cfg.on_event != nil then time_ms() else 0 end
+  if cfg.on_event != nil
+    notify(cfg, {kind: "open", peer: peer})
+  end
+  let rd = new_reader(fd, peer, cfg)
+  let open = true
+  while open
+    let r = pcall process_one_request(rd, cfg)
+    if r.ok
+      open = r.value
+    else
+      eprint("http: internal error: {r.error}")
+      if cfg.on_event != nil
+        notify(cfg, {kind: "crash", peer: peer, error: r.error, stack: r.stack, raw: raw_of(rd)})
+      end
+      pcall reject(rd, cfg, 500)
+      rd.ended = "error"
+      open = false
+    end
+  end
+  send(cfg.server, {tag: "_http_closing", pid: self()})
+  tcp_close(fd)
+  if cfg.on_event != nil
+    notify(cfg, {kind: "close", peer: peer, reason: rd.ended, requests: rd.answered, bytes_in: rd.bytes_in, ms: time_ms() - opened})
+  end
+end
+
+# One process per connection. If accept fails (out of fds) it logs once and retries every ACCEPT_BACKOFF_MS.
+# With a connection cap it monitors each connection and reaps DOWNs before each decision.
+fn accept_loop(listen_fd, cfg)
+  let failing = false
+  let counts = if cfg.max_conns != nil or cfg.max_per_ip != nil then new_counts() else nil end
+  while true
+    let a = pcall tcp_accept(listen_fd)
+    if a.ok
+      failing = false
+      accept_one(a.value, cfg, counts)
+    else
+      if not failing
+        eprint("http: {a.error}; retrying every {ACCEPT_BACKOFF_MS} ms")
+        failing = true
+      end
+      sleep(ACCEPT_BACKOFF_MS)
+    end
+  end
+end
+
+# live: pid -> peer ip
+fn new_counts()
+  {live: {}, total: 0, per_ip: {}}
+end
+
+fn reap(counts)
+  let more = true
+  while more
+    receive
+    when {tag: "DOWN", pid: pid}
+      let ip = delete(counts.live, pid)
+      if ip != nil
+        counts.total = counts.total - 1
+        let n = counts.per_ip[ip] - 1
+        if n == 0
+          delete(counts.per_ip, ip)
+        else
+          counts.per_ip[ip] = n
+        end
+      end
+    after 0
+      more = false
+    end
+  end
+end
+
+# the cap a new connection from `ip` would exceed, or nil
+fn over_cap(counts, cfg, ip)
+  if cfg.max_conns != nil and counts.total >= cfg.max_conns
+    return "max_connections"
+  end
+  if cfg.max_per_ip != nil
+    let n = counts.per_ip[ip]
+    if n != nil and n >= cfg.max_per_ip
+      return "max_per_ip"
+    end
+  end
+  nil
+end
+
+# a client that reset before its address could be read is just closed
+fn accept_one(fd, cfg, counts)
+  let p = pcall tcp_peer(fd)
+  if not p.ok or p.value == nil
+    pcall tcp_close(fd)
+    return nil
+  end
+  let peer = p.value
+  if counts != nil
+    reap(counts)
+    let cap = over_cap(counts, cfg, peer.ip)
+    if cap != nil
+      pcall refuse_now(fd)
+      if cfg.on_event != nil
+        notify(cfg, {kind: "refused", peer: peer, reason: cap})
+      end
+      return nil
+    end
+  end
+  let r = if counts == nil
+    pcall spawn(fn()
+      handle_connection(fd, peer, cfg)
+    end)
+  else
+    pcall spawn_monitor(fn()
+      handle_connection(fd, peer, cfg)
+    end)
+  end
+  if not r.ok
+    eprint("http: {r.error}; refusing a connection")
+    pcall refuse(fd)
+    if cfg.on_event != nil
+      notify(cfg, {kind: "refused", peer: peer, reason: "spawn_failed", error: r.error})
+    end
+    return nil
+  end
+  let pid = if counts == nil then r.value else r.value.pid end
+  if counts != nil
+    counts.live[pid] = peer.ip
+    counts.total = counts.total + 1
+    let n = counts.per_ip[peer.ip]
+    counts.per_ip[peer.ip] = if n == nil then 1 else n + 1 end
+  end
+  # Registered by the acceptor, not the connection: the acceptor is killed before the shutdown sweep,
+  # so every connection it spawned is in the server's mailbox by then.
+  send(cfg.server, {tag: "_http_conn", pid: pid, fd: fd})
+end
+
+# Handles _http_conn, _http_closing, DOWN or EXIT; returns a shutdown reason or nil. `conns`: pid -> socket.
+# One catch-all receive is cheaper than a pattern per kind, and stray messages get dropped.
+fn server_message(conns, msg, acceptor, watch, unwatched = nil)
+  if type(msg) != "table" or type(msg.pid) != "int"
+    return nil
+  end
+  let tag = msg.tag
+  if tag == "_http_conn"
+    conns[msg.pid] = msg.fd
+    if unwatched == nil
+      monitor(msg.pid)
+    else
+      push(unwatched, msg.pid)
+    end
+  elif tag == "_http_closing"
+    delete(conns, msg.pid)
+  elif tag == "DOWN"
+    if watch != nil and msg.pid == watch
+      return "shutdown"
+    end
+    let fd = delete(conns, msg.pid)
+    if fd != nil
+      tcp_close(fd)
+    end
+  elif tag == "EXIT"
+    if msg.pid == acceptor
+      eprint("http: acceptor died: {msg.reason}")
+      return "acceptor died: {msg.reason}"
+    elif msg.reason != "normal"
+      return msg.reason
+    end
+  end
+  nil
+end
+
+# monitoring one that already died queues its DOWN at once, so nothing is lost
+fn watch_new(conns, unwatched)
+  for pid in unwatched
+    if conns[pid] != nil
+      monitor(pid)
+    end
+  end
+  while len(unwatched) > 0
+    pop(unwatched)
+  end
+end
+
+# a connection parked in a C call keeps its socket until its DOWN closes it; one that traps exits closes its own
+fn shut_down(listen_fd, acceptor, conns, watch)
+  kill(acceptor, "shutdown")
+  tcp_close(listen_fd)
+  for pid in keys(conns)
+    kill(pid, "shutdown")
+  end
+  # a connection spawned just before the acceptor died may still be registering: kill it too
+  let more = true
+  while more
+    receive
+    when msg
+      server_message(conns, msg, nil, watch)    # nil: acceptor's EXIT is expected now
+      if type(msg) == "table" and msg.tag == "_http_conn"
+        kill(msg.pid, "shutdown")
+      end
+    after 0
+      more = false
+    end
+  end
+end
+
+# Traps exits so a kill (stop, a supervisor) or the acceptor dying arrives as EXIT for a clean shutdown.
+# Opens the listener itself, so a starter killed early can't take the port with it.
+fn server_main(host, port, cfg, starter, ref, watch)
+  let l = pcall tcp_listen(host, port)
+  if not l.ok
+    send(starter, {tag: "_http_started", ref: ref, error: l.error})
+    return nil
+  end
+  let listen_fd = claim(l.value)
+  let bound_port = tcp_local_port(listen_fd)
+  process_flag("trap_exit", true)
+  if watch != nil
+    monitor(watch)
+  end
+  cfg.server = self()
+  let a = pcall spawn_link(fn()
+    accept_loop(listen_fd, cfg)
+  end)
+  if not a.ok
+    send(starter, {tag: "_http_started", ref: ref, error: a.error})
+    return nil
+  end
+  let acceptor = a.value
+  send(starter, {tag: "_http_started", ref: ref, port: bound_port})
+  # A short connection often finishes before the server runs, its _http_closing right behind its _http_conn,
+  # so drain the mailbox before monitoring: a closed one needs no monitor.
+  let conns = {}
+  let unwatched = []
+  let reason = nil
+  while reason == nil
+    receive
+    when msg
+      reason = server_message(conns, msg, acceptor, watch, unwatched)
+    end
+    let more = reason == nil
+    while more
+      receive
+      when msg
+        reason = server_message(conns, msg, acceptor, watch, unwatched)
+        more = reason == nil
+      after 0
+        more = false
+      end
+    end
+    watch_new(conns, unwatched)
+  end
+  shut_down(listen_fd, acceptor, conns, watch)
+  process_flag("trap_exit", false)
+  kill(self(), reason)
+end
+
+fn check_int(caller, name, v, min)
+  if type(v) != "int" or v < min
+    error("{caller}: {name} must be an int >= {min}, got {v}")
+  end
+end
+
+## Starts a server without blocking and returns `{pid, port}`; the server isn't linked to the caller.
+## Options: `port` (8080; 0 picks a free one), `host` ("0.0.0.0"), `max_body` (8 MB), `max_connections`,
+## `max_per_ip`, `idle_timeout_ms`, `request_timeout_ms`, `write_timeout_ms` (30000 each, nil for none),
+## and `on_event`, called with {kind: "open" | "request" | "close" | "refused" | "crash", peer, ...}.
+let START_OPTIONS = ["port", "host", "max_body", "idle_timeout_ms", "request_timeout_ms", "write_timeout_ms", "max_connections", "max_per_ip", "on_event"]
+
+fn check_keys(who, what, t, allowed, where = "")
+  for k, _ in t
+    let known = false
+    for a in allowed
+      if a == k
+        known = true
+      end
+    end
+    if not known
+      let near = if type(k) == "string" then string.closest(k, allowed) end
+      let hint = if near != nil then " (did you mean \"{near}\"?)" else "" end
+      error("{who}: unknown {what} \"{k}\"{where}{hint}")
+    end
+  end
+end
+
+fn start(router_ref, opts = {})
+  launch("http.start", router_ref, nil, opts)
+end
+
+# nil (no limit) or an int > 0
+fn timeout_opt(caller, name, value)
+  if value == nil
+    return nil
+  elif type(value) != "int"
+    error("{caller}: {name} must be an int > 0 (milliseconds) or nil, got {type(value)}")
+  elif value <= 0
+    error("{caller}: {name} must be an int > 0 (milliseconds) or nil, got {value}")
+  end
+  value
+end
+
+# the server monitors `watch` (nil: nobody)
+fn launch(caller, router_ref, watch, opts)
+  if type(opts) != "table"
+    error("{caller}: opts must be a table, got {type(opts)}")
+  end
+  check_keys(caller, "option", opts, START_OPTIONS)
+  let {port = 8080, host = "0.0.0.0", max_body = DEFAULT_MAX_BODY, idle_timeout_ms = DEFAULT_IDLE_TIMEOUT_MS, request_timeout_ms = DEFAULT_REQUEST_TIMEOUT_MS, write_timeout_ms = DEFAULT_WRITE_TIMEOUT_MS, max_connections = nil, max_per_ip = nil, on_event = nil} = opts
+  if type(port) != "int" or port < 0 or port > 65535
+    error("{caller}: port must be an int from 0 to 65535, got {port}")
+  end
+  if type(host) != "string"
+    error("{caller}: host must be a string (an IP address), got {type(host)}")
+  end
+  check_int(caller, "max_body", max_body, 0)
+  idle_timeout_ms = timeout_opt(caller, "idle_timeout_ms", idle_timeout_ms)
+  request_timeout_ms = timeout_opt(caller, "request_timeout_ms", request_timeout_ms)
+  write_timeout_ms = timeout_opt(caller, "write_timeout_ms", write_timeout_ms)
+  if max_connections != nil
+    check_int(caller, "max_connections", max_connections, 1)
+  end
+  if max_per_ip != nil
+    check_int(caller, "max_per_ip", max_per_ip, 1)
+  end
+  if on_event != nil and type(on_event) != "fn"
+    error("{caller}: on_event must be a fn or nil, got {type(on_event)}")
+  end
+  if type(router_ref) != "table" or type(router_ref.match) != "fn"
+    error("{caller}: expected a router from http.router(), got {type(router_ref)}")
+  end
+  let cfg = {router: router_ref, max_body: max_body, idle_ms: idle_timeout_ms, request_ms: request_timeout_ms, write_ms: write_timeout_ms, max_conns: max_connections, max_per_ip: max_per_ip, on_event: on_event, server: nil}
+  let me = self()
+  let ref = make_ref()
+  let s = pcall spawn(fn()
+    server_main(host, port, cfg, me, ref, watch)
+  end)
+  if not s.ok
+    error("{caller}: {s.error}")
+  end
+  receive
+  when {tag: "_http_started", ref: ^ref, port: bound_port}
+    {pid: s.value, port: bound_port}
+  when {tag: "_http_started", ref: ^ref, error: e}
+    error("{caller}: {e}")
+  after STOP_TIMEOUT_MS
+    error("{caller}: the server process did not start")
+  end
+end
+
+# undo a monitor this call added (and drop its DOWN); leave one the caller already had
+fn drop_monitor(pid, added)
+  if added and not demonitor(pid)
+    receive
+    when {tag: "DOWN", pid: ^pid}
+      nil
+    after 0
+      nil
+    end
+  end
+end
+
+# put a consumed DOWN back if the monitor was the caller's own
+fn return_down(pid, added, reason)
+  if not added
+    send(self(), {tag: "DOWN", pid: pid, reason: reason})
+  end
+  nil
+end
+
+## Like `start`, but blocks until the server exits. Killing the caller stops the server; raises if it dies on its own.
+fn serve(router_ref, opts = {})
+  let pid = launch("http.serve", router_ref, self(), opts).pid
+  monitor(pid)
+  receive
+  when {tag: "DOWN", pid: ^pid, reason: reason}
+    if reason != "normal" and reason != "shutdown"
+      error("http.serve: server died: {reason}")
+    end
+    nil
+  end
+end
+
+fn target_pid(t, caller)
+  let kind = type(t)
+  if kind == "int"
+    return t
+  elif kind == "string"
+    let pid = whereis(t)
+    if pid == nil
+      error("{caller}: no process registered as \"{t}\"")
+    end
+    return pid
+  elif kind == "table" and type(t.pid) == "int"
+    return t.pid
+  end
+  error("{caller}: expected a server pid, \{pid\} handle or registered name, got {t}")
+end
+
+## Stops a server (handle, pid or registered name), cutting off requests in flight.
+## Returns once the port and every connection are closed, waiting at most `timeout_ms`.
+fn stop(server, timeout_ms = 5000)
+  if timeout_ms != nil and type(timeout_ms) != "int"
+    error("http.stop: timeout_ms must be an int (milliseconds) or nil, got {type(timeout_ms)}")
+  end
+  let pid = target_pid(server, "http.stop")
+  let added = monitor(pid)
+  kill(pid, "shutdown")
+  if timeout_ms == nil
+    receive
+    when {tag: "DOWN", pid: ^pid, reason: reason}
+      return_down(pid, added, reason)
+    end
+    return nil
+  end
+  receive
+  when {tag: "DOWN", pid: ^pid, reason: reason}
+    return_down(pid, added, reason)
+  after timeout_ms
+    drop_monitor(pid, added)
+    error("http.stop: the server did not stop within {timeout_ms} ms")
+  end
+end
+
+export response, ok, html, json_response, redirect, not_found, bad_request,
+  server_error, set_cookie, delete_cookie, parse_form, html_escape, router,
+  start, serve, stop

@@ -1,0 +1,30 @@
+# `while running` stopped by `running = false` resets at the back-edge like `while true`
+
+let main_pid = self()
+
+fn loop(count, running)
+  while running
+    let msg = receive()
+    match msg
+    when {tag: "tick", n: n}
+      let junk = [n, n + 1, n + 2, n + 3, n + 4, n + 5, "pad-" + to_string(n)]
+      count = count + 1
+    when {tag: "stop"}
+      running = false
+    end
+  end
+  send(main_pid, {tag: "result", count: count})
+end
+
+let worker = spawn(fn()
+  loop(0, true)
+end)
+
+let total = 5000
+for i = 0, total
+  send(worker, {tag: "tick", n: i})
+end
+send(worker, {tag: "stop"})
+
+let r = receive()
+print("result: " + to_string(r.count))

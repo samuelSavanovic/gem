@@ -1,0 +1,40 @@
+# a top-level `let` named like a builtin: its initializer and code before it still see the builtin,
+# code after it and every fn of the file see the binding
+
+load "./modules/builtin_let_mod" as mod
+
+let t = {a: 1, b: 2}
+
+print(len(keys(t)))
+if len(t) > 0
+  print(type(keys))
+end
+
+# a closure and a named fn defined before the let see the binding
+let later = fn() keys end
+fn key_total()
+  len(keys)
+end
+
+let keys = sort(keys(t))         # the initializer calls the builtin
+print(keys)
+print(key_total(), later())
+
+let keys = len(keys) + 10
+print(keys)
+
+let values = fn(tbl) sort(values(tbl)) end
+print(values({p: 3, q: 1}))
+
+# destructuring: the temp's initializer sees the builtin
+let {abs} = {abs: abs}
+print(abs(-3))
+
+print(mod.keys, mod.key_count())
+mod.say("hello")
+
+# a top-level fn shadows the builtin in the whole file
+print(floor(2.5))
+fn floor(x)
+  "my floor {x}"
+end

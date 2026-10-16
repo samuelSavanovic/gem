@@ -1,0 +1,2 @@
+# Loading a module without an export statement is a compile error at the load.
+load "./modules/no_export"

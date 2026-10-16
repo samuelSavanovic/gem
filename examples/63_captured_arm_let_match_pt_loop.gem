@@ -1,0 +1,50 @@
+# like 60 with a match instead of if/else, and enough iterations to reset
+
+let main_pid = self()
+
+fn worker(reply_to)
+  while true
+    let msg = receive()
+    match msg
+    when {tag: "stop"}
+      send(reply_to, {tag: "done"})
+      return nil
+    when {tag: "go", n: n}
+      let acc = reply_to
+      let payload = "iter-" + to_string(n)
+      let r = pcall(fn()
+        spawn(fn()
+          send(acc, {tag: "result", n: n, payload: payload})
+        end)
+      end)
+    end
+  end
+end
+
+let w = spawn(fn() worker(main_pid) end)
+let total = 1000
+for i = 0, total
+  send(w, {tag: "go", n: i})
+end
+send(w, {tag: "stop"})
+
+let received = 0
+let last_n = -1
+let last_payload = ""
+let done_seen = false
+while not (done_seen and received == total)
+  let r = receive()
+  match r
+  when {tag: "result", n: n, payload: p}
+    received += 1
+    if n > last_n
+      last_n = n
+      last_payload = p
+    end
+  when {tag: "done"}
+    done_seen = true
+  end
+end
+print("received: " + to_string(received))
+print("last_n: " + to_string(last_n))
+print("last_payload: " + last_payload)

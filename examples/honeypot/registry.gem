@@ -1,0 +1,85 @@
+## Starts a session per accepted connection within the global and per-IP caps, and records crashes.
+
+load "./session"
+load "./recorder"
+
+# the registry owns the socket from here until the session claims it, so a crash in between closes
+# it; sockets still in the mailbox are the acceptor's (server.start_front)
+fn accepted(state, sock, peer)
+  claim(sock)
+  let cfg = state.cfg
+  let ip = peer.ip
+  let from_ip = if has_key(state.per_ip, ip) then state.per_ip[ip] else 0 end
+  let cap = if state.count >= cfg.max_sessions then "max_sessions" elif from_ip >= cfg.max_per_ip then "max_per_ip" end
+  if cap != nil
+    tcp_close(sock)
+    recorder.emit(cfg.events, {kind: "cap", cap: cap, ip: ip})
+    return nil
+  end
+  let r = pcall spawn_monitor(fn() session.run(sock, peer, cfg) end)
+  if r.ok
+    state.live[r.value.pid] = ip
+    state.per_ip[ip] = from_ip + 1
+    state.count = state.count + 1
+  else
+    tcp_close(sock)
+    recorder.emit(cfg.events, {kind: "cap", cap: "spawn_failed", ip: ip, detail: r.error})
+  end
+end
+
+fn down(state, pid, reason)
+  if not has_key(state.live, pid)
+    return nil
+  end
+  let ip = delete(state.live, pid)
+  state.count = state.count - 1
+  if state.per_ip[ip] == 1
+    delete(state.per_ip, ip)
+  else
+    state.per_ip[ip] = state.per_ip[ip] - 1
+  end
+  if reason != "normal"
+    recorder.emit(state.cfg.events, {kind: "crash", session: pid, reason: reason})
+  end
+end
+
+fn loop(state)
+  while true
+    receive
+    when {tag: "accepted", sock: sock, peer: peer}
+      accepted(state, sock, peer)
+    when {tag: "DOWN", pid: pid, reason: reason}
+      down(state, pid, reason)
+    when {tag: "_hp_count", from: from, ref: ref}
+      send(from, {tag: "_hp_counted", ref: ref, sessions: state.count, ips: len(state.per_ip)})
+    when other
+      nil
+    end
+  end
+end
+
+## Returns its pid. Takes `{tag: "accepted", sock, peer}`; over a cap it closes the socket
+## and logs a `cap` event instead.
+fn start(name, cfg)
+  let pid = spawn do
+    loop({live: {}, per_ip: {}, count: 0, cfg: cfg})
+  end
+  register(name, pid)
+  pid
+end
+
+## `{sessions, ips}` of the registry at `target`, or nil if it doesn't answer within `timeout_ms`.
+fn count(target, timeout_ms = 1000)
+  let to = if type(target) == "string" then whereis(target) else target end
+  if to == nil
+    return nil
+  end
+  let ref = make_ref()
+  send(to, {tag: "_hp_count", from: self(), ref: ref})
+  receive
+  when {tag: "_hp_counted", ref: ^ref, sessions: n, ips: ips} then {sessions: n, ips: ips}
+  after timeout_ms then nil
+  end
+end
+
+export start, count

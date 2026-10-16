@@ -1,0 +1,35 @@
+# every make_counter call leaves a pinned box behind and resets must free them
+
+fn make_counter()
+  let n = 0
+  let inc = fn() n = n + 1 end
+  inc()
+  inc()
+  inc()
+  inc()
+  inc()
+  n
+end
+
+let main_pid = self()
+
+let w = spawn(fn()
+  let total = 0
+  while true
+    let msg = receive()
+    if msg == "done"
+      send(main_pid, {tag: "result", total: total})
+      return
+    end
+    total = total + make_counter()
+    let junk = {x: "pad-" + to_string(total), y: [1,2,3,4,5]}
+  end
+end)
+
+let n = 50000
+for i = 0, n
+  send(w, 1)
+end
+send(w, "done")
+let r = receive()
+print("total: " + to_string(r.total))

@@ -1,0 +1,5 @@
+fn f()
+  let = 1
+end
+
+export f

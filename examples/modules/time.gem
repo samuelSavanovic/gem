@@ -1,0 +1,10 @@
+# named like std/time, which std/log loads: the two are different modules
+fn now()
+  "user time"
+end
+
+fn boom()
+  error("boom")
+end
+
+export now, boom

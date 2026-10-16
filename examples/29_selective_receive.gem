@@ -1,0 +1,129 @@
+spawn(fn()
+  let me = self()
+  send(me, {tag: "a", val: 1})
+  send(me, {tag: "b", val: 2})
+
+  receive
+  when {tag: "b", val: v}
+    print("test1: got b val={v}")
+  end
+end)
+
+spawn(fn()
+  let me = self()
+  send(me, {tag: "x", val: 10})
+  send(me, {tag: "y", val: 20})
+  send(me, {tag: "x", val: 30})
+
+  receive
+  when {tag: "y", val: v}
+    print("test2: y={v}")
+  end
+  # plain receive still gets the first "x"
+  let msg = receive()
+  print("test2: next={msg.val}")
+end)
+
+spawn(fn()
+  let me = self()
+  send(me, {kind: "ping"})
+  send(me, {kind: "data", payload: 42})
+  send(me, {kind: "stop"})
+
+  # skips "ping" to match "data"
+  receive
+  when {kind: "data", payload: p}
+    print("test3: data={p}")
+  when {kind: "stop"}
+    print("test3: stop")
+  end
+  let msg = receive()
+  print("test3: remaining={msg.kind}")
+end)
+
+spawn(fn()
+  let me = self()
+  send(me, {tag: "data", items: [100, 200]})
+
+  receive
+  when {tag: "data", items: [a, b]}
+    print("test4: a={a} b={b}")
+  end
+end)
+
+spawn(fn()
+  let me = self()
+  send(me, {tag: "app", data: "hello"})
+  let child = spawn(fn()
+    error("crash!")
+  end)
+  monitor(child)
+  # by now the app message and DOWN are both in the mailbox
+
+  receive
+  when {tag: "DOWN", reason: r}
+    print("test5: down reason={r}")
+  end
+  let msg = receive()
+  print("test5: app data={msg.data}")
+end)
+
+spawn(fn()
+  receive
+  when {tag: "nope"}
+    print("test6: WRONG")
+  after 0
+    print("test6: timed out")
+  end
+end)
+
+spawn(fn()
+  let me = self()
+  send(me, {tag: "wrong"})
+
+  receive
+  when {tag: "right"}
+    print("test7: WRONG")
+  after 0
+    print("test7: timed out")
+  end
+  let msg = receive()
+  print("test7: leftover={msg.tag}")
+end)
+
+# a receive block as the fn's value
+spawn(fn()
+  let me = self()
+  send(me, {tag: "val", n: 42})
+
+  let get_val = fn()
+    receive
+    when {tag: "val", n: x}
+      x
+    end
+  end
+  let result = get_val()
+  print("test8: result={result}")
+end)
+
+spawn(fn()
+  let me = self()
+  send(me, "plain message")
+  let msg = receive()
+  print("test9: {msg}")
+end)
+
+spawn(fn()
+  let me = self()
+  send(me, {tag: "outer", val: 1})
+  send(me, {tag: "inner", val: 2})
+
+  receive
+  when {tag: "outer", val: v}
+    print("test10: outer={v}")
+    receive
+    when {tag: "inner", val: w}
+      print("test10: inner={w}")
+    end
+  end
+end)

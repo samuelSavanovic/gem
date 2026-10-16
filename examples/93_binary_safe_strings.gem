@@ -1,0 +1,30 @@
+# ==, <, sort, str_replace and path_join look past embedded NULs
+
+let nul = chr(0)
+let a = "x" + nul + "y"
+let b = "x" + nul + "z"
+
+print(len(a))
+print(len(b))
+
+print(a == "x")
+print(a == ("x" + nul + "y"))
+print(a == b)
+
+print(a < b)
+print(b < a)
+
+# two strings that differ only after an embedded NUL
+let xs = [b, a]
+sort(xs)
+print(xs[0] == a)
+print(xs[1] == b)
+
+# the pattern itself contains a NUL
+let s = "aa" + nul + "bb" + nul + "cc"
+let r = str_replace(s, "a" + nul, "X")
+print(len(r))                                   # "aXbb\0cc"
+print(substr(r, 2) == ("bb" + nul + "cc"))
+
+let p = path_join("d" + nul + "x", "f" + nul + "y")
+print(len(p))                                   # "d\0x" + "/" + "f\0y"

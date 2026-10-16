@@ -1,0 +1,4 @@
+# One undeclared identifier: a single error with a caret at `mystery_value`.
+
+let known = 1
+print(known + mystery_value)

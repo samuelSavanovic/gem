@@ -1,0 +1,42 @@
+/* libFuzzer entry for tests/fuzz/parser_fuzz.gem (make fuzz-parser). The program's main process calls
+ * gem_fuzz_main({run: fuzz_one}), which hands its own argv to LLVMFuzzerRunDriver; libFuzzer calls
+ * back with each input, passed to that fn as a string. It all runs on main's coroutine stack, like
+ * any extern fn. Link with libclang_rt.fuzzer_no_main (the Gem program has its own main). */
+#include <stdint.h>
+#include <stddef.h>
+#include <stdlib.h>
+#include "gem.h"
+
+int LLVMFuzzerRunDriver(int *argc, char ***argv, int (*cb)(const uint8_t *data, size_t size));
+
+/* The fn each input goes to: a top-level Gem fn, so its env is NULL and
+   nothing in it lives in the arena. */
+static GemVal gem_fuzz_target;
+
+/* A mark taken once, before the first input. After each input it gets the
+   reset a loop's back-edge would (gem_arena_reset_region, which runs once
+   the reset is due), with no roots: what the inputs allocated, their
+   strings included, is freed, and what they left in module slots is kept.
+   The C frames between inputs hold no Gem value newer than the mark. */
+static GemArenaMark gem_fuzz_mark;
+
+static int gem_fuzz_input(const uint8_t *data, size_t size) {
+    GemVal src = gem_string_with_len((const char *)data, (int64_t)size);
+    gem_fuzz_target.fn(gem_fuzz_target.env, &src, 1);
+    gem_arena_reset_region(&gem_fuzz_mark, NULL, 0, NULL, 0);
+    return 0;
+}
+
+/* An internal error: abort, so libFuzzer saves the input as a crash. */
+static int64_t gem_fuzz_abort(void) {
+    abort();
+}
+
+static int64_t gem_fuzz_main(GemVal target) {
+    gem_fuzz_target = gem_table_get(target, GEM_STR_LIT("run", 3));
+    if (gem_fuzz_target.type != VAL_FN) gem_error("gem_fuzz_main: target.run must be a fn");
+    gem_arena_mark(&gem_fuzz_mark);
+    int argc = gem_stored_argc;
+    char **argv = gem_stored_argv;
+    return LLVMFuzzerRunDriver(&argc, &argv, gem_fuzz_input);
+}

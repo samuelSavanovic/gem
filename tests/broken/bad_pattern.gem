@@ -1,0 +1,9 @@
+# Two bad characters in pattern position. The lexer skips a bad byte and
+# goes on, so both errors come out in one pass.
+let v = 1
+match v
+when @
+  print("a")
+when $
+  print("b")
+end

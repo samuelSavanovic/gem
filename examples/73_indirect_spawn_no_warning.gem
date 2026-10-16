@@ -1,0 +1,18 @@
+# spawning a closure returned by a call (not a fn literal): its `while true` loop doesn't warn
+
+fn make_loop(reply_to)
+  fn()
+    while true
+      let msg = receive()
+      if msg == "stop"
+        send(reply_to, "done")
+        return
+      end
+    end
+  end
+end
+
+let me = self()
+let w = spawn(make_loop(me))
+send(w, "stop")
+print(receive())

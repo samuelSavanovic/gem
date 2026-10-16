@@ -1,0 +1,35 @@
+# constant folding gives the same values the runtime would
+
+print(1 + 2)
+print(10 - 4)
+print(3 * 7)
+print(20 / 6)
+print(20 % 6)
+
+print(1.5 + 2.5)
+print(1 + 2.5)
+print(10.0 / 4)
+
+print("hel" + "lo")
+print("a" + "b" + "c")
+
+print(-5)
+print(-3.5)
+print(not true)
+print(not nil)
+print(not 0)              # 0 is truthy
+
+print(1 < 2)
+print(2.0 == 2)           # different types
+print("a" < "b")
+print(3 != 3)
+
+print(false and 1/0)      # rhs would error if evaluated
+print(true or 1/0)
+print(true and "kept")
+print(nil or "fallback")
+
+# division by zero isn't folded: it still raises at run time
+let x = 0
+let r = pcall print(10 / x)
+print(r.ok)

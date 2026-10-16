@@ -1,0 +1,156 @@
+## POSIX extended regular expressions (libc's regcomp/regexec).
+## A compiled regex is C memory behind a handle: free it with `regex.free` on every path, and use it
+## only in the process that compiled it. Matching works on byte ranges, NULs included, and runs inline,
+## holding up every other process while it runs.
+
+extern include "rx.h"
+extern fn rx_new() -> Ptr
+extern fn rx_compile(h: Ptr, pattern: String, icase: Bool) -> Int
+extern fn rx_error(h: Ptr, code: Int) -> String
+extern fn rx_free(h: Ptr) -> Nil
+extern fn rx_exec(h: Ptr, data: Bytes, start: Int, stop: Int, notbol: Bool, offsets: Bool) -> Bool
+extern fn rx_group_start(h: Ptr, group: Int) -> Int
+extern fn rx_group_end(h: Ptr, group: Int) -> Int
+
+let METACHARS = '.[]()*+?{}|^$\\'
+let WORD = "[:alnum:]_"
+
+# `pattern` with each `\N` outside brackets renumbered by `shift`, for the groups a wrapper puts first;
+# nil when one would pass `\9`
+fn shift_backrefs(pattern, shift)
+  let out = buf_new()
+  let i = 0
+  let n = len(pattern)
+  while i < n
+    let ch = pattern[i]
+    if ch == "\\" and i + 1 < n
+      let next = pattern[i + 1]
+      if next >= "1" and next <= "9"
+        let k = to_int(next) + shift
+        if k > 9
+          return nil
+        end
+        buf_push(out, "\\{k}")
+      else
+        buf_push(out, ch + next)
+      end
+      i += 2
+    elif ch == "["
+      # a bracket expression runs to its first `]` that is neither its first member nor the end of
+      # a `[:class:]`, `[.x.]` or `[=x=]`
+      let j = i + 1
+      if j < n and pattern[j] == "^"
+        j += 1
+      end
+      if j < n and pattern[j] == "]"
+        j += 1
+      end
+      while j < n and pattern[j] != "]"
+        if pattern[j] == "[" and j + 1 < n and (pattern[j + 1] == ":" or pattern[j + 1] == "." or pattern[j + 1] == "=")
+          let close = find(pattern, pattern[j + 1] + "]", j + 2)
+          if close < 0
+            j = n
+          else
+            j = close + 2
+          end
+        else
+          j += 1
+        end
+      end
+      buf_push(out, substr(pattern, i, j + 1 - i))
+      i = j + 1
+    else
+      buf_push(out, ch)
+      i += 1
+    end
+  end
+  to_string(out)
+end
+
+## Escapes `s` so it matches itself (grep -F).
+fn quote(s)
+  build_string do |add|
+    for ch in s
+      if find(METACHARS, ch) >= 0
+        add("\\")
+      end
+      add(ch)
+    end
+  end
+end
+
+## Compiles an ERE. `icase` ignores case; `word` (grep -w) needs the match to start and end at a line
+## edge or next to a byte that isn't a letter, digit or `_`; `line` (grep -x) wins over `word`.
+## Returns `{ok: true, value: rx}` or `{ok: false, error: msg}` with GNU grep's message for the
+## POSIX error codes. A pattern can't hold a NUL byte.
+fn compile(pattern, {icase = false, word = false, line = false} = {})
+  if find(pattern, "\0") >= 0
+    return {ok: false, error: "the pattern holds a NUL byte"}
+  end
+  let source = if pattern == ""
+    # macOS's regcomp rejects an empty pattern; `()` matches the empty string under either libc
+    "()"
+  else
+    pattern
+  end
+  let group = 0
+  if line or word
+    group = 1
+    if not line
+      group = 2
+    end
+    let shifted = shift_backrefs(pattern, group)
+    if shifted == nil
+      return {ok: false, error: "Invalid back reference"}
+    end
+    if line
+      source = "^({shifted})$"
+    else
+      # the first and last groups take the bytes around the word; the pattern is group 2
+      source = "(^|[^{WORD}])({shifted})([^{WORD}]|$)"
+    end
+  end
+  let h = rx_new()
+  if h == 0
+    return {ok: false, error: "out of memory"}
+  end
+  let code = rx_compile(h, source, icase)
+  if code != 0
+    let msg = rx_error(h, code)
+    rx_free(h)
+    return {ok: false, error: msg}
+  end
+  {ok: true, value: {handle: h, group: group}}
+end
+
+## Freeing it again does nothing; using it afterwards raises.
+fn free(rx)
+  rx_free(rx.handle)
+  rx.handle = 0
+end
+
+fn check(rx, s, start, stop)
+  if rx.handle == 0
+    error("regex: the regex was freed")
+  end
+  if start < 0 or start > stop or stop > len(s)
+    error("regex: bad range {start}..{stop} of a {len(s)}-byte string")
+  end
+end
+
+## Whether `rx` matches in `s[start, stop)`. `^` matches at `start` only when it's 0 or follows a newline.
+fn test(rx, s, start, stop)
+  check(rx, s, start, stop)
+  rx_exec(rx.handle, s, start, stop, start > 0 and ord(s, start - 1) != 10, false)
+end
+
+## The first match in `s[start, stop)` as `{start, stop}` (with `word`, minus the edge bytes), or nil.
+fn search(rx, s, start, stop)
+  check(rx, s, start, stop)
+  if not rx_exec(rx.handle, s, start, stop, start > 0 and ord(s, start - 1) != 10, true)
+    return nil
+  end
+  {start: rx_group_start(rx.handle, rx.group), stop: rx_group_end(rx.handle, rx.group)}
+end
+
+export quote, compile, free, test, search

@@ -1,0 +1,12 @@
+# every way a module can bind an exported name, imported as a namespace, under an alias and selectively.
+# A name not exported or not defined is a compile error (tests/broken/export_*.gem, import_no_export.gem).
+load "./modules/reexport_mod"
+load "./modules/reexport_mod" as rm
+load "./modules/reexport_mod" (double, lo, hi, upper)
+
+print(reexport_mod.double(4))
+print(reexport_mod.limit)
+print(rm.lo, rm.hi)
+print(rm.upper("abc"))
+print(rm.string.lower("XyZ"))
+print(double(21), lo + hi, upper("ok"))

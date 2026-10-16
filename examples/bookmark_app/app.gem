@@ -1,0 +1,17 @@
+# bookmark manager on http://localhost:8080, run from this directory; LOG_LEVEL defaults to info
+
+load "std/http"
+load "std/log"
+load "./bookmarks"
+
+let PORT = 8080
+
+fn main()
+  let level = getenv("LOG_LEVEL")
+  if level != nil
+    log.set_level(level)
+  end
+  let db = bookmarks.open_db("bookmarks.db")
+  log.info("bookmark manager listening on http://localhost:{PORT}")
+  http.serve(bookmarks.routes(db, "./static"), {port: PORT})
+end

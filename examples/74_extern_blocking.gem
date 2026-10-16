@@ -1,0 +1,17 @@
+# extern blocking fn from a worker: usleep (yields while a pool thread blocks), strdup (malloc'd String)
+
+extern include "unistd.h"
+extern include "string.h"
+
+extern blocking fn usleep(usec: Int) -> Int
+extern blocking fn strdup(s: String) -> String
+
+fn worker(parent)
+  usleep(1000)
+  let s = strdup("hello from worker")
+  send(parent, s)
+end
+
+let me = self()
+spawn(fn() worker(me) end)
+print(receive())

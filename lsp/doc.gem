@@ -1,0 +1,185 @@
+# One registered process per open document ("lsp_doc:" + uri), holding its text and analysis (AST, tokens,
+# sink, symbols). Each edit reparses with a fresh sink; a partial AST from a recovered parse is used as is.
+
+load "std/string"
+load "./rpc"
+load "./symbols" (build_symbols)
+load "../compiler/parser" (parse_source)
+load "../compiler/lexer" (tokenize)
+load "../compiler/lower" (lower)
+load "../compiler/errors" (make_error_sink)
+load "../compiler/loader" (find_project_root, find_install_root, compute_stdlib_root, resolve_load_path, load_target_problem, make_show_path)
+
+let _install_root_path = find_install_root()
+
+fn install_root()
+  _install_root_path
+end
+
+# file:///a/b.gem -> /a/b.gem. No percent-decoding.
+fn uri_to_path(uri)
+  if string.starts_with(uri, "file://")
+    return substr(uri, 7, len(uri) - 7)
+  end
+  uri
+end
+
+# reports each top-level `load` whose target is missing or a directory; modules that exist aren't opened
+fn report_load_problems(ast, text, path, base_dir, project_root, stdlib_root, sink)
+  let show_path = make_show_path(path, project_root)
+  for stmt in ast.stmts
+    if type(stmt) != "table" or stmt.tag != "load"
+      continue
+    end
+    let res = pcall resolve_load_path(stmt.path, base_dir, project_root, stdlib_root)
+    if not res.ok
+      continue
+    end
+    let problem = load_target_problem(stmt.path, res.value, show_path)
+    if problem != nil
+      sink.report(text, path, stmt.line, stmt.col, len("load"), problem.msg, problem.hint)
+    end
+  end
+end
+
+# a lex error gives an empty program; tokens are kept so handlers find the name under the cursor without relexing
+fn analyze(uri, text)
+  let path = uri_to_path(uri)
+  let base_dir = dirname(path)
+  let project_root = find_project_root(base_dir)
+  if project_root != nil
+    project_root = normalize_path(project_root)
+  end
+  let stdlib_root = compute_stdlib_root(install_root(), project_root)
+  let sink = make_error_sink()
+  let token_sink = make_error_sink()
+  let tokens = tokenize(text, path, token_sink)
+  # symbols, definition and completion all walk the lowered AST
+  let ast = lower(parse_source(text, path, sink))
+  report_load_problems(ast, text, path, base_dir, project_root, stdlib_root, sink)
+  let syms = build_symbols(ast, path, base_dir, project_root, stdlib_root)
+  {ast: ast, tokens: tokens, sink: sink, symbols: syms, text: text,
+   base_dir: base_dir, project_root: project_root, stdlib_root: stdlib_root}
+end
+
+fn doc_loop(uri, text, version, cache)
+  receive
+  when {tag: "set_text", text: new_text, version: new_version}
+    let new_cache = analyze(uri, new_text)
+    doc_loop(uri, new_text, new_version, new_cache)
+  when {tag: "close"}
+    return
+  when {tag: "get_text", from: from}
+    send(from.pid, {tag: "doc_reply", ref: from.ref, text: text})
+    doc_loop(uri, text, version, cache)
+  when {tag: "get_symbols", from: from}
+    send(from.pid, {tag: "doc_reply", ref: from.ref, symbols: cache.symbols})
+    doc_loop(uri, text, version, cache)
+  when {tag: "get_cache", from: from}
+    send(from.pid, {tag: "doc_reply", ref: from.ref, cache: cache})
+    doc_loop(uri, text, version, cache)
+  end
+end
+
+fn open(td)
+  let name = "lsp_doc:" + td.uri
+  if whereis(name) != nil
+    # client reopened an open doc: just replace the text
+    send(name, {tag: "set_text", text: td.text, version: td.version})
+    return nil
+  end
+  # Wait for the doc process to register: stdin reads never yield, so a request right after didOpen
+  # could whereis() before the process has run at all.
+  let parent_pid = self()
+  let ref = make_ref()
+  spawn(fn()
+    register(name, self())
+    let cache = analyze(td.uri, td.text)
+    send(parent_pid, {tag: "doc_ready", ref: ref})
+    doc_loop(td.uri, td.text, td.version, cache)
+  end)
+  receive
+  when {tag: "doc_ready", ref: ^ref}
+    nil
+  after 5000
+    nil
+  end
+  nil
+end
+
+fn change(td, content_changes)
+  # full sync: one change holding the whole text
+  if len(content_changes) > 0
+    let new_text = content_changes[0].text
+    let name = "lsp_doc:" + td.uri
+    if whereis(name) != nil
+      send(name, {tag: "set_text", text: new_text, version: td.version})
+    end
+  end
+  nil
+end
+
+fn close(td)
+  let name = "lsp_doc:" + td.uri
+  if whereis(name) != nil
+    send(name, {tag: "close"})
+  end
+  nil
+end
+
+# nil if the doc isn't open
+fn get_text(uri)
+  let name = "lsp_doc:" + uri
+  if whereis(name) == nil
+    return nil
+  end
+  let ref = make_ref()
+  send(name, {tag: "get_text", from: {pid: self(), ref: ref}})
+  receive
+  when {tag: "doc_reply", ref: ^ref, text: text}
+    text
+  after 5000
+    nil
+  end
+end
+
+fn get_symbols(uri)
+  let name = "lsp_doc:" + uri
+  if whereis(name) == nil
+    return nil
+  end
+  let ref = make_ref()
+  send(name, {tag: "get_symbols", from: {pid: self(), ref: ref}})
+  receive
+  when {tag: "doc_reply", ref: ^ref, symbols: syms}
+    syms
+  after 5000
+    nil
+  end
+end
+
+# the whole analysis (ast, tokens, symbols, text, roots) in one round trip, or nil if the doc isn't open
+fn get_cache(uri)
+  let name = "lsp_doc:" + uri
+  if whereis(name) == nil
+    return nil
+  end
+  let ref = make_ref()
+  send(name, {tag: "get_cache", from: {pid: self(), ref: ref}})
+  receive
+  when {tag: "doc_reply", ref: ^ref, cache: c}
+    c
+  after 5000
+    nil
+  end
+end
+
+fn publish_diagnostics(uri, diagnostics)
+  rpc.write_message(rpc.make_notification(
+    "textDocument/publishDiagnostics",
+    {uri: uri, diagnostics: diagnostics}
+  ))
+  nil
+end
+
+export open, change, close, get_text, get_symbols, get_cache, publish_diagnostics, uri_to_path

@@ -1,0 +1,170 @@
+# JSON-RPC framing over stdin/stdout, message constructors, UTF-16 columns.
+
+load "std/string"
+load "std/json"
+
+# nil at EOF or on a broken header (reason on stderr), else {ok: true, msg} or {ok: false, id, code, message}.
+# A client's response (no method) comes back with code nil: send nothing.
+
+fn read_message()
+  let length = nil
+  while true
+    let line = input()
+    if line == nil
+      return nil
+    end
+    if line == ""
+      break
+    end
+    if string.starts_with(line, "Content-Length:")
+      let value_str = string.trim(substr(line, 15, len(line) - 15))
+      let parsed = pcall to_int(value_str)
+      if not parsed.ok or parsed.value < 0
+        eprint("gem lsp: bad Content-Length header: {line}")
+        return nil
+      end
+      length = parsed.value
+    end
+  end
+  if length == nil
+    eprint("gem lsp: message without a Content-Length header")
+    return nil
+  end
+  let body = read_stdin(length)
+  let parsed = pcall json.parse(body)
+  if not parsed.ok
+    return {ok: false, id: nil, code: ERR_PARSE, message: parsed.error}
+  end
+  let msg = parsed.value
+  if type(msg) != "table"
+    return {ok: false, id: nil, code: ERR_INVALID_REQUEST, message: "a message must be a JSON object"}
+  end
+  if type(msg.method) != "string"
+    if has_key(msg, "result") or has_key(msg, "error")
+      return {ok: false, id: nil, code: nil, message: nil}
+    end
+    return {ok: false, id: msg.id, code: ERR_INVALID_REQUEST, message: "a request must have a string method"}
+  end
+  {ok: true, msg: msg}
+end
+
+
+fn write_message(msg)
+  let body = json.encode(msg)
+  let header = "Content-Length: " + to_string(len(body)) + "\r\n\r\n"
+  write_stdout(header + body)
+end
+
+fn make_response(id, result)
+  {jsonrpc: "2.0", id: id, result: result}
+end
+
+fn make_error_response(id, code, message)
+  {jsonrpc: "2.0", id: id, error: {code: code, message: message}}
+end
+
+fn make_notification(method, params)
+  {jsonrpc: "2.0", method: method, params: params}
+end
+
+let ERR_PARSE = -32700
+let ERR_INVALID_REQUEST = -32600
+let ERR_METHOD_NOT_FOUND = -32601
+let ERR_INVALID_PARAMS = -32602
+let ERR_INTERNAL = -32603
+let ERR_SERVER_NOT_INITIALIZED = -32002
+
+fn make_position(line, character)
+  {line: line, character: character}
+end
+
+fn make_range(start_pos, end_pos)
+  {start: start_pos, end: end_pos}
+end
+
+# severity: 1 error, 2 warning, 3 info, 4 hint
+fn make_diagnostic(range, severity, message, source)
+  {range: range, severity: severity, message: message, source: source}
+end
+
+fn make_location(uri, range)
+  {uri: uri, range: range}
+end
+
+# CompletionItemKind values we use
+let CIK_TEXT = 1
+let CIK_METHOD = 2
+let CIK_FUNCTION = 3
+let CIK_FIELD = 5
+let CIK_VARIABLE = 6
+let CIK_MODULE = 9
+let CIK_KEYWORD = 14
+
+fn make_completion_item(label, kind, detail)
+  {label: label, kind: kind, detail: detail}
+end
+
+# the full set every time, so never incomplete
+fn make_completion_list(items)
+  {isIncomplete: false, items: items}
+end
+
+# LSP columns are UTF-16 code units, ours UTF-8 bytes: 1-3 byte sequences are one unit, 4-byte ones two.
+
+fn utf16_col_to_byte_col(line_text, utf16_col)
+  let blen = len(line_text)
+  let byte = 0
+  let units = 0
+  while byte < blen and units < utf16_col
+    let b = ord(line_text, byte)
+    if b < 128
+      byte += 1
+      units += 1
+    elif b < 224
+      byte += 2
+      units += 1
+    elif b < 240
+      byte += 3
+      units += 1
+    else
+      byte += 4
+      units += 2
+    end
+  end
+  byte
+end
+
+fn byte_col_to_utf16_col(line_text, byte_col)
+  let blen = len(line_text)
+  let limit = byte_col
+  if limit > blen then limit = blen end
+  let byte = 0
+  let units = 0
+  while byte < limit
+    let b = ord(line_text, byte)
+    if b < 128
+      byte += 1
+      units += 1
+    elif b < 224
+      byte += 2
+      units += 1
+    elif b < 240
+      byte += 3
+      units += 1
+    else
+      byte += 4
+      units += 2
+    end
+  end
+  units
+end
+
+export read_message, write_message,
+       make_response, make_error_response, make_notification,
+       make_position, make_range, make_diagnostic,
+       make_location, make_completion_item, make_completion_list,
+       utf16_col_to_byte_col, byte_col_to_utf16_col,
+       ERR_PARSE, ERR_INVALID_REQUEST, ERR_METHOD_NOT_FOUND,
+       ERR_INVALID_PARAMS, ERR_INTERNAL, ERR_SERVER_NOT_INITIALIZED,
+       CIK_TEXT, CIK_METHOD, CIK_FUNCTION, CIK_FIELD,
+       CIK_VARIABLE, CIK_MODULE, CIK_KEYWORD

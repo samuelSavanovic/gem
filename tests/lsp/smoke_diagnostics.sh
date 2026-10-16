@@ -1,0 +1,139 @@
+#!/usr/bin/env bash
+# parse errors show up as publishDiagnostics with a message and a sane 0-based range, and clear once fixed
+
+set -e
+
+cd "$(dirname "$0")/../.."
+
+BIN="${BIN:-./build/gem}"
+if [ ! -x "$BIN" ]; then
+  echo "smoke: $BIN not found; run 'make build' first" >&2
+  exit 1
+fi
+
+FIXTURE_DIR="$(mktemp -d -t gem_lsp_diag.XXXXXX)"
+trap 'rm -rf "$FIXTURE_DIR"' EXIT
+FIXTURE="$FIXTURE_DIR/broken.gem"
+URI="file://$FIXTURE"
+
+# a fn with no `end`
+BROKEN=$'fn add(a, b)\n  a + b\n'
+CLEAN=$'fn add(a, b)\n  a + b\nend\n'
+
+# the server uses the didOpen text, but the path should exist anyway
+printf '%s' "$BROKEN" > "$FIXTURE"
+
+json_escape() {
+  python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))'
+}
+
+BROKEN_JSON=$(printf '%s' "$BROKEN" | json_escape)
+CLEAN_JSON=$(printf '%s' "$CLEAN" | json_escape)
+
+make_frame() {
+  local body="$1"
+  local len="${#body}"
+  printf 'Content-Length: %d\r\n\r\n%s' "$len" "$body"
+}
+
+INIT='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"processId":null,"rootUri":null,"capabilities":{}}}'
+INITED='{"jsonrpc":"2.0","method":"initialized","params":{}}'
+OPEN='{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"'"$URI"'","languageId":"gem","version":1,"text":'"$BROKEN_JSON"'}}}'
+CHANGE='{"jsonrpc":"2.0","method":"textDocument/didChange","params":{"textDocument":{"uri":"'"$URI"'","version":2},"contentChanges":[{"text":'"$CLEAN_JSON"'}]}}'
+SHUT='{"jsonrpc":"2.0","id":2,"method":"shutdown","params":null}'
+EXIT='{"jsonrpc":"2.0","method":"exit","params":null}'
+
+INPUT=$(
+  make_frame "$INIT"
+  make_frame "$INITED"
+  make_frame "$OPEN"
+  make_frame "$CHANGE"
+  make_frame "$SHUT"
+  make_frame "$EXIT"
+)
+
+OUT=$(printf '%s' "$INPUT" | "$BIN" lsp)
+RC=$?
+
+if [ "$RC" -ne 0 ]; then
+  echo "FAIL: server exit code $RC (expected 0 after acked shutdown)" >&2
+  printf '%s\n' "$OUT" >&2
+  exit 1
+fi
+
+# one publish for didOpen, one for didChange
+PUB_COUNT=$(printf '%s' "$OUT" | grep -c '"method":"textDocument/publishDiagnostics"' || true)
+if [ "$PUB_COUNT" -lt 2 ]; then
+  echo "FAIL: expected >=2 publishDiagnostics, got $PUB_COUNT" >&2
+  printf '%s\n' "$OUT" >&2
+  exit 1
+fi
+
+python3 - "$OUT" "$URI" <<'PY'
+import json, sys, re
+
+raw = sys.argv[1]
+expected_uri = sys.argv[2]
+
+i = 0
+publishes = []
+while i < len(raw):
+    m = re.match(r'Content-Length:\s*(\d+)\r\n\r\n', raw[i:])
+    if not m:
+        break
+    length = int(m.group(1))
+    i += m.end()
+    body = raw[i:i+length]
+    i += length
+    msg = json.loads(body)
+    if msg.get("method") == "textDocument/publishDiagnostics":
+        publishes.append(msg["params"])
+
+broken_pub = None
+clean_pub = None
+for p in publishes:
+    if p["uri"] != expected_uri:
+        continue
+    if broken_pub is None:
+        broken_pub = p
+    else:
+        clean_pub = p
+
+if broken_pub is None or clean_pub is None:
+    print("FAIL: missing broken or clean publishDiagnostics for doc URI", file=sys.stderr)
+    print(json.dumps(publishes, indent=2), file=sys.stderr)
+    sys.exit(1)
+
+diags = broken_pub["diagnostics"]
+if not diags:
+    print("FAIL: broken-source publish had empty diagnostics", file=sys.stderr)
+    sys.exit(1)
+
+d = diags[0]
+# 1 = Error
+if d.get("severity") != 1:
+    print(f"FAIL: severity != 1 (got {d.get('severity')})", file=sys.stderr); sys.exit(1)
+if d.get("source") != "gem":
+    print(f"FAIL: source != 'gem' (got {d.get('source')})", file=sys.stderr); sys.exit(1)
+if "message" not in d or not d["message"]:
+    print("FAIL: empty message", file=sys.stderr); sys.exit(1)
+rng = d.get("range", {})
+for end in ("start", "end"):
+    pos = rng.get(end, {})
+    if not isinstance(pos.get("line"), int) or not isinstance(pos.get("character"), int):
+        print(f"FAIL: range.{end} missing integer line/character: {pos}", file=sys.stderr)
+        sys.exit(1)
+# The `fn` has no `end`: the error points at the `fn` on line 0.
+if rng["start"]["line"] != 0 or "has no `end`" not in d["message"]:
+    print(f"FAIL: expected the missing-end error at line 0, got {rng['start']['line']}: {d['message']}", file=sys.stderr)
+    sys.exit(1)
+if (rng["end"]["line"], rng["end"]["character"]) < (rng["start"]["line"], rng["start"]["character"]):
+    print(f"FAIL: range end before start: {rng}", file=sys.stderr); sys.exit(1)
+
+if clean_pub["diagnostics"]:
+    print("FAIL: clean-source publish had non-empty diagnostics:", file=sys.stderr)
+    print(json.dumps(clean_pub, indent=2), file=sys.stderr)
+    sys.exit(1)
+
+print("ok: lsp diagnostics smoke test")
+PY

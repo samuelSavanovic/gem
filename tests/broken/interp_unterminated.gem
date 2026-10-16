@@ -1,0 +1,2 @@
+# The interpolation opened inside this string is never closed.
+print("{"a")

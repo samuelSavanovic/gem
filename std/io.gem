@@ -1,0 +1,153 @@
+## io: read a file or stdin a line at a time; lines come without their `\n` or `\r\n`.
+##
+##   io.lines("access.log") do |line| ... end
+##   let r = io.reader("-")    # "-" is stdin; r.next() is nil at the end
+##
+## Regular files are read in 64 KB blocks, so memory stays flat; pipes and devices are read whole.
+
+let BLOCK = 65536
+
+fn check_path(fname, path)
+  if type(path) != "string"
+    error("io.{fname}: path must be a string, got {type(path)}")
+  end
+end
+
+# drops a `\r` before the newline
+fn cut(text, start, nl)
+  if nl > start and ord(text, nl - 1) == 13
+    return substr(text, start, nl - 1 - start)
+  end
+  substr(text, start, nl - start)
+end
+
+# a fn giving the next block per call ("" at the end); a pipe or device can't seek, so it's one whole read_file
+fn block_source(path)
+  let st = stat(path)
+  let in_blocks = st == nil or st.type == "file"
+  let offset = 0
+  let done = false
+  fn()
+    if done
+      return ""
+    end
+    if not in_blocks
+      done = true
+      return read_file(path)
+    end
+    let chunk = read_file(path, offset, BLOCK)
+    offset += len(chunk)
+    done = chunk == ""
+    chunk
+  end
+end
+
+# a line spanning blocks is collected in pieces so a long line stays linear
+fn join_parts(parts)
+  if len(parts) == 1
+    return parts[0]
+  end
+  build_string do |add|
+    for part in parts
+      add(part)
+    end
+  end
+end
+
+## Calls `f(line)` for each line of the file at `path` (`"-"`: stdin). Use `reader` to stop early.
+fn lines(path, f)
+  check_path("lines", path)
+  if path == "-"
+    let line = input()
+    while line != nil
+      f(line)
+      line = input()
+    end
+    return nil
+  end
+  let next_block = block_source(path)
+  let parts = []
+  while true
+    let chunk = next_block()
+    if chunk == ""
+      break
+    end
+    let pos = 0
+    let nl = find(chunk, "\n", 0)
+    if nl >= 0 and len(parts) > 0
+      push(parts, substr(chunk, 0, nl + 1))
+      let line = join_parts(parts)
+      parts = []
+      f(cut(line, 0, len(line) - 1))
+      pos = nl + 1
+      nl = find(chunk, "\n", pos)
+    end
+    while nl >= 0
+      f(cut(chunk, pos, nl))
+      pos = nl + 1
+      nl = find(chunk, "\n", pos)
+    end
+    if pos < len(chunk)
+      push(parts, substr(chunk, pos))
+    end
+  end
+  if len(parts) > 0
+    f(join_parts(parts))
+  end
+  nil
+end
+
+## A reader of the lines at `path` (`"-"`: stdin): `r.next()` gives the next line, or nil at the end.
+## It holds no open file, so dropping it early leaks nothing.
+fn reader(path)
+  check_path("reader", path)
+  if path == "-"
+    return {next: fn() input() end}
+  end
+  let next_block = block_source(path)
+  let chunk = ""
+  let pos = 0
+  let parts = []
+  let next = fn()
+    while true
+      let nl = find(chunk, "\n", pos)
+      if nl >= 0
+        let start = pos
+        pos = nl + 1
+        if len(parts) == 0
+          return cut(chunk, start, nl)
+        end
+        push(parts, substr(chunk, start, nl + 1 - start))
+        let line = join_parts(parts)
+        parts = []
+        return cut(line, 0, len(line) - 1)
+      end
+      if pos < len(chunk)
+        push(parts, substr(chunk, pos))
+      end
+      chunk = next_block()
+      pos = 0
+      if chunk == ""
+        if len(parts) == 0
+          return nil
+        end
+        let last = join_parts(parts)
+        parts = []
+        return last
+      end
+    end
+  end
+  {next: next}
+end
+
+## Every line of the file at `path` (`"-"`: stdin) as an array. For a large file, use `lines`.
+fn read_lines(path)
+  check_path("read_lines", path)
+  let out = []
+  lines(path) do |line|
+    push(out, line)
+  end
+  out
+end
+
+export lines, reader, read_lines

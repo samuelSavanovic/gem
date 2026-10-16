@@ -1,0 +1,60 @@
+# a `let` in a `while` body shadowing a variable the condition reads, when nothing in the loop
+# assigns it, gets a warning (tests/notes/137_shadowed_loop_counter.expected). Assigning it anywhere
+# in the loop turns the warning off. Hiding an enclosing block's variable in the same fn is a
+# compile error, so these cases hide module-level variables from inside a fn.
+
+let n = 3
+let i = 0
+let k = 0
+let count = 0
+
+# warned: the module-level `i` never changes; only `break` ends this
+fn shadowed()
+  let steps = 0
+  while i < n
+    let i = i + 1
+    steps += 1
+    if steps == 5 then break end
+  end
+  print("shadowed: i = {i}, steps = {steps}")
+end
+shadowed()
+
+# not warned: the counter is assigned, no `let`
+let j = 0
+while j < n
+  j = j + 1
+end
+print("assigned: j = {j}")
+
+# not warned: the outer `k` is assigned too, so the shadow is deliberate
+fn assigned_and_shadowed()
+  while k < n
+    k += 1
+    let k = "inner"
+    if k != "inner" then print("unreachable") end
+  end
+  print("assigned and shadowed: k = {k}")
+end
+assigned_and_shadowed()
+
+# not warned: a `let` in a closure body is the closure's own variable
+let m = 0
+while m < n
+  let f = fn() let m = 100; m end
+  m = m + f() - 99
+end
+print("closure: m = {m}")
+
+# not warned: a named fn assigns it, so a call in the loop can change it
+fn bump()
+  count += 1
+end
+fn bumped()
+  while count < 3
+    let count = 99
+    bump()
+  end
+  print("module var changed by a fn: count = {count}")
+end
+bumped()

@@ -1,0 +1,24 @@
+## hex: encode bytes as hexadecimal text and back.
+
+extern fn gem_hex_encode(s: Bytes) -> Table
+extern fn gem_hex_decode(s: Bytes) -> Table
+
+fn check(fname, s)
+  if type(s) != "string"
+    error("hex.{fname}: s must be a string, got {type(s)}")
+  end
+end
+
+## Each byte of `s` as two lowercase hex digits.
+fn encode(s)
+  check("encode", s)
+  gem_hex_encode(s)
+end
+
+## Decodes hex text (either case), or nil for an odd length or a non-hex character.
+fn decode(s)
+  check("decode", s)
+  gem_hex_decode(s)
+end
+
+export encode, decode

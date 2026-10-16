@@ -1,0 +1,319 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Gem",
+  "scopeName": "source.gem",
+  "patterns": [
+    { "include": "#comment" },
+    { "include": "#extern-decl" },
+    { "include": "#string-triple-double" },
+    { "include": "#string-triple-single" },
+    { "include": "#string-double" },
+    { "include": "#string-single" },
+    { "include": "#number" },
+    { "include": "#named-fn-decl" },
+    { "include": "#anon-fn" },
+    { "include": "#block-params" },
+    { "include": "#rest-param" },
+    { "include": "#keyword" },
+    { "include": "#builtin" },
+    { "include": "#operator" },
+    { "include": "#punctuation" },
+    { "include": "#identifier" }
+  ],
+  "repository": {
+
+    "comment": {
+      "patterns": [
+        { "name": "comment.line.documentation.gem", "match": "##.*$" },
+        { "name": "comment.line.number-sign.gem", "match": "#.*$" }
+      ]
+    },
+
+    "number": {
+      "patterns": [
+        {
+          "name": "constant.numeric.float.gem",
+          "match": "\\b[0-9]+\\.[0-9]+\\b"
+        },
+        {
+          "name": "constant.numeric.integer.gem",
+          "match": "\\b[0-9]+\\b"
+        }
+      ]
+    },
+
+    "keyword": {
+      "patterns": [
+        {
+          "name": "constant.language.gem",
+          "match": "\\b(true|false|nil)\\b"
+        },
+        {
+          "name": "keyword.control.gem",
+          "match": "\\b(if|elif|else|end|while|for|in|match|when|do|return|break|continue|after|then)\\b"
+        },
+        {
+          "name": "keyword.other.gem",
+          "match": "\\b(let|load|export|extern|blocking|include|and|or|not)\\b"
+        },
+        {
+          "name": "keyword.declaration.function.gem",
+          "match": "\\bfn\\b"
+        }
+      ]
+    },
+
+    "builtin": {
+      "name": "support.function.builtin.gem",
+      "match": "\\b(print|error|len|type|to_string|to_int|to_float|push|pcall|keys|str_replace|has_key|substr|find|chr|ord|buf_new|buf_push|spawn|send|receive|self|monitor|demonitor|spawn_monitor|register|whereis|time_ms|kill|sleep|link|unlink|spawn_link|process_flag|make_ref|send_after|cancel_timer|processes|process_info|runtime_stats|read_file|write_file|delete|pop|values|eprint|exit|argv|sort|floor|ceil|round|abs|pow|sqrt|random|append_file|getenv|setenv|input|read_stdin|write_stdout|insert|remove_at|band|bor|bxor|bnot|bshl|bshr|file_exists|dirname|path_join|normalize_path|remove_file|mkdir|list_dir|is_dir|rename|stat|exec|exec_capture|tcp_connect|tcp_listen|tcp_accept|tcp_read|tcp_write|tcp_close|tcp_peer|tcp_local_port|tcp_fd|tcp_from_fd|tls_connect|claim|epoch_ms|format_time|format_time_local|sqlite_open|sqlite_close|sqlite_exec|sqlite_query|sqlite_last_insert_id|sqlite_changes|build_string)\\b(?=\\s*(?:[({]|do\\b))"
+    },
+
+    "named-fn-decl": {
+      "comment": "fn name(...): fn as a keyword, plus the function name",
+      "match": "(\\bfn\\b)\\s+([a-zA-Z_][a-zA-Z0-9_]*)\\s*(?=\\()",
+      "captures": {
+        "1": { "name": "keyword.declaration.function.gem" },
+        "2": { "name": "entity.name.function.gem" }
+      }
+    },
+
+    "anon-fn": {
+      "comment": "fn( ... ): anonymous function, just fn",
+      "match": "\\bfn\\s*(?=\\()",
+      "name": "keyword.declaration.function.gem"
+    },
+
+    "block-params": {
+      "comment": "Block parameter list: |x, y|",
+      "begin": "(?<=do|\\{)\\s*(\\|)",
+      "end": "(\\|)",
+      "beginCaptures": {
+        "1": { "name": "punctuation.definition.parameters.begin.gem" }
+      },
+      "endCaptures": {
+        "1": { "name": "punctuation.definition.parameters.end.gem" }
+      },
+      "contentName": "variable.parameter.gem",
+      "patterns": [
+        {
+          "name": "punctuation.separator.gem",
+          "match": ","
+        }
+      ]
+    },
+
+    "extern-decl": {
+      "patterns": [
+        {
+          "comment": "extern include \"header.h\"",
+          "match": "\\b(extern)\\s+(include)\\b",
+          "captures": {
+            "1": { "name": "keyword.other.gem" },
+            "2": { "name": "keyword.other.gem" }
+          }
+        },
+        {
+          "comment": "extern [blocking] fn name(param: Type) -> Type",
+          "begin": "\\b(extern)\\s+(?:(blocking)\\s+)?(fn)\\s+([a-zA-Z_][a-zA-Z0-9_]*)\\s*(?=\\()",
+          "end": "(?=\\n|$)",
+          "beginCaptures": {
+            "1": { "name": "keyword.other.gem" },
+            "2": { "name": "keyword.other.gem" },
+            "3": { "name": "keyword.declaration.function.gem" },
+            "4": { "name": "entity.name.function.gem" }
+          },
+          "patterns": [
+            { "include": "#extern-type-annotation" },
+            { "include": "#operator" },
+            { "include": "#punctuation" },
+            { "include": "#identifier" }
+          ]
+        }
+      ]
+    },
+
+    "extern-type-annotation": {
+      "comment": ": Type or -> Type in extern declarations",
+      "match": "(?::\\s*|->>?\\s*)\\b(Int|Float|String|Bool|Nil|Ptr|Table|Fn|Bytes|Socket)\\b",
+      "captures": {
+        "1": { "name": "entity.name.type.gem" }
+      }
+    },
+
+    "string-triple-double": {
+      "comment": "Triple-double-quoted multi-line string with interpolation",
+      "name": "string.quoted.triple.double.gem",
+      "begin": "\"\"\"",
+      "end": "\"\"\"",
+      "beginCaptures": { "0": { "name": "punctuation.definition.string.begin.gem" } },
+      "endCaptures": { "0": { "name": "punctuation.definition.string.end.gem" } },
+      "patterns": [
+        {
+          "name": "constant.character.escape.gem",
+          "match": "\\\\[nrt0\\\\\"{}]"
+        },
+        { "include": "#interpolation" }
+      ]
+    },
+
+    "string-triple-single": {
+      "comment": "Triple-single-quoted multi-line string, no interpolation",
+      "name": "string.quoted.triple.single.gem",
+      "begin": "'''",
+      "end": "'''",
+      "beginCaptures": { "0": { "name": "punctuation.definition.string.begin.gem" } },
+      "endCaptures": { "0": { "name": "punctuation.definition.string.end.gem" } },
+      "patterns": [
+        {
+          "name": "constant.character.escape.gem",
+          "match": "\\\\[nrt\\\\']"
+        }
+      ]
+    },
+
+    "string-double": {
+      "comment": "Double-quoted string with interpolation",
+      "name": "string.quoted.double.gem",
+      "begin": "\"",
+      "end": "\"",
+      "beginCaptures": { "0": { "name": "punctuation.definition.string.begin.gem" } },
+      "endCaptures": { "0": { "name": "punctuation.definition.string.end.gem" } },
+      "patterns": [
+        {
+          "name": "constant.character.escape.gem",
+          "match": "\\\\[nrt0\\\\\"{}]"
+        },
+        { "include": "#interpolation" }
+      ]
+    },
+
+    "interpolation": {
+      "comment": "String interpolation: {expr}",
+      "begin": "\\{",
+      "end": "\\}",
+      "beginCaptures": { "0": { "name": "punctuation.section.interpolation.begin.gem" } },
+      "endCaptures": { "0": { "name": "punctuation.section.interpolation.end.gem" } },
+      "contentName": "meta.embedded.line.gem",
+      "patterns": [
+        { "include": "#comment" },
+        { "include": "#string-triple-double" },
+        { "include": "#string-triple-single" },
+        { "include": "#string-double" },
+        { "include": "#string-single" },
+        { "include": "#number" },
+        { "include": "#keyword" },
+        { "include": "#builtin" },
+        { "include": "#operator" },
+        { "include": "#interpolation" },
+        { "include": "#identifier" }
+      ]
+    },
+
+    "string-single": {
+      "comment": "Single-quoted string, no interpolation",
+      "name": "string.quoted.single.gem",
+      "begin": "'",
+      "end": "'",
+      "beginCaptures": { "0": { "name": "punctuation.definition.string.begin.gem" } },
+      "endCaptures": { "0": { "name": "punctuation.definition.string.end.gem" } },
+      "patterns": [
+        {
+          "name": "constant.character.escape.gem",
+          "match": "\\\\[nrt\\\\']"
+        }
+      ]
+    },
+
+    "rest-param": {
+      "comment": "Rest parameter: ...name in fn(a, ...rest) or fn(a, ...rest, body)",
+      "match": "(\\.\\.\\.)[a-zA-Z_][a-zA-Z0-9_]*",
+      "captures": {
+        "1": { "name": "keyword.operator.rest.gem" }
+      },
+      "name": "variable.parameter.gem"
+    },
+
+    "operator": {
+      "patterns": [
+        {
+          "name": "keyword.operator.rest.gem",
+          "match": "\\.\\.\\."
+        },
+        {
+          "name": "keyword.operator.arrow.gem",
+          "match": "->"
+        },
+        {
+          "name": "keyword.operator.comparison.gem",
+          "match": "==|!=|<=|>=|<|>"
+        },
+        {
+          "name": "keyword.operator.assignment.compound.gem",
+          "match": "\\+=|-=|\\*=|/="
+        },
+        {
+          "name": "keyword.operator.assignment.gem",
+          "match": "="
+        },
+        {
+          "name": "keyword.operator.pipe.gem",
+          "match": "\\|"
+        },
+        {
+          "name": "keyword.operator.pin.gem",
+          "match": "\\^"
+        },
+        {
+          "name": "keyword.operator.arithmetic.gem",
+          "match": "[+\\-*/%]"
+        }
+      ]
+    },
+
+    "punctuation": {
+      "patterns": [
+        {
+          "name": "punctuation.section.parens.begin.gem",
+          "match": "\\("
+        },
+        {
+          "name": "punctuation.section.parens.end.gem",
+          "match": "\\)"
+        },
+        {
+          "name": "punctuation.section.brackets.begin.gem",
+          "match": "\\["
+        },
+        {
+          "name": "punctuation.section.brackets.end.gem",
+          "match": "\\]"
+        },
+        {
+          "name": "punctuation.section.braces.begin.gem",
+          "match": "\\{"
+        },
+        {
+          "name": "punctuation.section.braces.end.gem",
+          "match": "\\}"
+        },
+        {
+          "name": "punctuation.separator.dot.gem",
+          "match": "\\."
+        },
+        {
+          "name": "punctuation.separator.comma.gem",
+          "match": ","
+        },
+        {
+          "name": "punctuation.separator.colon.gem",
+          "match": ":"
+        }
+      ]
+    },
+
+    "identifier": {
+      "name": "variable.other.gem",
+      "match": "[a-zA-Z_][a-zA-Z0-9_]*"
+    }
+  }
+}

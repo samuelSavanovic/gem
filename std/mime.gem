@@ -1,0 +1,139 @@
+## mime: content types by file extension and back. Both ignore case and take a string or a buffer.
+##
+##   mime.lookup("site/index.HTML")    # "text/html; charset=utf-8"
+##   mime.ext("image/jpeg")            # ".jpg"
+
+load "std/string"
+
+let types = {
+  html: "text/html",
+  htm: "text/html",
+  css: "text/css",
+  js: "text/javascript",
+  mjs: "text/javascript",
+  json: "application/json",
+  xml: "application/xml",
+  txt: "text/plain",
+  md: "text/markdown",
+  csv: "text/csv",
+  yaml: "application/yaml",
+  yml: "application/yaml",
+  toml: "application/toml",
+  map: "application/json",
+  ics: "text/calendar",
+  rss: "application/rss+xml",
+  atom: "application/atom+xml",
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  gif: "image/gif",
+  svg: "image/svg+xml",
+  ico: "image/x-icon",
+  webp: "image/webp",
+  avif: "image/avif",
+  bmp: "image/bmp",
+  tif: "image/tiff",
+  tiff: "image/tiff",
+  woff: "font/woff",
+  woff2: "font/woff2",
+  ttf: "font/ttf",
+  otf: "font/otf",
+  pdf: "application/pdf",
+  zip: "application/zip",
+  gz: "application/gzip",
+  tar: "application/x-tar",
+  mp3: "audio/mpeg",
+  wav: "audio/wav",
+  ogg: "audio/ogg",
+  oga: "audio/ogg",
+  flac: "audio/flac",
+  m4a: "audio/mp4",
+  mp4: "video/mp4",
+  ogv: "video/ogg",
+  mov: "video/quicktime",
+  webm: "video/webm",
+  wasm: "application/wasm"
+}
+
+let charset_prefixes = ["text/", "application/json", "application/xml", "application/yaml", "application/toml"]
+
+# older names for types already in `types`
+let aliases = {
+  "application/javascript": ".js",
+  "application/x-javascript": ".js",
+  "text/x-markdown": ".md",
+  "application/x-yaml": ".yaml",
+  "text/yaml": ".yaml",
+  "audio/x-wav": ".wav",
+  "audio/wave": ".wav"
+}
+
+fn text(fname, what, v)
+  let t = type(v)
+  if t == "string"
+    return v
+  end
+  if t == "buffer"
+    return to_string(v)
+  end
+  error("mime.{fname}: {what} must be a string, got {t}")
+end
+
+# "a/b.tar.gz" -> "gz", "a.d/x" -> "". No `/` and no `.` means a bare extension.
+fn ext_from_path(path_or_ext)
+  let n = len(path_or_ext)
+  let i = n - 1
+  while i >= 0
+    let c = ord(path_or_ext, i)
+    if c == 46
+      return substr(path_or_ext, i + 1, n - i - 1)
+    end
+    if c == 47
+      return ""
+    end
+    i -= 1
+  end
+  path_or_ext
+end
+
+fn needs_charset(content_type)
+  for prefix in charset_prefixes
+    if string.starts_with(content_type, prefix)
+      return true
+    end
+  end
+  false
+end
+
+## Content type for a path or extension ("index.html", ".html", "html"); unknown is application/octet-stream.
+fn lookup(path_or_ext)
+  path_or_ext = text("lookup", "path_or_ext", path_or_ext)
+  let ct = types[string.lower(ext_from_path(path_or_ext))]
+  if ct == nil
+    return "application/octet-stream"
+  end
+  if needs_charset(ct)
+    return "{ct}; charset=utf-8"
+  end
+  ct
+end
+
+## The usual extension, with its dot, for `content_type` (parameters ignored), or nil.
+fn ext(content_type)
+  content_type = text("ext", "content_type", content_type)
+  let base = content_type
+  let semi = string.index_of(content_type, ";")
+  if semi >= 0
+    base = substr(content_type, 0, semi)
+  end
+  base = string.lower(string.trim(base))
+  # first match wins, so `types` lists jpg before jpeg, html before htm
+  for e, ct in types
+    if ct == base
+      return ".{e}"
+    end
+  end
+  aliases[base]
+end
+
+export lookup, ext

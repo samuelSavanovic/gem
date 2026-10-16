@@ -1,0 +1,28 @@
+let a = []
+push(a, 10)
+push(a, 20)
+push(a, 30)
+print(len(a))
+print(a[0])
+print(a[1])
+print(a[2])
+
+let v = push(a, 99)
+print(v)
+
+print(len(a))
+
+let b = []
+for i = 0, 5
+  push(b, i * 10)
+end
+for item in b
+  print(item)
+end
+
+let c = []
+push(c, "hello")
+push(c, "world")
+for s in c
+  print(s)
+end

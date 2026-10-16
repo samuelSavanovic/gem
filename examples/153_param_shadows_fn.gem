@@ -1,0 +1,137 @@
+# a param named like a top-level fn shadows it in its whole scope, closures and do blocks included
+
+fn item() "FN" end
+fn count() "FN" end
+fn step() "FN" end
+fn acc() "FN" end
+fn label(x) "fn label {x}" end
+
+extern include "stdlib.h"
+extern fn labs(n: Int) -> Int
+
+fn plain(item)
+  let f = fn() item end
+  f()
+end
+print("plain", plain(5))
+
+fn defaulted(item = 7)
+  let f = fn() item end
+  f()
+end
+print("defaulted", defaulted(), defaulted(8))
+
+fn rest(...item)
+  let f = fn() len(item) end
+  f()
+end
+print("rest", rest(1, 2, 3))
+
+fn destructured({item})
+  let f = fn() item end
+  f()
+end
+print("destructured", destructured({item: "d"}))
+
+let g = fn(item)
+  let h = fn() fn() item end end
+  h()()
+end
+print("closure param", g(9))
+
+# a do block reads the param, and the param is also called
+fn calls(label)
+  let out = []
+  for x in [1, 2]
+    push(out, x)
+  end
+  let r = table_map(out) do |x|
+    label(x)
+  end
+  r
+end
+fn table_map(arr, f)
+  let r = []
+  for x in arr
+    push(r, f(x))
+  end
+  r
+end
+print("do block", calls(fn(x) x * 10 end))
+
+fn boxed(count)
+  let inc = fn() count += 1 end
+  inc()
+  inc()
+  count
+end
+print("boxed", boxed(10))
+
+fn tco(step, acc)
+  if step == 0
+    return acc
+  end
+  let f = fn() step end
+  tco(step - 1, acc + f())
+end
+print("tco", tco(100000, 0))
+
+fn ping(item, n)
+  if n == 0
+    let f = fn() item end
+    return f()
+  end
+  pong(item + 1, n - 1)
+end
+fn pong(item, n)
+  ping(item, n)
+end
+print("mutual tco", ping(0, 100000))
+
+fn tco_rest(step = 3, ...acc)
+  if step == 0
+    let f = fn() len(acc) end
+    return f()
+  end
+  tco_rest(step - 1, 1, 2)
+end
+print("tco rest", tco_rest())
+
+fn spawner(item)
+  let me = self()
+  spawn do
+    send(me, item)
+  end
+  receive
+  when v
+    v
+  end
+end
+print("spawn", spawner("sent"))
+
+fn double(x) x * 2 end
+fn checked(item)
+  let a = pcall double(item)
+  let b = pcall do
+    item + 1
+  end
+  let c = pcall(fn() item - 1 end)
+  [a.value, b.value, c.value]
+end
+print("pcall", checked(21))
+
+fn ext(labs)
+  let f = fn() labs end
+  f()
+end
+print("extern", ext("param"), labs(-4))
+
+# the fns are still reachable where no param shadows them
+let fns = fn() item() end
+print("fns", item(), fns(), label(1))
+
+# a closure created where the name is the fn keeps the fn when called inside a shadowing fn
+fn outer(item)
+  fns()
+end
+print("lexical", outer(3))

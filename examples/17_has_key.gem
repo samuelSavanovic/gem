@@ -1,0 +1,17 @@
+let t = {a: 1, b: 2}
+
+print(has_key(t, "a"))
+print(has_key(t, "c"))
+
+let arr = [10, 20, 30]
+print(has_key(arr, 0))
+print(has_key(arr, 5))
+
+# Distinguishes nil value from missing key
+let t2 = {x: nil}
+print(t2.x == nil)
+print(has_key(t2, "x"))
+print(has_key(t2, "y"))
+
+let check = has_key
+print(check(t, "b"))

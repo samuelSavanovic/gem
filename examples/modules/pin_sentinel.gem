@@ -1,0 +1,23 @@
+# a module variable pinned inside a fn, renamed when the module is loaded under a prefix
+let sentinel = "S"
+
+fn classify(v)
+  match v
+  when ^sentinel
+    "sentinel"
+  when {k: ^sentinel}
+    "nested sentinel"
+  else
+    "other"
+  end
+end
+
+# a pattern binding next to a module variable (one named like it is a compile error)
+fn unwrap(v)
+  match v
+  when {k: got}
+    got
+  end
+end
+
+export classify, unwrap

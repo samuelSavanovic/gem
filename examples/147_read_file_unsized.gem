@@ -1,0 +1,36 @@
+# read_file reads files of unknown size (procfs reports 0, pipes none) to EOF, in main and in a
+# spawned process; regular files keep the sized fast path
+
+let fifo = "/tmp/gem_147_fifo_{epoch_ms()}_{random(1000000)}"
+exec("mkfifo {fifo}")
+exec("printf 'hello\\nfrom a pipe' > {fifo} &")
+let s = read_file(fifo)
+print(len(s), s)
+
+let main = self()
+spawn do
+  exec("printf 'child pipe' > {fifo} &")
+  send(main, read_file(fifo))
+end
+print(receive())
+remove_file(fifo)
+
+# Linux only; skipped elsewhere with the same output
+let status = "/proc/self/status"
+if file_exists(status)
+  let st = read_file(status)
+  print("procfs:", len(st) > 0 and substr(st, 0, 5) == "Name:")
+else
+  print("procfs:", true)
+end
+
+let path = "/tmp/gem_147_file_{epoch_ms()}_{random(1000000)}"
+write_file(path, "")
+print(len(read_file(path)))
+write_file(path, "a\0b\0")
+let b = read_file(path)
+print(len(b), ord(substr(b, 1, 1)))
+remove_file(path)
+
+let r = pcall(fn() read_file("/tmp") end)
+print(r.ok, r.error)

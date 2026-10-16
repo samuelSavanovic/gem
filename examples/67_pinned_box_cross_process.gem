@@ -1,0 +1,28 @@
+# the spawned loop's `bump` mutates module binding `count`, its own copy; it must reach 5000 across resets
+
+let main_pid = self()
+let count = 0
+let bump = fn() count = count + 1 end
+
+let w = spawn(fn()
+  while true
+    let msg = receive()
+    if msg == "report"
+      send(main_pid, {tag: "count", count: count})
+    elif msg == "stop"
+      return
+    else
+      bump()
+    end
+    let junk = {pad: "x" + to_string(count), arr: [1,2,3,4,5,6,7]}
+  end
+end)
+
+let n = 5000
+for i = 0, n
+  send(w, "tick")
+end
+send(w, "report")
+let r = receive()
+send(w, "stop")
+print("count: " + to_string(r.count))

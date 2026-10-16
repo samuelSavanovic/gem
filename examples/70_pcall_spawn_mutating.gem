@@ -1,0 +1,28 @@
+# pcall(fn() spawn(fn() ... end) end) where the spawned loop mutates the pcall closure's captures
+
+let main_pid = self()
+
+let r = pcall(fn()
+  let counter = 0
+  let bump = fn() counter = counter + 1 end
+  let w = spawn(fn()
+    while true
+      let msg = receive()
+      if msg == "stop"
+        send(main_pid, {tag: "done", count: counter})
+        return
+      end
+      bump()
+      let junk = {pad: "x" + to_string(counter), arr: [1,2,3,4,5,6,7]}
+    end
+  end)
+  for i = 0, 5000
+    send(w, "tick")
+  end
+  send(w, "stop")
+  let result = receive()
+  result.count
+end)
+
+print("ok: " + to_string(r.ok))
+print("value: " + to_string(r.value))

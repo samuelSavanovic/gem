@@ -1,0 +1,37 @@
+let add = fn(a, b)
+  return a + b
+end
+
+let add3 = fn(a, b, c)
+  return a + b + c
+end
+
+let x = add(
+  10,
+  20
+)
+print(x)
+
+let y = add(
+  add(1, 2),
+  add(
+    3,
+    4
+  )
+)
+print(y)
+
+let z = add3(
+  100,
+  200,
+  300
+)
+print(z)
+
+let w = add(
+  5, 6)
+print(w)
+
+let v = add(7, 8
+)
+print(v)

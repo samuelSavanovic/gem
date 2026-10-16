@@ -1,0 +1,94 @@
+# a binding named like a builtin shadows it in its scope, the same in the entry file and in modules
+
+load "./modules/builtin_name_outer" as outer
+
+# an entry-file fn: calls and references reach it, at top level and inside fns
+fn push(t, v)
+  t[len(t)] = v * 10
+end
+
+let t = []
+push(t, 1)
+let p = push
+p(t, 2)
+fn push_three(t)
+  push(t, 3)
+end
+push_three(t)
+print(t)
+
+# desugared for-loops and match patterns still use the real builtins
+fn type(v)
+  "user type"
+end
+for x in [1, 2]
+  print("for {x}")
+end
+match {a: 1}
+when {a: a}
+  print("match a={a}")
+end
+match [7, 8]
+when [m, n]
+  print("match {m} {n}")
+end
+print(type(1))
+
+let sort = "my sort"
+fn show_sort()
+  sort
+end
+print(show_sort())
+
+# a loaded module's fns shadow only inside that module
+print(outer.outer_len([1, 2]))
+print(outer.outer_error())
+print(outer.via_inner([1, 2, 3]))
+print(outer.error("y"))
+print(len([1, 2, 3, 4]))
+
+fn add_len(len)
+  len + 1
+end
+print(add_len(5))
+
+fn loop_with_len_param(len, items)
+  let n = 0
+  for x in items
+    n += x
+  end
+  match {k: n}
+  when {k: k}
+    n = k
+  end
+  len + n
+end
+print(loop_with_len_param(100, [1, 2, 3]))
+
+fn with_error_param(error)
+  error("param")
+end
+print(with_error_param(fn(m) "called {m}" end))
+
+fn with_error_local()
+  let error = fn(m) "local {m}" end
+  error("err")
+end
+print(with_error_local())
+
+let r = pcall(fn() error("real error") end)
+print(r.error)
+
+# a param named `sort` keeps the closure it's given: it must not be treated like a closure passed
+# to the builtin sort (only called during the sort), so it stays valid after `keep` returns
+let kept = []
+fn keep(sort)
+  let count = 41
+  sort(fn() count + 1 end)
+end
+keep(fn(f) kept[0] = f end)
+fn clobber(a, b, c, d)
+  [a, b, c, d]
+end
+clobber(1, 2, 3, 4)
+print(kept[0]())

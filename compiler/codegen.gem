@@ -1,0 +1,2923 @@
+# AST -> C. make_codegen() returns a table of closures sharing the state below.
+
+load "./liveness" (compute_live_for_pt_loops_in_stmts)
+load "./errors" (make_error_sink)
+load "./builtins" (BUILTIN_FNS, LEAF_BUILTINS, DIRECT_BUILTINS)
+load "./cgutil" (escape_c_string, pad_for, c_int_literal, format_float, set_add, set_contains, set_union, set_intersect, sorted_array_to_set, find_closest_export, is_node)
+load "./scope" (collect_top_let_names, scope_shadowing_lets, collect_module_namespaces, collect_shadow_lets_in_fn)
+load "./captures" (collect_free_vars, collect_free_node, walk_captures_node, walk_writes_node, find_captured_in_scope, find_capture_writes_in_scope, find_writes_in_closure_body, mark_non_escaping_stmts)
+load "./tco" (fn_def_is_tco, find_tail_call_sccs)
+load "./append" (decompose_concat, expr_has_var, find_append_vars)
+load "./callgraph" (build_call_graph, mark_recursive_fns)
+load "./loops" (lift_captured_arm_lets_in_fn, lift_captured_arm_lets_top_stmts, top_rescue_placeholders, tag_process_tail_while_loops)
+
+fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_file = nil, sink = nil, global_display = nil, std_dir = nil)
+  if module_bindings == nil
+    module_bindings = {}
+  end
+  if global_display == nil
+    global_display = {}
+  end
+  if sources_by_file == nil
+    sources_by_file = {}
+  end
+  if sink == nil
+    sink = make_error_sink()
+  end
+
+  # path as shown in #line, frame records and notes (make_show_path), independent of where the repo lives
+  let rel_path = fn(p)
+    if show_path == nil
+      return p
+    end
+    show_path(p)
+  end
+
+  # user-facing name: drops `__sh<N>_` and maps `__mod_<mangle>_<name>` to `<mod>.<name>` (`__main_`: display_name)
+  let user_var_name = fn(name)
+    let n = name
+    while len(n) > 5 and substr(n, 0, 4) == "__sh"
+      let i = 4
+      while i < len(n) and ord(n, i) >= 48 and ord(n, i) <= 57
+        i += 1
+      end
+      if i == 4 or i >= len(n) or n[i] != "_"
+        break
+      end
+      n = substr(n, i + 1, len(n) - i - 1)
+    end
+    if global_display[n] != nil
+      return global_display[n]
+    end
+    n
+  end
+
+  # node.file is set by tag_source_file; entry-file and synthetic nodes have none
+  let file_of = fn(node)
+    if node != nil and node.file != nil
+      return node.file
+    end
+    source_name
+  end
+
+  let loc_of = fn(node)
+    let f = file_of(node)
+    if node != nil and node.line != nil
+      return "{rel_path(f)}:{node.line}"
+    end
+    rel_path(f)
+  end
+
+  # for sink.report's source line + caret; nil when we don't have the text
+  let source_of = fn(node)
+    let f = file_of(node)
+    if has_key(sources_by_file, f)
+      return sources_by_file[f]
+    end
+    nil
+  end
+
+  let functions = []
+  let forward_decls = []
+  let extern_c_decls = []
+  let tmp_counter = 0
+  let mark_counter = 0
+  let ic_counter = 0
+  let ic_init = chr(123) + "0" + chr(125)
+  let anon_counter = 0
+  let defined_fns = {}
+  let builtin_fns = BUILTIN_FNS
+  let builtins = {}
+  for k, _ in builtin_fns
+    builtins[k] = true
+  end
+  # entry-file bindings shadowing a builtin are renamed `__main_<name>` (shadow_entry_builtins); show `<name>`
+  let display_name = fn(name)
+    if len(name) > 7 and substr(name, 0, 7) == "__main_"
+      let orig = substr(name, 7, len(name) - 7)
+      if has_key(builtin_fns, orig)
+        return orig
+      end
+    end
+    name
+  end
+  # name recorded in the stack frame; traces, pcall's `stack` and crash reports print it as is
+  let frame_name = fn(name)
+    if len(name) > 7 and substr(name, 0, 7) == "__anon_"
+      return "anonymous fn"
+    end
+    display_name(user_var_name(name))
+  end
+  let boxed_vars = {}
+  let top_level_vars = {}
+  # module binding -> {export: `__mod_<mangle>_<export>`} for bindings never rebound, so `m.x` compiles to the slot
+  let module_ns = {}
+  # reverse of module_ns: export -> [{binding, field}] holding its value
+  let ns_targets = {}
+  let in_top_level = false
+  let local_names = {}
+  # locals with a C variable in scope here; an arm's lets drop out when its C block closes (filter_live_for_rescue)
+  let fn_scope_locals = {}
+  # captures of the closure body being compiled: `_cls->gem_v_<name>`, a `GemVal *` to the storage (the reset root)
+  let closure_captures = {}
+  # Captures a non-escaping closure assigns. Its env points at the creator's unboxed C locals, in a frame older
+  # than this body's loop marks, so every loop here roots them regardless of liveness (an error can unwind to
+  # the creator, which reads them).
+  let stack_env_writes = {}
+  let current_closure_struct_name = nil
+  let current_closure_captures = nil
+  let tco_fn_name = nil
+  let tco_params = nil
+  let tco_boxed = nil
+  # TCO fn with default/rest params: a self tail call fills `_tco_argv` and jumps to the rebind block
+  let tco_rebind = false
+  let tco_argv_max = 0
+  # call graph from mark_process_tail, for note_spawn_global_writes
+  let pt_caller_records = {}
+  let pt_anon_parent = {}
+  let pt_anon_nodes = {}
+  let pt_name_to_fn = {}
+  # mutual tail calls (find_tail_call_sccs): fn name -> SCC id, and per SCC how many TLB slots its wrapper copies
+  let scc_member_to_id = {}
+  let scc_id_max_params = {}
+  # SCC of the member being compiled, so a tail call to a sibling goes through the trampoline
+  let current_scc_id = nil
+  # name -> C flag for in-place `name = name + x` appends, set while the var holds the buffer (compile_while)
+  let append_buf_vars = {}
+  # leaf fns skip push/pop_frame and just set gem_leaf_site/gem_leaf_line: they call no Gem code, so they're innermost
+  let in_leaf_fn = false
+  # C expr of this fn's return point (GemArenaPoint), or nil
+  let ret_point = nil
+
+  let tmp = fn()
+    tmp_counter += 1
+    "_t{tmp_counter}"
+  end
+
+  # a literal or computed temp, which nothing later can change; others get pinned, since C arg order is unspecified
+  let is_inert_expr = fn(e)
+    if substr(e, 0, 2) == "_t" and len(e) > 2
+      for i = 2, len(e)
+        let c = e[i]
+        if c < "0" or c > "9"
+          return false
+        end
+      end
+      return true
+    end
+    e == "GEM_NIL" or e == "gem_bool(1)" or e == "gem_bool(0)" or substr(e, 0, 8) == "gem_int(" or substr(e, 0, 10) == "gem_float(" or substr(e, 0, 13) == "GEM_STR_LIT(\""
+  end
+
+  let pin_operand = fn(r)
+    if is_inert_expr(r.expr)
+      return r
+    end
+    let t = tmp()
+    {expr: t, setup: r.setup + "    GemVal {t} = {r.expr};\n"}
+  end
+
+  let anon_name = fn()
+    anon_counter += 1
+    "__anon_{anon_counter}"
+  end
+
+  let mangle = fn(name)
+    "gem_v_{name}"
+  end
+
+  # Top-level bindings are per-process slots: reads go through gem_global_get, writes through gem_global_set /
+  # gem_global_ref so the lazy spawn copy sees the change; never gem_cur_globals directly. Slots are never captured
+  # or passed as reset roots (the runtime roots them all). In a fn, a local or capture of that name shadows it.
+  let is_global_ref = fn(name)
+    if not set_contains(top_level_vars, name)
+      return false
+    end
+    if in_top_level
+      return true
+    end
+    not set_contains(fn_scope_locals, name) and not set_contains(closure_captures, name)
+  end
+
+  let gmangle = fn(name)
+    "gem_g_{name}"
+  end
+
+  let gindex = fn(name)
+    "gem_gi_{name}"
+  end
+
+  let join_c = fn(items)
+    let out = ""
+    for i = 0, len(items)
+      if i > 0
+        out = out + ", "
+      end
+      out = out + items[i]
+    end
+    out
+  end
+
+  let emit_region_reset = fn(p, mark, roots, pinned)
+    let b = buf_new()
+    buf_push(b, "{p}if (gem_arena_reset_due(&{mark})) \{\n")
+    let roots_arg = "NULL"
+    let pinned_arg = "NULL"
+    if len(roots) > 0
+      buf_push(b, "{p}    GemVal *_rr[] = \{{join_c(roots)}};\n")
+      roots_arg = "_rr"
+    end
+    if len(pinned) > 0
+      buf_push(b, "{p}    GemVal *_rp[] = \{{join_c(pinned)}};\n")
+      pinned_arg = "_rp"
+    end
+    buf_push(b, "{p}    gem_arena_reset_region(&{mark}, {roots_arg}, {len(roots)}, {pinned_arg}, {len(pinned)});\n")
+    buf_push(b, "{p}}\n")
+    to_string(b)
+  end
+
+  # after writing an exported module binding, refresh the namespace tables holding it (`let ns = m; ns.x`)
+  let ns_refresh = fn(name, p)
+    if ns_targets[name] == nil or not is_global_ref(name)
+      return ""
+    end
+    let out = ""
+    for t in ns_targets[name]
+      if set_contains(top_level_vars, t.binding)
+        out = out + "{p}gem_ns_refresh({gmangle(t.binding)}, \"{escape_c_string(t.field)}\", {gmangle(name)});\n"
+      end
+    end
+    out
+  end
+
+  let var_lvalue = fn(name)
+    if is_global_ref(name)
+      return "(*gem_global_ref({gindex(name)}))"
+    end
+    if set_contains(boxed_vars, name)
+      return "(*{mangle(name)})"
+    end
+    mangle(name)
+  end
+
+  let var_store = fn(name, expr)
+    if is_global_ref(name)
+      return "gem_global_set({gindex(name)}, {expr});"
+    end
+    "{var_lvalue(name)} = {expr};"
+  end
+
+  # every pop_frame / set_line goes through these so leaf fns use the leaf slot
+  let pop_str = fn(p)
+    if in_leaf_fn
+      "{p}gem_leaf_site = NULL;\n"
+    else
+      "{p}gem_pop_frame();\n"
+    end
+  end
+  # Every fn-body return goes through return_str / return_nil_str: with a return point it resets first,
+  # keeping only the return value. emit_scc_tail_call's return is the exception (SCC bodies have no point).
+  let return_str = fn(p, t)
+    let reset = if ret_point != nil
+      "{p}if (gem_ret_reset_due(&{ret_point})) gem_arena_reset_return(&{ret_point}, &{t}, 1);\n"
+    else
+      ""
+    end
+    "{reset}{pop_str(p)}{p}return {t};"
+  end
+  let return_nil_str = fn(p)
+    let reset = if ret_point != nil
+      "{p}if (gem_ret_reset_due(&{ret_point})) gem_arena_reset_return(&{ret_point}, NULL, 1);\n"
+    else
+      ""
+    end
+    "{reset}{pop_str(p)}{p}return GEM_NIL;"
+  end
+  let setline_str = fn(line, p)
+    if in_leaf_fn
+      "{p}gem_leaf_line = {line};\n"
+    else
+      "{p}gem_set_line({line});\n"
+    end
+  end
+  # leaf entry; sets the line only if the first statement won't
+  let leaf_entry_str = fn(name, file, line, body)
+    let b = buf_new()
+    buf_push(b, "    static const GemLeafSite _leaf_site = \{\"{escape_c_string(name)}\", \"{escape_c_string(file)}\"};\n")
+    buf_push(b, "    gem_leaf_site = &_leaf_site;\n")
+    if len(body) == 0 or type(body[0]) != "table" or body[0].line == nil
+      buf_push(b, "    gem_leaf_line = {line};\n")
+    end
+    to_string(b)
+  end
+
+  # names the capture walk skips: named fns, and unshadowed builtins
+  let is_global_name = fn(name)
+    (set_contains(builtins, name) and not set_contains(local_names, name)) or set_contains(defined_fns, name)
+  end
+
+  let compile_expr = nil
+
+  # left operand is pinned if the right one runs anything
+  let operands = fn(left_r, right_node)
+    let right_r = compile_expr(right_node)
+    if right_r.setup != "" or not is_inert_expr(right_r.expr)
+      left_r = pin_operand(left_r)
+    end
+    {left: left_r.expr, right: right_r.expr, setup: left_r.setup + right_r.setup}
+  end
+
+  # left to right for a list of operands (args, interp parts): pin each one that has code running after it
+  let left_to_right = fn(results)
+    let later_runs = false
+    let i = len(results) - 1
+    while i >= 0
+      let r = results[i]
+      if later_runs
+        r = pin_operand(r)
+        results[i] = r
+      end
+      if r.setup != "" or not is_inert_expr(r.expr)
+        later_runs = true
+      end
+      i -= 1
+    end
+    let b = buf_new()
+    let exprs = []
+    for r in results
+      buf_push(b, r.setup)
+      push(exprs, r.expr)
+    end
+    {setup: to_string(b), exprs: exprs}
+  end
+  let compile_stmt = nil
+  let compile_stmt_return = nil
+  let compile_stmts = nil
+  let compile_stmts_tail = nil
+  let compile_if = nil
+  let compile_while = nil
+  let compile_match = nil
+  let compile_receive_match = nil
+  let compile_call = nil
+  let compile_binop = nil
+  let compile_anon_fn = nil
+  let compile_closure_fn = nil
+  let compile_table = nil
+  let compile_array = nil
+  let compile_extern_fn = nil
+  let compile_blocking_extern_fn = nil
+  let compile_fn = nil
+  let emit_tco_continue = nil
+  let emit_scc_tail_call = nil
+  let scc_wrapper_for = nil
+
+  # Leaf fns run no Gem code (only LEAF_BUILTINS calls; receive can yield), so the leaf slot is enough for traces.
+  # Extern calls don't qualify: with the extern's body in the same C file, cc can drop the leaf-slot store as dead,
+  # and the guard-page handler reads that slot. Builtins are compiled apart, so the store before them stays
+  # (and the inline DIRECT_BUILTINS paths can't raise or fault).
+  let leaf_safe_call = fn(node)
+    let func = node.func
+    if type(func) != "table" or func.tag != "var" or set_contains(local_names, func.name)
+      return false
+    end
+    LEAF_BUILTINS[func.name] == true
+  end
+  let node_has_calls = nil
+  node_has_calls = fn(node)
+    if node == nil
+      return false
+    end
+    if type(node) != "table"
+      return false
+    end
+    let tag = node.tag
+    if tag == "receive_match"
+      return true
+    end
+    if tag == "call"
+      if not leaf_safe_call(node)
+        return true
+      end
+      for a in node.args
+        if node_has_calls(a)
+          return true
+        end
+      end
+      return false
+    end
+    if tag == "anon_fn" or tag == "fn_def"
+      # nested fn: nothing in it (defaults included) runs here
+      return false
+    end
+    for k, v in node
+      if type(v) == "table"
+        if node_has_calls(v)
+          return true
+        end
+      end
+    end
+    false
+  end
+  let fn_is_leaf = fn(node, body)
+    for s in body
+      if node_has_calls(s)
+        return false
+      end
+    end
+    if node.defaults != nil
+      for d in node.defaults
+        if d != nil and node_has_calls(d)
+          return false
+        end
+      end
+    end
+    true
+  end
+
+  # can this call reach code that reads module slots? user fns/closures, and builtins that run fns or spawn
+  let slot_reader_builtins = {pcall: true, sort: true, build_string: true, spawn: true, spawn_link: true, spawn_monitor: true}
+  let node_may_read_slots = nil
+  node_may_read_slots = fn(node)
+    if node == nil or type(node) != "table"
+      return false
+    end
+    let tag = node.tag
+    if tag == "anon_fn" or tag == "fn_def"
+      return false
+    end
+    if tag == "call"
+      let callee = node.func
+      if not is_node(callee, "var") or set_contains(local_names, callee.name) or not has_key(builtin_fns, callee.name) or has_key(slot_reader_builtins, callee.name)
+        return true
+      end
+    end
+    for k, v in node
+      if type(v) == "table" and node_may_read_slots(v)
+        return true
+      end
+    end
+    false
+  end
+
+  # whole-program pass: call graph, loop tagging for back-edge resets, per-loop liveness, mutual-tail-call SCCs
+  let mark_process_tail = fn(fn_defs, top_stmts, extern_names)
+    let graph = build_call_graph(fn_defs, top_stmts, builtin_fns, extern_names)
+    mark_recursive_fns(graph)
+    let caller_records = graph.caller_records
+    let name_to_fn = graph.name_to_fn
+
+    tag_process_tail_while_loops(fn_defs, top_stmts, source_name)
+
+    # sets node.liveness_result, which compile_while reads
+    for fd in fn_defs
+      compute_live_for_pt_loops_in_stmts(fd.body)
+    end
+    compute_live_for_pt_loops_in_stmts(top_stmts)
+
+    # mutual tail cycles get a gem_sccbody_<name> per member plus a trampoline, so a round trip eats no C frame
+    let sccs = find_tail_call_sccs(fn_defs, caller_records, name_to_fn)
+    scc_member_to_id = sccs.member_to_id
+    scc_id_max_params = sccs.id_max_params
+
+    pt_caller_records = caller_records
+    pt_anon_parent = graph.anon_parent
+    pt_anon_nodes = graph.anon_nodes
+    pt_name_to_fn = name_to_fn
+  end
+
+  # notes each write to module state from code a spawn reaches: it only changes that process's copy
+  let note_spawn_global_writes = fn()
+    let records = pt_caller_records
+    let children = {}
+    for aid, parent in pt_anon_parent
+      if children[parent] == nil
+        children[parent] = []
+      end
+      push(children[parent], aid)
+    end
+
+    # a caller's params/lets, plus every enclosing scope's for a closure
+    let local_cache = {}
+    let locals_of = nil
+    locals_of = fn(cid)
+      if local_cache[cid] != nil
+        return local_cache[cid]
+      end
+      let s = {}
+      if len(cid) >= 3 and substr(cid, 0, 3) == "fn:"
+        let fd = pt_name_to_fn[substr(cid, 3, len(cid) - 3)]
+        if fd != nil
+          for p in fd.params
+            set_add(s, p)
+          end
+          if fd.rest_param != nil
+            set_add(s, fd.rest_param)
+          end
+          collect_shadow_lets_in_fn(fd.body, s)
+        end
+      elif pt_anon_nodes[cid] != nil
+        let an = pt_anon_nodes[cid].fn
+        for p in an.params
+          set_add(s, p)
+        end
+        if an.rest_param != nil
+          set_add(s, an.rest_param)
+        end
+        collect_shadow_lets_in_fn(an.body, s)
+        let parent = pt_anon_parent[cid]
+        if parent != nil and parent != "<top>"
+          s = set_union(s, locals_of(parent))
+        end
+      end
+      local_cache[cid] = s
+      s
+    end
+    # cid -> first spawn node that reaches it (a local named `spawn` isn't the builtin)
+    let reached = {}
+    let queue = []
+    for aid, info in pt_anon_nodes
+      if info.spawn != nil and not set_contains(locals_of(pt_anon_parent[aid]), info.spawn_via)
+        reached[aid] = info.spawn
+        push(queue, aid)
+      end
+    end
+    let qi = 0
+    while qi < len(queue)
+      let cid = queue[qi]
+      qi += 1
+      let r = records[cid]
+      if r == nil
+        continue
+      end
+      let next = []
+      for callee, _ in r.tail_callees
+        push(next, "fn:" + callee)
+      end
+      for callee, _ in r.non_tail_callees
+        push(next, "fn:" + callee)
+      end
+      if children[cid] != nil
+        for c in children[cid]
+          push(next, c)
+        end
+      end
+      for n in next
+        if reached[n] == nil
+          reached[n] = reached[cid]
+          push(queue, n)
+        end
+      end
+    end
+    let seen = {}
+    for cid, spawn_node in reached
+      let r = records[cid]
+      if r == nil
+        continue
+      end
+      for w in r.writes
+        let locals = locals_of(cid)
+        # std settings (log.set_level etc.) are per process on purpose
+        let wf = file_of(w.node)
+        let in_std = std_dir != nil and substr(wf, 0, len(std_dir) + 1) == std_dir + "/"
+        if not in_std and set_contains(top_level_vars, w.name) and not set_contains(locals, w.name) and (w.via == nil or not set_contains(locals, w.via))
+          let n = w.node
+          let line_str = if n.line != nil then to_string(n.line) else "?" end
+          let key = "{file_of(n)}:{line_str}:{w.name}"
+          if seen[key] == nil
+            seen[key] = true
+            let sline = if spawn_node.line != nil then to_string(spawn_node.line) else "?" end
+            eprint("note: {rel_path(file_of(n))}:{line_str}: this changes module-level `{display_name(user_var_name(w.name))}` in code that runs in a spawned process (spawn at {rel_path(file_of(spawn_node))}:{sline}); each process has its own copy of module state, so the change is visible only in that process.\n")
+          end
+        end
+      end
+    end
+  end
+
+  # Arity errors for direct calls: named fns, externs, `m.f`, and module-level `let f = fn ...` declared once
+  # and never assigned. Required params run up to the last one without a default. scope_shadowing_lets already
+  # renamed lets and fn-named params that would shadow these, so a var callee of that name is the fn, except for
+  # a param shadowing a let fn. Calls through values aren't checked.
+  let check_call_arities = fn(fn_defs, extern_fns_list, top_stmts)
+    let arity = {}
+    let let_fns = {}
+    let assigned = {}
+    let find_assigns = nil
+    find_assigns = fn(node)
+      if node.tag == "assign"
+        set_add(assigned, node.name)
+      end
+      for k, v in node
+        if type(v) == "table" and k != "liveness_result"
+          find_assigns(v)
+        end
+      end
+    end
+    for fd in fn_defs
+      find_assigns(fd)
+    end
+    for s in top_stmts
+      find_assigns(s)
+    end
+    let top_let_count = {}
+    for s in top_stmts
+      let lets = if s.tag == "block" then s.stmts else [s] end
+      for l in lets
+        if l.tag == "let"
+          top_let_count[l.name] = (top_let_count[l.name] or 0) + 1
+        end
+      end
+    end
+    for s in top_stmts
+      if s.tag == "let" and is_node(s.value, "anon_fn") and top_let_count[s.name] == 1 and not set_contains(assigned, s.name) and set_contains(top_level_vars, s.name)
+        let f = s.value
+        let min = 0
+        for i = 0, len(f.params)
+          if f.defaults == nil or f.defaults[i] == nil
+            min = i + 1
+          end
+        end
+        let max = if f.rest_param == nil then len(f.params) end
+        arity[s.name] = {min: min, max: max, def: {params: f.params, defaults: f.defaults, rest_param: f.rest_param, line: s.line, file: file_of(s), tag: "let"}}
+        let_fns[s.name] = true
+      end
+    end
+    for fd in fn_defs
+      let min = 0
+      for i = 0, len(fd.params)
+        if fd.defaults == nil or fd.defaults[i] == nil
+          min = i + 1
+        end
+      end
+      let max = if fd.rest_param == nil then len(fd.params) end
+      arity[fd.name] = {min: min, max: max, def: fd}
+    end
+    for ef in extern_fns_list
+      arity[ef.name] = {min: len(ef.params), max: len(ef.params), def: ef}
+    end
+    # A selective import (`load "m" (f)`) binds `let f = <m's f>`.
+    for s in top_stmts
+      if s.tag == "let" and is_node(s.value, "var") and s.selective_import == true and arity[s.value.name] != nil and top_let_count[s.name] == 1 and not set_contains(assigned, s.name) and set_contains(top_level_vars, s.name)
+        arity[s.name] = arity[s.value.name]
+      end
+    end
+    let reported = {}
+    let check = fn(call, name, shown, loc, span)
+      let a = arity[name]
+      let n = len(call.args)
+      if a == nil or (n >= a.min and (a.max == nil or n <= a.max))
+        return nil
+      end
+      let key = "{file_of(loc)}:{loc.line}:{loc.col}"
+      if reported[key] != nil
+        return nil
+      end
+      reported[key] = true
+      let takes = if a.max == nil
+        "at least {a.min}"
+      elif a.max != a.min
+        "{a.min} to {a.max}"
+      else
+        "{a.min}"
+      end
+      let noun = if a.max == 1 and a.min == 1 then "argument" else "arguments" end
+      let sig = []
+      let d = a.def
+      for i = 0, len(d.params)
+        let pname = user_var_name(d.params[i])
+        if d.tag == "extern_fn"
+          pname = d.params[i].name
+        elif d.defaults != nil and d.defaults[i] != nil
+          pname = pname + " = ..."
+        end
+        push(sig, pname)
+      end
+      if d.rest_param != nil
+        push(sig, "..." + user_var_name(d.rest_param))
+      end
+      let sig_text = ""
+      for i = 0, len(sig)
+        if i > 0
+          sig_text = sig_text + ", "
+        end
+        sig_text = sig_text + sig[i]
+      end
+      let hint = "it is defined as `{shown}({sig_text})`"
+      if d.line != nil
+        hint = hint + " at {rel_path(file_of(d))}:{d.line}"
+      end
+      if n < a.min
+        hint = hint + "; to make a parameter optional, give it a default (`name = nil`)"
+      elif n > 0 and is_node(call.args[n - 1], "anon_fn") and call.args[n - 1].do_block == true
+        hint = hint + "; the `do` block is the last argument"
+      end
+      sink.report(source_of(loc), file_of(loc), loc.line, loc.col, span, "`{shown}` takes {takes} {noun}, called with {n}", hint)
+    end
+    let one_fn = {pcall: "pcall f(x)", spawn: "spawn do f(x) end", spawn_link: "spawn_link do f(x) end", spawn_monitor: "spawn_monitor do f(x) end"}
+    # params of the enclosing fns: lets named like a builtin got renamed, params didn't
+    let walk = nil
+    walk = fn(node, params)
+      if node.tag == "fn_def" or node.tag == "anon_fn"
+        params = set_union(params, sorted_array_to_set(node.params))
+        if node.rest_param != nil
+          set_add(params, node.rest_param)
+        end
+      end
+      if node.tag == "call"
+        let f = node.func
+        if is_node(f, "var") and has_key(one_fn, f.name) and not set_contains(params, f.name) and len(node.args) != 1
+          sink.report(source_of(f), file_of(f), f.line, f.col, len(f.name), "`{f.name}` takes one fn and calls it with no arguments, called with {len(node.args)} arguments", "to pass arguments, wrap the call: `{one_fn[f.name]}`")
+        elif is_node(f, "var") and arity[f.name] != nil and not (let_fns[f.name] == true and set_contains(params, f.name))
+          let shown = frame_name(f.name)
+          check(node, f.name, shown, f, len(shown))
+        elif is_node(f, "dot") and is_node(f.object, "var") and has_key(module_ns, f.object.name)
+          let target = module_ns[f.object.name][f.field]
+          if target != nil and arity[target] != nil
+            let shown = "{display_name(f.object.name)}.{f.field}"
+            check(node, target, shown, f.object, len(shown))
+          end
+        end
+      end
+      for k, v in node
+        if type(v) == "table" and k != "liveness_result"
+          walk(v, params)
+        end
+      end
+    end
+    for fd in fn_defs
+      walk(fd, {})
+    end
+    for s in top_stmts
+      walk(s, {})
+    end
+  end
+
+  emit_tco_continue = fn(call_node, indent)
+    let p = pad_for(indent)
+    let b = buf_new()
+    let args = call_node.args
+    let arg_temps = []
+    for i = 0, len(args)
+      let r = compile_expr(args[i])
+      let t = tmp()
+      buf_push(b, r.setup)
+      buf_push(b, "{p}GemVal {t} = {r.expr};\n")
+      push(arg_temps, t)
+    end
+
+    # Reset against _tco_mk (taken at fn entry). Callers only hold values older than the mark, and here the arg
+    # temps are the only live values (params get rebound, body locals are dead); the runtime handles old objects
+    # mutated since the mark, module slots and the mailbox. Boxed params get a fresh box below like a real call,
+    # so the old box isn't a root: it survives only if a closure in the args holds it.
+    let tco_roots = []
+    for t in arg_temps
+      push(tco_roots, "&{t}")
+    end
+    buf_push(b, emit_region_reset(p, "_tco_mk", tco_roots, []))
+
+    if tco_rebind
+      # the rebind block builds defaults and the rest table, after the reset
+      if len(arg_temps) > tco_argv_max
+        tco_argv_max = len(arg_temps)
+      end
+      for i = 0, len(arg_temps)
+        buf_push(b, "{p}_tco_argv[{i}] = {arg_temps[i]};\n")
+      end
+      buf_push(b, "{p}args = _tco_argv;\n")
+      buf_push(b, "{p}argc = {len(arg_temps)};\n")
+      buf_push(b, "{p}goto _tco_rebind;")
+      return to_string(b)
+    end
+
+    for i = 0, len(tco_params)
+      let mp = mangle(tco_params[i])
+      let val = if i < len(arg_temps) then arg_temps[i] else "GEM_NIL" end
+      if set_contains(tco_boxed, tco_params[i])
+        buf_push(b, "{p}{mp} = gem_box_alloc();\n")
+        buf_push(b, "{p}*{mp} = {val};\n")
+      else
+        buf_push(b, "{p}{mp} = {val};\n")
+      end
+    end
+    buf_push(b, "{p}continue;")
+    to_string(b)
+  end
+
+  # tail call to an SCC sibling: args into the TLB, set gem_tail_fn, pop our frame and return to the wrapper
+  emit_scc_tail_call = fn(call_node, target_name, indent)
+    let p = pad_for(indent)
+    let b = buf_new()
+    let args = call_node.args
+    let arg_temps = []
+    for i = 0, len(args)
+      let r = compile_expr(args[i])
+      let t = tmp()
+      buf_push(b, r.setup)
+      buf_push(b, "{p}GemVal {t} = {r.expr};\n")
+      push(arg_temps, t)
+    end
+    for i = 0, len(arg_temps)
+      buf_push(b, "{p}gem_tail_args[{i}] = {arg_temps[i]};\n")
+    end
+    buf_push(b, "{p}gem_tail_argc = {len(arg_temps)};\n")
+    buf_push(b, "{p}gem_tail_env = NULL;\n")
+    buf_push(b, "{p}gem_tail_fn = gem_sccbody_{target_name};\n")
+    buf_push(b, pop_str(p))
+    buf_push(b, "{p}return GEM_NIL;")
+    to_string(b)
+  end
+
+  # gem_fn_<name> of an SCC member: runs the body the TLB names, resetting and yielding between; no frame of its own
+  scc_wrapper_for = fn(node, sid)
+    let name = node.name
+    let b = buf_new()
+    buf_push(b, "static GemVal gem_fn_{name}(void *_env, GemVal *args, int argc) \{\n")
+    buf_push(b, "    GemFnPtr _next_fn = gem_sccbody_{name};\n")
+    buf_push(b, "    void *_next_env = _env;\n")
+    buf_push(b, "    GemVal *_next_args = args;\n")
+    buf_push(b, "    int _next_argc = argc;\n")
+    buf_push(b, "    GemVal _tail_args[GEM_MAX_TAIL_ARGS];\n")
+    buf_push(b, "    GemVal _result;\n")
+    buf_push(b, "    GemArenaMark _mk;\n")
+    buf_push(b, "    gem_arena_mark(&_mk);\n")
+    buf_push(b, "    while (1) \{\n")
+    buf_push(b, "        _result = _next_fn(_next_env, _next_args, _next_argc);\n")
+    buf_push(b, "        if (gem_tail_fn == NULL) break;\n")
+    # The TLB is shared by all processes: copy it out and clear gem_tail_fn before anything below can yield.
+    buf_push(b, "        _next_fn = gem_tail_fn;\n")
+    buf_push(b, "        gem_tail_fn = NULL;\n")
+    buf_push(b, "        _next_env = gem_tail_env;\n")
+    # fixed count (the SCC's largest arity) so the copy unrolls; argc is clamped since no body reads past it
+    let nargs = scc_id_max_params[sid]
+    buf_push(b, "        _next_argc = gem_tail_argc < {nargs} ? gem_tail_argc : {nargs};\n")
+    for i = 0, nargs
+      buf_push(b, "        _tail_args[{i}] = gem_tail_args[{i}];\n")
+    end
+    buf_push(b, "        _next_args = _tail_args;\n")
+    # the mark predates the first body, and between bodies the copied args are the only live values
+    buf_push(b, "        if (gem_arena_reset_due(&_mk)) \{\n")
+    buf_push(b, "            GemVal *_roots[GEM_MAX_TAIL_ARGS];\n")
+    buf_push(b, "            for (int _i = 0; _i < _next_argc; _i++) _roots[_i] = &_tail_args[_i];\n")
+    buf_push(b, "            gem_arena_reset_region(&_mk, _roots, _next_argc, NULL, 0);\n")
+    buf_push(b, "        }\n")
+    buf_push(b, "        gem_yield_check();\n")
+    buf_push(b, "    }\n")
+    # the members' own returns don't reset; do it here off the mark's base
+    buf_push(b, "    if (gem_ret_reset_due(&_mk.base)) gem_arena_reset_return(&_mk.base, &_result, 0);\n")
+    buf_push(b, "    return _result;\n")
+    buf_push(b, "}")
+    to_string(b)
+  end
+
+  let codegen_error = fn(node, msg)
+    eprint("\n[Compiler Bug]: {msg}\n  --> {loc_of(node)}\n  The compiler accepted source it does not know how to emit C for.\n  This is a bug in the compiler, not your code. Please file an issue with a minimal repro.\n")
+    exit(1)
+  end
+
+  let suggest_name = fn(name)
+    let cands = []
+    for src in [local_names, top_level_vars, defined_fns, builtin_fns]
+      for k, _ in src
+        if type(k) == "string" and k != name and not (len(k) >= 2 and substr(k, 0, 2) == "__")
+          push(cands, k)
+        end
+      end
+    end
+    let best = find_closest_export(name, cands)
+    if best != nil then "did you mean `{best}`?" end
+  end
+
+  # `a = 3` with no `let a` would otherwise end in a cc error about gem_v_a
+  let check_assign_target = fn(name, node)
+    if set_contains(local_names, name) or set_contains(top_level_vars, name) or set_contains(boxed_vars, name)
+      return nil
+    end
+    if has_key(builtin_fns, name) or set_contains(defined_fns, name)
+      let shown = display_name(name)
+      sink.report(source_of(node), file_of(node), node.line, node.col, len(shown), "cannot assign to function `{shown}`", nil)
+    else
+      let near = suggest_name(name)
+      let hint = if near != nil then "{near} To declare a new variable, use `let {name} = ...`" else "use `let {name} = ...` to declare" end
+      sink.report(source_of(node), file_of(node), node.line, node.col, len(name), "undeclared identifier `{name}`", hint)
+    end
+  end
+
+  compile_expr = fn(node)
+    match node
+    when {tag: "int", value: value}
+      return {expr: "gem_int({c_int_literal(value)})", setup: ""}
+    when {tag: "float", value: value}
+      return {expr: "gem_float({format_float(value)})", setup: ""}
+    when {tag: "string", value: value}
+      let escaped = escape_c_string(value)
+      # no copy: points at the C literal. Explicit length for embedded NULs.
+      return {expr: "GEM_STR_LIT(\"{escaped}\", {len(value)})", setup: ""}
+    when {tag: "interp", parts: parts}
+      if len(parts) == 0
+        return {expr: "GEM_STR_LIT(\"\", 0)", setup: ""}
+      end
+      let results = []
+      for part in parts
+        push(results, compile_expr(part))
+      end
+      let ordered = left_to_right(results)
+      let setup = ordered.setup
+      let compiled = ordered.exprs
+      let arr_tmp = tmp()
+      let items = compiled[0]
+      for i = 1, len(compiled)
+        items = items + ", " + compiled[i]
+      end
+      setup = setup + "    GemVal {arr_tmp}[] = \{{items}};\n"
+      return {expr: "gem_interp({len(compiled)}, {arr_tmp})", setup: setup}
+    when {tag: "bool", value: value}
+      if value
+        return {expr: "gem_bool(1)", setup: ""}
+      end
+      return {expr: "gem_bool(0)", setup: ""}
+    when {tag: "nil"}
+      return {expr: "GEM_NIL", setup: ""}
+    when {tag: "var", name: name}
+      if not set_contains(local_names, name)
+        if has_key(builtin_fns, name)
+          return {expr: "gem_make_fn({builtin_fns[name]}, NULL)", setup: ""}
+        elif set_contains(defined_fns, name)
+          return {expr: "gem_make_fn(gem_fn_{name}, NULL)", setup: ""}
+        elif not set_contains(top_level_vars, name)
+          # undeclared; report and keep going (the driver won't run cc)
+          sink.report(source_of(node), file_of(node), node.line, node.col, len(name), "undeclared identifier `{name}`", suggest_name(name))
+          return {expr: "GEM_NIL", setup: ""}
+        end
+      end
+      if is_global_ref(name)
+        return {expr: gmangle(name), setup: ""}
+      end
+      return {expr: var_lvalue(name), setup: ""}
+    when {tag: "call"}
+      return compile_call(node)
+    when {tag: "binop"}
+      return compile_binop(node)
+    when {tag: "unop", expr: uexpr, op: op}
+      let r = compile_expr(uexpr)
+      if op == "-"
+        return {expr: "gem_neg({r.expr})", setup: r.setup}
+      elif op == "not"
+        return {expr: "gem_not({r.expr})", setup: r.setup}
+      end
+      codegen_error(node, "unknown unary operator: {op}")
+    when {tag: "anon_fn"}
+      return compile_anon_fn(node)
+    when {tag: "table"}
+      return compile_table(node)
+    when {tag: "array"}
+      return compile_array(node)
+    when {tag: "dot", object: object, field: field}
+      # `m.x` reads the module's live slot, not the namespace table's copy
+      if is_node(object, "var") and has_key(module_ns, object.name) and has_key(module_bindings, object.name) and is_global_ref(object.name)
+        let target = module_ns[object.name][field]
+        if target != nil and (set_contains(top_level_vars, target) or set_contains(defined_fns, target))
+          return compile_expr({tag: "var", name: target, line: node.line, col: node.col, file: node.file})
+        end
+      end
+      if is_node(object, "var") and has_key(module_bindings, object.name) and (in_top_level or not set_contains(local_names, object.name))
+        let exports = module_bindings[object.name]
+        let found = false
+        for ename in exports
+          if ename == field
+            found = true
+          end
+        end
+        if not found
+          let loc_node = node
+          if loc_node.line == nil and object.line != nil
+            loc_node = object
+          end
+          let suggestion = find_closest_export(field, exports)
+          let hint = if suggestion != nil then "did you mean `{suggestion}`?" end
+          sink.report(source_of(loc_node), file_of(loc_node), loc_node.line, loc_node.col, len(field), "module `{display_name(object.name)}` has no export `{field}`", hint)
+        end
+      end
+      let r = compile_expr(object)
+      let t = tmp()
+      ic_counter += 1
+      let ic = ic_counter
+      let escaped = escape_c_string(field)
+      let setup = r.setup + "    GemVal {t} = {r.expr};\n    static GemICacheSlot _ic_{ic} = {ic_init};\n"
+      return {expr: "gem_table_get_cached({t}, \"{escaped}\", &_ic_{ic})", setup: setup}
+    when {tag: "index", object: object, key: key}
+      let o = operands(compile_expr(object), key)
+      return {expr: "gem_table_get({o.left}, {o.right})", setup: o.setup}
+    else
+      nil
+    end
+
+    codegen_error(node, "unknown expression node: {node.tag}")
+  end
+
+  compile_table = fn(node)
+    let entries = node.entries
+    let t = tmp()
+    let b = buf_new()
+    buf_push(b, "    GemVal {t} = gem_table_new_braces();\n")
+    for entry in entries
+      let val_r = compile_expr(entry.value)
+      buf_push(b, val_r.setup)
+      if entry.int_key != nil
+        buf_push(b, "    gem_table_set({t}, gem_int({c_int_literal(entry.int_key)}), {val_r.expr});\n")
+      else
+        let escaped = escape_c_string(entry.key)
+        buf_push(b, "    gem_table_set({t}, GEM_STR_LIT(\"{escaped}\", {len(entry.key)}), {val_r.expr});\n")
+      end
+    end
+    if node.frozen == true
+      buf_push(b, "    gem_table_freeze({t});\n")
+    end
+    {expr: t, setup: to_string(b)}
+  end
+
+  compile_array = fn(node)
+    let elements = node.elements
+    let t = tmp()
+    let b = buf_new()
+    buf_push(b, "    GemVal {t} = gem_table_new();\n")
+    for i = 0, len(elements)
+      let elem_r = compile_expr(elements[i])
+      buf_push(b, elem_r.setup)
+      buf_push(b, "    gem_table_set({t}, gem_int({i}), {elem_r.expr});\n")
+    end
+    {expr: t, setup: to_string(b)}
+  end
+
+  compile_anon_fn = fn(node)
+    let inner_defined = sorted_array_to_set(node.params)
+    if node.rest_param != nil
+      set_add(inner_defined, node.rest_param)
+    end
+    let free = collect_free_vars(node.body, inner_defined, is_global_name)
+    if node.defaults != nil
+      for d in node.defaults
+        if d != nil
+          collect_free_node(d, inner_defined, free, is_global_name)
+        end
+      end
+    end
+    # module slots are never captured; a free name nothing binds is left out so the body reports it undeclared
+    let captures = []
+    for cap in sort(keys(free))
+      if not is_global_ref(cap) and set_contains(local_names, cap)
+        push(captures, cap)
+      end
+    end
+
+    if len(captures) == 0
+      let result = compile_closure_fn(node, [])
+      return {expr: "gem_make_fn({result.fn_name}, NULL)", setup: ""}
+    end
+
+    let result = compile_closure_fn(node, captures)
+
+    let b = buf_new()
+    let env_tmp = tmp()
+    if node.non_escaping == true
+      # can't outlive this C frame, so the env goes on the stack
+      buf_push(b, "    struct {result.struct_name} {env_tmp};\n")
+      buf_push(b, "    {env_tmp}._num_captures = {len(captures)};\n")
+      for cap in captures
+        let mc = mangle(cap)
+        let outer_is_box = set_contains(boxed_vars, cap)
+        # env fields are `GemVal *`: share the outer box, or point straight at the outer local
+        if outer_is_box
+          buf_push(b, "    {env_tmp}.{mc} = {mc};\n")
+        else
+          buf_push(b, "    {env_tmp}.{mc} = &{mc};\n")
+        end
+      end
+      return {expr: "gem_make_fn({result.fn_name}, &{env_tmp})", setup: to_string(b)}
+    end
+    buf_push(b, "    struct {result.struct_name} *{env_tmp} = gem_alloc(sizeof(struct {result.struct_name}));\n")
+    buf_push(b, "    {env_tmp}->_num_captures = {len(captures)};\n")
+    for cap in captures
+      let mc = mangle(cap)
+      let outer_is_box = set_contains(boxed_vars, cap)
+      # share the outer box, or snapshot an unboxed (never mutated) local into a fresh box,
+      # since the closure may outlive the frame
+      if outer_is_box
+        buf_push(b, "    {env_tmp}->{mc} = {mc};\n")
+      else
+        let box_tmp = tmp()
+        buf_push(b, "    GemVal *{box_tmp} = gem_alloc(sizeof(GemVal));\n")
+        buf_push(b, "    *{box_tmp} = {mc};\n")
+        buf_push(b, "    {env_tmp}->{mc} = {box_tmp};\n")
+      end
+    end
+    {expr: "gem_make_fn({result.fn_name}, {env_tmp})", setup: to_string(b)}
+  end
+
+  # -> {setup, arr_name, argc}; arr_name is nil for no args
+  let compile_args = fn(args)
+    let results = []
+    for a in args
+      push(results, compile_expr(a))
+    end
+    let argc = len(args)
+    let ordered = left_to_right(results)
+    let arg_exprs = ordered.exprs
+    if argc == 0
+      return {setup: ordered.setup, arr_name: nil, argc: 0}
+    end
+    let t = tmp()
+    let arr = arg_exprs[0]
+    for i = 1, argc
+      arr = arr + ", " + arg_exprs[i]
+    end
+    {setup: ordered.setup + "    GemVal {t}[] = \{{arr}};\n", arr_name: t, argc: argc}
+  end
+
+  let emit_direct_call = fn(fn_name, env, ca)
+    if ca.argc == 0
+      return {expr: "{fn_name}({env}, NULL, 0)", setup: ca.setup}
+    end
+    {expr: "{fn_name}({env}, {ca.arr_name}, {ca.argc})", setup: ca.setup}
+  end
+
+  compile_call = fn(node)
+    let {func, args} = node
+
+    if func.tag == "dot" and func.field == "len" and len(args) == 0
+      let obj_r = compile_expr(func.object)
+      return {expr: "gem_len_val({obj_r.expr})", setup: obj_r.setup}
+    end
+
+    if func.tag == "var"
+      let name = func.name
+
+      if name == "error" and not set_contains(local_names, name)
+        let line = node.line
+        if line == nil
+          line = 0
+        end
+        let escaped_file = escape_c_string(rel_path(file_of(node)))
+        let ca = compile_args(args)
+        if ca.argc == 0
+          return {expr: "gem_error_at_fn(\"{escaped_file}\", {line}, NULL, 0)", setup: ca.setup}
+        end
+        return {expr: "gem_error_at_fn(\"{escaped_file}\", {line}, {ca.arr_name}, {ca.argc})", setup: ca.setup}
+      elif has_key(builtin_fns, name) and not set_contains(local_names, name)
+        let direct = DIRECT_BUILTINS["{name}/{len(args)}"]
+        if direct != nil
+          let results = []
+          for a in args
+            push(results, compile_expr(a))
+          end
+          let ordered = left_to_right(results)
+          return {expr: "{direct}({join_c(ordered.exprs)})", setup: ordered.setup}
+        end
+        return emit_direct_call(builtin_fns[name], "NULL", compile_args(args))
+      elif set_contains(defined_fns, name) and not set_contains(local_names, name)
+        return emit_direct_call("gem_fn_{name}", "NULL", compile_args(args))
+      end
+    end
+
+    # call through a value: callee evaluated before the args, checked after
+    let func_r = compile_expr(func)
+    let ca = compile_args(args)
+    let tmp_fn = tmp()
+    let line = node.line
+    if line == nil
+      line = 0
+    end
+    let escaped_file = escape_c_string(rel_path(file_of(node)))
+    # callee_field: lower() moved a `t.f` callee into a temporary.
+    let field = if func.tag == "dot" then func.field else node.callee_field end
+    let check = if field != nil
+      "gem_check_callable_field({tmp_fn}, \"{escape_c_string(field)}\", \"{escaped_file}\", {line})"
+    else
+      "gem_check_callable({tmp_fn}, \"{escaped_file}\", {line})"
+    end
+    let setup = func_r.setup + "    GemVal {tmp_fn} = {func_r.expr};\n" + ca.setup + "    {check};\n"
+    if ca.argc == 0
+      return {expr: "{tmp_fn}.fn({tmp_fn}.env, NULL, 0)", setup: setup}
+    end
+    {expr: "{tmp_fn}.fn({tmp_fn}.env, {ca.arr_name}, {ca.argc})", setup: setup}
+  end
+
+  compile_binop = fn(node)
+    let op = node.op
+    let lc_r = compile_expr(node.left)
+    let lc = lc_r.expr
+    let ls = lc_r.setup
+    # `and`/`or` use the left value twice
+    if op == "and" or op == "or"
+      let pr = pin_operand(lc_r)
+      lc = pr.expr
+      ls = pr.setup
+    end
+
+    if op == "+"
+      let o = operands(lc_r, node.right)
+      return {expr: "gem_add({o.left}, {o.right})", setup: o.setup}
+    elif op == "-"
+      let o = operands(lc_r, node.right)
+      return {expr: "gem_sub({o.left}, {o.right})", setup: o.setup}
+    elif op == "*"
+      let o = operands(lc_r, node.right)
+      return {expr: "gem_mul({o.left}, {o.right})", setup: o.setup}
+    elif op == "/"
+      let o = operands(lc_r, node.right)
+      return {expr: "gem_div({o.left}, {o.right})", setup: o.setup}
+    elif op == "%"
+      let o = operands(lc_r, node.right)
+      return {expr: "gem_mod({o.left}, {o.right})", setup: o.setup}
+    elif op == "in"
+      let o = operands(lc_r, node.right)
+      let t = tmp()
+      let setup = o.setup + "    GemVal {t}[] = \{{o.right}, {o.left}};\n"
+      return {expr: "gem_in_fn(NULL, {t}, 2)", setup: setup}
+    elif op == "=="
+      let o = operands(lc_r, node.right)
+      return {expr: "gem_eq({o.left}, {o.right})", setup: o.setup}
+    elif op == "!="
+      let o = operands(lc_r, node.right)
+      return {expr: "gem_neq({o.left}, {o.right})", setup: o.setup}
+    elif op == "<"
+      let o = operands(lc_r, node.right)
+      return {expr: "gem_lt({o.left}, {o.right})", setup: o.setup}
+    elif op == ">"
+      let o = operands(lc_r, node.right)
+      return {expr: "gem_gt({o.left}, {o.right})", setup: o.setup}
+    elif op == "<="
+      let o = operands(lc_r, node.right)
+      return {expr: "gem_le({o.left}, {o.right})", setup: o.setup}
+    elif op == ">="
+      let o = operands(lc_r, node.right)
+      return {expr: "gem_ge({o.left}, {o.right})", setup: o.setup}
+    elif op == "and"
+      let rc_r = compile_expr(node.right)
+      let t = tmp()
+      let b = buf_new()
+      buf_push(b, ls)
+      buf_push(b, "    GemVal {t};\n")
+      buf_push(b, "    if (!gem_truthy({lc})) \{\n")
+      buf_push(b, "        {t} = {lc};\n")
+      buf_push(b, "    } else \{\n")
+      if rc_r.setup != ""
+        # not re-indented: that would touch spaces inside C string literals
+        buf_push(b, rc_r.setup)
+      end
+      buf_push(b, "        {t} = {rc_r.expr};\n")
+      buf_push(b, "    }\n")
+      return {expr: t, setup: to_string(b)}
+    elif op == "or"
+      let rc_r = compile_expr(node.right)
+      let t = tmp()
+      let b = buf_new()
+      buf_push(b, ls)
+      buf_push(b, "    GemVal {t};\n")
+      buf_push(b, "    if (gem_truthy({lc})) \{\n")
+      buf_push(b, "        {t} = {lc};\n")
+      buf_push(b, "    } else \{\n")
+      if rc_r.setup != ""
+        buf_push(b, rc_r.setup)
+      end
+      buf_push(b, "        {t} = {rc_r.expr};\n")
+      buf_push(b, "    }\n")
+      return {expr: t, setup: to_string(b)}
+    end
+
+    codegen_error(node, "unknown binary operator: {op}")
+  end
+
+  compile_stmts = fn(stmts, indent)
+    let b = buf_new()
+    for stmt in stmts
+      buf_push(b, compile_stmt(stmt, indent))
+      buf_push(b, "\n")
+    end
+    to_string(b)
+  end
+
+  compile_stmts_tail = fn(stmts, indent, return_pos)
+    if not return_pos
+      return compile_stmts(stmts, indent)
+    end
+    let b = buf_new()
+    if len(stmts) > 0
+      for i = 0, len(stmts) - 1
+        buf_push(b, compile_stmt(stmts[i], indent))
+        buf_push(b, "\n")
+      end
+      buf_push(b, compile_stmt_return(stmts[-1], indent))
+      buf_push(b, "\n")
+    else
+      let p = pad_for(indent)
+      buf_push(b, "{return_nil_str(p)}\n")
+    end
+    to_string(b)
+  end
+
+  compile_stmt = fn(node, indent)
+    let p = pad_for(indent)
+    let line_dir = if node.line != nil
+      "#line {node.line} \"{escape_c_string(rel_path(file_of(node)))}\"\n{setline_str(node.line, p)}"
+    else
+      ""
+    end
+
+    match node
+    when {tag: "let", name: name, value: value}
+      # in scope until the enclosing C block closes (callers that open one save and restore fn_scope_locals)
+      set_add(fn_scope_locals, name)
+      let r = compile_expr(value)
+      if in_top_level and has_key(module_bindings, name) and not (is_node(value, "table") and value.frozen == true)
+        delete(module_bindings, name)
+      end
+      let mname = mangle(name)
+      if in_top_level and set_contains(top_level_vars, name)
+        return "{line_dir}{r.setup}{p}gem_global_set({gindex(name)}, {r.expr});"
+      end
+      if set_contains(boxed_vars, name)
+        # captured and assigned by a closure: a pinned box, which survives resets while something reaches it
+        return "{line_dir}{r.setup}{p}GemVal *{mname} = gem_box_alloc();\n{p}*{mname} = {r.expr};"
+      end
+      return "{line_dir}{r.setup}{p}GemVal {mname} = {r.expr};"
+    when {tag: "assign", name: name, value: value}
+      check_assign_target(name, node)
+      if has_key(append_buf_vars, name)
+        let parts = decompose_concat(name, value)
+        if parts != nil
+          let mname = var_lvalue(name)
+          let flag = append_buf_vars[name]
+          let b = buf_new()
+          buf_push(b, line_dir)
+          for part in parts
+            let r = compile_expr(part)
+            buf_push(b, r.setup)
+            buf_push(b, "{p}gem_string_append_to(&{mname}, {r.expr}, &{flag});\n")
+          end
+          return to_string(b)
+        end
+      end
+      let r = compile_expr(value)
+      let refresh = ns_refresh(name, p)
+      if refresh != ""
+        return "{line_dir}{r.setup}{p}{var_store(name, r.expr)}\n{substr(refresh, 0, len(refresh) - 1)}"
+      end
+      return "{line_dir}{r.setup}{p}{var_store(name, r.expr)}"
+    when {tag: "dot_assign", object: object, value: value, field: field}
+      let o = left_to_right([compile_expr(object), compile_expr(value)])
+      let escaped = escape_c_string(field)
+      return "{line_dir}{o.setup}{p}gem_table_set({o.exprs[0]}, GEM_STR_LIT(\"{escaped}\", {len(field)}), {o.exprs[1]});"
+    when {tag: "index_assign", object: object, key: key, value: value}
+      let o = left_to_right([compile_expr(object), compile_expr(key), compile_expr(value)])
+      return "{line_dir}{o.setup}{p}gem_table_set({o.exprs[0]}, {o.exprs[1]}, {o.exprs[2]});"
+    when {tag: "if"}
+      return "{line_dir}" + compile_if(node, indent, false)
+    when {tag: "while"}
+      return "{line_dir}" + compile_while(node, indent)
+    when {tag: "match"}
+      return "{line_dir}" + compile_match(node, indent, false)
+    when {tag: "receive_match"}
+      return "{line_dir}" + compile_receive_match(node, indent, false)
+    when {tag: "break"}
+      return p + "break;"
+    when {tag: "continue"}
+      return p + "continue;"
+    when {tag: "return", value: value}
+      if value != nil
+        let r = compile_expr(value)
+        let t = tmp()
+        return "{line_dir}{r.setup}{p}GemVal {t} = {r.expr};\n{return_str(p, t)}"
+      end
+      return "{line_dir}{return_nil_str(p)}"
+    when {tag: "call"}
+      let r = compile_expr(node)
+      return "{line_dir}{r.setup}{p}(void)({r.expr});"
+    when {tag: "fn_def"}
+      return ""
+    when {tag: "block", stmts: stmts}
+      let b = buf_new()
+      for stmt in stmts
+        buf_push(b, compile_stmt(stmt, indent))
+        buf_push(b, "\n")
+      end
+      return to_string(b)
+    else
+      nil
+    end
+
+    let r = compile_expr(node)
+    "{line_dir}{r.setup}{p}(void)({r.expr});"
+  end
+
+  compile_stmt_return = fn(node, indent)
+    let p = pad_for(indent)
+    let line_dir = if node.line != nil
+      "#line {node.line} \"{escape_c_string(rel_path(file_of(node)))}\"\n{setline_str(node.line, p)}"
+    else
+      ""
+    end
+
+    if tco_fn_name != nil
+      if is_node(node, "call") and is_node(node.func, "var") and node.func.name == tco_fn_name and not set_contains(local_names, tco_fn_name)
+        return line_dir + emit_tco_continue(node, indent)
+      end
+      if is_node(node, "return") and node.value != nil and is_node(node.value, "call") and is_node(node.value.func, "var") and node.value.func.name == tco_fn_name and not set_contains(local_names, tco_fn_name)
+        return line_dir + emit_tco_continue(node.value, indent)
+      end
+    end
+
+    if current_scc_id != nil
+      let scc_call_target = if is_node(node, "call") and is_node(node.func, "var")
+        node.func.name
+      elif is_node(node, "return") and node.value != nil and is_node(node.value, "call") and is_node(node.value.func, "var")
+        node.value.func.name
+      end
+      if scc_call_target != nil and not set_contains(local_names, scc_call_target)
+        let target_sid = scc_member_to_id[scc_call_target]
+        let call_node = if is_node(node, "return") then node.value else node end
+        # more args than the TLB holds (GEM_MAX_TAIL_ARGS) stays a plain call; extra args still get evaluated
+        if target_sid == current_scc_id and scc_call_target != tco_fn_name and len(call_node.args) <= 16
+          return line_dir + emit_scc_tail_call(call_node, scc_call_target, indent)
+        end
+      end
+    end
+
+    match node
+    when {tag: "let", name: name, value: value}
+      set_add(fn_scope_locals, name)
+      let r = compile_expr(value)
+      let mname = mangle(name)
+      if in_top_level and set_contains(top_level_vars, name)
+        return "{line_dir}{r.setup}{p}gem_global_set({gindex(name)}, {r.expr});\n{return_nil_str(p)}"
+      end
+      if set_contains(boxed_vars, name)
+        return "{line_dir}{r.setup}{p}GemVal *{mname} = gem_box_alloc();\n{p}*{mname} = {r.expr};\n{return_nil_str(p)}"
+      end
+      return "{line_dir}{r.setup}{p}GemVal {mname} = {r.expr};\n{return_nil_str(p)}"
+    when {tag: "assign", name: name, value: value}
+      check_assign_target(name, node)
+      let r = compile_expr(value)
+      let t = tmp()
+      # assignment yields nil in tail position
+      return "{line_dir}{r.setup}{p}GemVal {t} = {r.expr};\n{p}{var_store(name, t)}\n{ns_refresh(name, p)}{return_nil_str(p)}"
+    when {tag: "return", value: value}
+      if value != nil
+        let r = compile_expr(value)
+        let t = tmp()
+        return "{line_dir}{r.setup}{p}GemVal {t} = {r.expr};\n{return_str(p, t)}"
+      end
+      return "{line_dir}{return_nil_str(p)}"
+    when {tag: "if"}
+      return "{line_dir}" + compile_if(node, indent, true)
+    when {tag: "while"}
+      return "{line_dir}{compile_while(node, indent)}\n{return_nil_str(p)}"
+    when {tag: "match"}
+      return "{line_dir}" + compile_match(node, indent, true)
+    when {tag: "receive_match"}
+      return "{line_dir}" + compile_receive_match(node, indent, true)
+    when {tag: "block", stmts: stmts}
+      let b = buf_new()
+      buf_push(b, "{p}\{\n")
+      let saved_block = set_union(fn_scope_locals, {})
+      for i = 0, len(stmts) - 1
+        buf_push(b, compile_stmt(stmts[i], indent + 1))
+        buf_push(b, "\n")
+      end
+      if len(stmts) > 0
+        buf_push(b, compile_stmt_return(stmts[-1], indent + 1))
+        buf_push(b, "\n")
+      end
+      fn_scope_locals = saved_block
+      buf_push(b, "{p}}")
+      return to_string(b)
+    when {tag: "dot_assign"}
+      return "{compile_stmt(node, indent)}\n{return_nil_str(p)}"
+    when {tag: "index_assign"}
+      return "{compile_stmt(node, indent)}\n{return_nil_str(p)}"
+    when {tag: "break"}
+      return "{compile_stmt(node, indent)}\n{return_nil_str(p)}"
+    when {tag: "continue"}
+      return "{compile_stmt(node, indent)}\n{return_nil_str(p)}"
+    when {tag: "fn_def"}
+      return "{compile_stmt(node, indent)}\n{return_nil_str(p)}"
+    else
+      nil
+    end
+
+    let r = compile_expr(node)
+    let t = tmp()
+    "{line_dir}{r.setup}{p}GemVal {t} = {r.expr};\n{return_str(p, t)}"
+  end
+
+  compile_if = fn(node, indent, return_pos)
+    let p = pad_for(indent)
+    let cond_r = compile_expr(node.cond)
+    let b = buf_new()
+    buf_push(b, cond_r.setup)
+    buf_push(b, "{p}if (gem_truthy({cond_r.expr})) \{\n")
+    let saved_then = set_union(fn_scope_locals, {})
+    buf_push(b, compile_stmts_tail(node.then, indent + 1, return_pos))
+    fn_scope_locals = saved_then
+    if node.else != nil
+      buf_push(b, "{p}} else \{\n")
+      let saved_else = set_union(fn_scope_locals, {})
+      buf_push(b, compile_stmts_tail(node.else, indent + 1, return_pos))
+      fn_scope_locals = saved_else
+    elif return_pos
+      buf_push(b, "{p}} else \{\n")
+      buf_push(b, compile_stmts_tail([], indent + 1, true))
+    end
+    buf_push(b, "{p}}")
+    to_string(b)
+  end
+
+  # Live-at-back-edge names -> reset roots (`GemVal *` exprs). A capture's env field already points at its
+  # storage; this frame's pinned boxes go in pinned_roots; slots, builtins and named fns need no root.
+  # Fails if a live name has no C local in scope here (a let inside an if/match arm).
+  let filter_live_for_rescue = fn(live_set)
+    let roots = []
+    let pinned_roots = []
+    let lk = keys(live_set)
+    for name in lk
+      if is_global_ref(name)
+        # runtime roots module slots
+      elif set_contains(local_names, name)
+        if set_contains(closure_captures, name)
+          push(roots, mangle(name))
+        elif set_contains(boxed_vars, name)
+          push(pinned_roots, mangle(name))
+        elif not set_contains(fn_scope_locals, name)
+          return {ok: false, reason: "live var `{name}` has no C local at this loop's back-edge (declared in a nested if/match arm?)"}
+        else
+          push(roots, "&{mangle(name)}")
+        end
+      elif set_contains(builtins, name)
+        # fn pointer
+      elif set_contains(defined_fns, name)
+        # fn pointer
+      else
+        # undeclared; compile_expr reports it
+      end
+    end
+    {ok: true, roots: roots, pinned_roots: pinned_roots}
+  end
+
+  let build_rescue_roots = fn(node)
+    let do_rescue = false
+    let rescue_roots = []
+    let pinned_rescue_roots = []
+    let refuse_reason = nil
+    let lr = node.liveness_result
+    if lr.ok
+      let live = lr.live
+      if len(stack_env_writes) > 0
+        live = set_union(live, stack_env_writes)
+      end
+      let fr = filter_live_for_rescue(live)
+      if fr.ok
+        do_rescue = true
+        rescue_roots = fr.roots
+        pinned_rescue_roots = fr.pinned_roots
+      else
+        refuse_reason = fr.reason
+      end
+    else
+      refuse_reason = lr.reason
+    end
+    # only `while true` warns: a loop that ends frees its garbage later. cond_moved: lower() moved the real condition
+    let infinite = is_node(node.cond, "bool") and node.cond.value == true and node.cond_moved != true
+    if not do_rescue and infinite
+      let line_str = if node.line != nil then to_string(node.line) else "?" end
+      eprint("warning: {rel_path(file_of(node))}:{line_str}: cannot reset per-process arena at this loop's back-edge: {refuse_reason}. Memory will grow unbounded across iterations. This pattern isn't supported in long-running loops yet; please file an issue if it blocks you.\n")
+    end
+    {do_rescue: do_rescue, rescue_roots: rescue_roots, pinned_rescue_roots: pinned_rescue_roots}
+  end
+
+  compile_while = fn(node, indent)
+    let p = pad_for(indent)
+    let is_pt_while = node.process_tail == true
+
+    let do_rescue = false
+    let rescue_roots = []
+    let pinned_rescue_roots = []
+    if is_pt_while
+      let r = build_rescue_roots(node)
+      do_rescue = r.do_rescue
+      rescue_roots = r.rescue_roots
+      pinned_rescue_roots = r.pinned_rescue_roots
+    end
+
+    let cond_r = compile_expr(node.cond)
+
+    let eligible = find_append_vars(node.body)
+    for name, _ in eligible
+      if expr_has_var(node.cond, name)
+        delete(eligible, name)
+      end
+      # a slot reader must see a string, not the buffer: slots append in place only in top-level code calling nothing
+      if set_contains(boxed_vars, name) or (is_global_ref(name) and not (in_top_level and not node_may_read_slots(node)))
+        delete(eligible, name)
+      end
+    end
+
+    let saved_append = {}
+    for k, v in append_buf_vars
+      saved_append[k] = v
+    end
+    # an outer loop already appending to it keeps ownership
+    let owned = []
+    for name, _ in eligible
+      if not has_key(append_buf_vars, name)
+        let flag = tmp()
+        append_buf_vars[name] = flag
+        push(owned, name)
+      end
+    end
+
+    let b = buf_new()
+    for name in owned
+      buf_push(b, "{p}int {append_buf_vars[name]} = 0;\n")
+    end
+    let mark = nil
+    if do_rescue
+      # Mark before the first iteration: outer frames only hold older values. At the back-edge the live locals are
+      # the only new values this frame reaches; the runtime covers mutated old objects, slots, mailbox and pinned boxes.
+      mark_counter += 1
+      mark = "_mk{mark_counter}"
+      buf_push(b, "{p}GemArenaMark {mark};\n")
+      buf_push(b, "{p}gem_arena_mark(&{mark});\n")
+    end
+    buf_push(b, "{p}while (1) \{\n")
+    buf_push(b, "{p}    gem_yield_check();\n")
+    if do_rescue
+      buf_push(b, emit_region_reset("{p}    ", mark, rescue_roots, pinned_rescue_roots))
+    end
+    if cond_r.setup != ""
+      buf_push(b, cond_r.setup)
+    end
+    buf_push(b, "{p}    if (!gem_truthy({cond_r.expr})) break;\n")
+    let saved_while_scope = set_union(fn_scope_locals, {})
+    buf_push(b, compile_stmts(node.body, indent + 1))
+    fn_scope_locals = saved_while_scope
+    buf_push(b, "{p}}")
+
+    for name in owned
+      let mname = var_lvalue(name)
+      buf_push(b, "\n{p}if ({append_buf_vars[name]}) {mname} = gem_string_finish({mname});")
+      let refresh = ns_refresh(name, p)
+      if refresh != ""
+        buf_push(b, "\n" + substr(refresh, 0, len(refresh) - 1))
+      end
+    end
+
+    append_buf_vars = saved_append
+    to_string(b)
+  end
+
+  compile_match = fn(node, indent, return_pos)
+    let p = pad_for(indent)
+    let target_r = compile_expr(node.target)
+    let t = if node.target_var != nil then mangle(node.target_var) else tmp() end
+    let b = buf_new()
+    buf_push(b, target_r.setup)
+    buf_push(b, "{p}GemVal {t} = {target_r.expr};\n")
+    if len(node.whens) == 0
+      if node.else != nil
+        buf_push(b, compile_stmts_tail(node.else, indent, return_pos))
+      elif return_pos
+        buf_push(b, "{return_nil_str(p)}\n")
+      end
+      buf_push(b, "{p}(void){t};")
+      return to_string(b)
+    end
+    for i = 0, len(node.whens)
+      let w = node.whens[i]
+      let val_r = compile_expr(w.value)
+      if i == 0
+        buf_push(b, val_r.setup)
+        buf_push(b, "{p}if (gem_truthy({val_r.expr})) \{\n")
+      else
+        buf_push(b, "{p}} else \{\n")
+        buf_push(b, val_r.setup)
+        buf_push(b, "{p}if (gem_truthy({val_r.expr})) \{\n")
+      end
+      let saved_arm = set_union(fn_scope_locals, {})
+      if w.bindings != nil
+        for binding in w.bindings
+          buf_push(b, compile_stmt(binding, indent + 1))
+          buf_push(b, "\n")
+        end
+      end
+      buf_push(b, compile_stmts_tail(w.body, indent + 1, return_pos))
+      fn_scope_locals = saved_arm
+    end
+    if node.else != nil
+      buf_push(b, "{p}} else \{\n")
+      let saved_else = set_union(fn_scope_locals, {})
+      buf_push(b, compile_stmts_tail(node.else, indent + 1, return_pos))
+      fn_scope_locals = saved_else
+    elif return_pos
+      buf_push(b, "{p}} else \{\n")
+      buf_push(b, compile_stmts_tail([], indent + 1, true))
+    end
+    buf_push(b, "{p}}")
+    for i = 1, len(node.whens)
+      buf_push(b, "\n{p}}")
+    end
+    to_string(b)
+  end
+
+  compile_receive_match = fn(node, indent, return_pos)
+    let p = pad_for(indent)
+    let arms = node.arms
+    let after_ms = node.after_ms
+    let after_body = node.after_body
+
+    let recv_tmp = mangle(node.recv_var)
+    let matched_tmp = tmp()
+    let prev_tmp = tmp()
+    let cur_tmp = tmp()
+    let deadline_tmp = tmp()
+    let proc_tmp = tmp()
+
+    let b = buf_new()
+
+    buf_push(b, "{p}GemVal {recv_tmp} = GEM_NIL;\n")
+    buf_push(b, "{p}int {matched_tmp} = -1;\n")
+
+    if after_ms != nil
+      let ms_r = compile_expr(after_ms)
+      buf_push(b, ms_r.setup)
+      buf_push(b, "{p}int64_t {deadline_tmp} = gem_after_deadline({ms_r.expr});\n")
+    end
+
+    buf_push(b, "{p}while (1) \{\n")
+    let p2 = pad_for(indent + 1)
+
+    buf_push(b, "{p2}GemProcess *{proc_tmp} = &gem_proc_table[gem_current_pid];\n")
+    buf_push(b, "{p2}GemMsgNode *{prev_tmp} = NULL;\n")
+    buf_push(b, "{p2}GemMsgNode *{cur_tmp} = {proc_tmp}->mailbox.head;\n")
+    buf_push(b, "{p2}{matched_tmp} = -1;\n")
+    # `after`-only receive: don't touch the mailbox, just wait
+    buf_push(b, if len(arms) == 0 then "{p2}while (0) \{\n" else "{p2}while ({cur_tmp}) \{\n" end)
+    let p3 = pad_for(indent + 2)
+    buf_push(b, "{p3}{recv_tmp} = {cur_tmp}->value;\n")
+
+    for i = 0, len(arms)
+      let arm = arms[i]
+      let cond_r = compile_expr(arm.pattern.condition)
+      if i == 0
+        buf_push(b, cond_r.setup)
+        buf_push(b, "{p3}if (gem_truthy({cond_r.expr})) \{\n")
+      else
+        buf_push(b, "{p3}} else \{\n")
+        buf_push(b, cond_r.setup)
+        buf_push(b, "{p3}if (gem_truthy({cond_r.expr})) \{\n")
+      end
+      buf_push(b, "{pad_for(indent + 3)}{matched_tmp} = {i};\n")
+    end
+    for i = 0, len(arms)
+      buf_push(b, "{p3}}")
+      if i < len(arms) - 1
+        buf_push(b, "\n")
+      end
+    end
+    buf_push(b, "\n")
+
+    buf_push(b, "{p3}if ({matched_tmp} >= 0) \{\n")
+    let p4 = pad_for(indent + 3)
+    buf_push(b, "{p4}gem_mailbox_remove(&{proc_tmp}->mailbox, {prev_tmp}, {cur_tmp});\n")
+    buf_push(b, "{p4}break;\n")
+    buf_push(b, "{p3}}\n")
+
+    buf_push(b, "{p3}{prev_tmp} = {cur_tmp};\n")
+    buf_push(b, "{p3}{cur_tmp} = {cur_tmp}->next;\n")
+    buf_push(b, "{p2}}\n")
+
+    buf_push(b, "{p2}if ({matched_tmp} >= 0) break;\n")
+    if after_ms != nil
+      buf_push(b, "{p2}if (gem_now_ms() >= {deadline_tmp}) \{\n")
+      buf_push(b, "{p2}    {matched_tmp} = -2;\n")
+      buf_push(b, "{p2}    break;\n")
+      buf_push(b, "{p2}}\n")
+      buf_push(b, "{p2}gem_selective_yield({deadline_tmp});\n")
+      buf_push(b, "{p2}if ({proc_tmp}->timed_out) \{\n")
+      buf_push(b, "{p2}    {matched_tmp} = -2;\n")
+      buf_push(b, "{p2}    break;\n")
+      buf_push(b, "{p2}}\n")
+    else
+      buf_push(b, "{p2}gem_selective_yield(-1);\n")
+    end
+
+    buf_push(b, "{p}}\n")
+
+    for i = 0, len(arms)
+      let arm = arms[i]
+      if i == 0
+        buf_push(b, "{p}if ({matched_tmp} == {i}) \{\n")
+      else
+        buf_push(b, "{p}} else if ({matched_tmp} == {i}) \{\n")
+      end
+      let saved_arm = set_union(fn_scope_locals, {})
+      if arm.pattern.bindings != nil
+        for binding in arm.pattern.bindings
+          buf_push(b, compile_stmt(binding, indent + 1))
+          buf_push(b, "\n")
+        end
+      end
+      buf_push(b, compile_stmts_tail(arm.body, indent + 1, return_pos))
+      fn_scope_locals = saved_arm
+    end
+
+    # the scan loop exits with an arm index or -2, so timeout is a plain `else` (and cc sees every return path)
+    if after_ms != nil
+      if len(arms) == 0
+        buf_push(b, "{p}\{\n")
+      else
+        buf_push(b, "{p}} else \{\n")
+      end
+      if after_body != nil
+        let saved_after = set_union(fn_scope_locals, {})
+        buf_push(b, compile_stmts_tail(after_body, indent + 1, return_pos))
+        fn_scope_locals = saved_after
+      elif return_pos
+        buf_push(b, compile_stmts_tail([], indent + 1, true))
+      end
+    elif return_pos
+      buf_push(b, "{p}} else \{\n")
+      buf_push(b, compile_stmts_tail([], indent + 1, true))
+    end
+
+    buf_push(b, "{p}}")
+    to_string(b)
+  end
+
+  let emit_extern_c_decl = fn(name, params, ret_type, node)
+    let c_ret = if ret_type == "Int"
+      "int64_t"
+    elif ret_type == "Float"
+      "double"
+    elif ret_type == "String"
+      "char*"
+    elif ret_type == "Bool"
+      "int"
+    elif ret_type == "Ptr"
+      "void*"
+    elif ret_type == "Table"
+      "GemVal"
+    elif ret_type == "Bytes"
+      "GemBytes"
+    else
+      "void"
+    end
+
+    let c_params = ""
+    if len(params) == 0
+      c_params = "void"
+    else
+      let first = true
+      for i = 0, len(params)
+        if not first
+          c_params = c_params + ", "
+        end
+        first = false
+        let pt = params[i]["type"]
+        if pt == "Int"
+          c_params = c_params + "int64_t"
+        elif pt == "Float"
+          c_params = c_params + "double"
+        elif pt == "String"
+          c_params = c_params + "const char*"
+        elif pt == "Bool"
+          c_params = c_params + "int"
+        elif pt == "Ptr"
+          c_params = c_params + "void*"
+        elif pt == "Table"
+          c_params = c_params + "GemVal"
+        elif pt == "Bytes"
+          c_params = c_params + "const uint8_t*, int64_t"
+        elif pt == "Socket"
+          c_params = c_params + "int"
+        else
+          c_params = c_params + "GemVal"
+        end
+      end
+    end
+
+    push(extern_c_decls, {decl: "{c_ret} {name}({c_params});", node: node})
+  end
+
+  # arity and type checks at the top of an extern wrapper; without them a wrong arg reads garbage from the union
+  let emit_extern_validation = fn(b, name, params)
+    # counts Gem args (Bytes is one Gem arg, two C args)
+    let n = len(params)
+    buf_push(b, "    if (argc != {n}) \{ char _eb[128]; snprintf(_eb, sizeof(_eb), \"{name}: expected {n} argument(s), got %d\", argc); gem_error(_eb); }\n")
+    for i = 0, n
+      let ptype = params[i]["type"]
+      let val_tag = if ptype == "Int"
+        "VAL_INT"
+      elif ptype == "Float"
+        "VAL_FLOAT"
+      elif ptype == "String"
+        "VAL_STRING"
+      elif ptype == "Bool"
+        "VAL_BOOL"
+      elif ptype == "Ptr"
+        "VAL_INT"
+      elif ptype == "Bytes"
+        "VAL_STRING"
+      elif ptype == "Table"
+        "VAL_TABLE"
+      end
+      if val_tag != nil
+        buf_push(b, "    if (args[{i}].type != {val_tag}) \{ char _eb[128]; snprintf(_eb, sizeof(_eb), \"{name}: arg {i} expected {ptype}, got %s\", gem_type_str(args[{i}])); gem_error(_eb); }\n")
+      end
+    end
+  end
+
+  compile_extern_fn = fn(node)
+    let {name, params, ret_type} = node
+    # `name` is the Gem binding, maybe renamed; c_name is the declared C symbol (rename_node)
+    let c_sym = if node.c_name != nil then node.c_name else name end
+
+    if node.blocking
+      return compile_blocking_extern_fn(node)
+    end
+
+    let b = buf_new()
+    buf_push(b, "static GemVal gem_fn_{name}(void *_env, GemVal *args, int argc) \{\n")
+    emit_extern_validation(b, c_sym, params)
+
+    let c_args = []
+    for i = 0, len(params)
+      let p = params[i]
+      let ptype = p["type"]
+      if ptype == "Int"
+        buf_push(b, "    int64_t _p{i} = args[{i}].ival;\n")
+        push(c_args, "_p{i}")
+      elif ptype == "Float"
+        buf_push(b, "    double _p{i} = args[{i}].fval;\n")
+        push(c_args, "_p{i}")
+      elif ptype == "String"
+        buf_push(b, "    char* _p{i} = args[{i}].sval;\n")
+        push(c_args, "_p{i}")
+      elif ptype == "Bool"
+        buf_push(b, "    int _p{i} = args[{i}].bval;\n")
+        push(c_args, "_p{i}")
+      elif ptype == "Ptr"
+        buf_push(b, "    void* _p{i} = (void*)(intptr_t)args[{i}].ival;\n")
+        push(c_args, "_p{i}")
+      elif ptype == "Bytes"
+        buf_push(b, "    const uint8_t* _p{i} = (const uint8_t*)args[{i}].sval;\n")
+        buf_push(b, "    int64_t _p{i}_len = (int64_t)args[{i}].slen;\n")
+        push(c_args, "_p{i}")
+        push(c_args, "_p{i}_len")
+      elif ptype == "Socket"
+        buf_push(b, "    int _p{i} = gem_extern_socket_fd(args[{i}], \"{c_sym}\", {i});\n")
+        push(c_args, "_p{i}")
+      elif ptype == "Table"
+        push(c_args, "args[{i}]")
+      else
+        push(c_args, "args[{i}]")
+      end
+    end
+
+    let call_args = ""
+    for i = 0, len(c_args)
+      if i > 0
+        call_args = call_args + ", "
+      end
+      call_args = call_args + c_args[i]
+    end
+
+    let call_expr = "{c_sym}({call_args})"
+
+    buf_push(b, "    gem_native_call_fence();\n")
+    if ret_type == "Nil"
+      buf_push(b, "    {call_expr};\n")
+      buf_push(b, "    return GEM_NIL;\n")
+    elif ret_type == "Table"
+      buf_push(b, "    return {call_expr};\n")
+    elif ret_type == "Int"
+      buf_push(b, "    int64_t _ret = {call_expr};\n")
+      buf_push(b, "    return gem_int(_ret);\n")
+    elif ret_type == "Float"
+      buf_push(b, "    double _ret = {call_expr};\n")
+      buf_push(b, "    return gem_float(_ret);\n")
+    elif ret_type == "String"
+      # const: we only copy it, and the C side may return a const char *
+      buf_push(b, "    const char* _ret = {call_expr};\n")
+      buf_push(b, "    return _ret ? gem_string(_ret) : GEM_NIL;\n")
+    elif ret_type == "Bool"
+      buf_push(b, "    int _ret = {call_expr};\n")
+      buf_push(b, "    return gem_bool(_ret);\n")
+    elif ret_type == "Ptr"
+      buf_push(b, "    void *_ret = {call_expr};\n")
+      buf_push(b, "    return gem_int((int64_t)(intptr_t)_ret);\n")
+    elif ret_type == "Bytes"
+      buf_push(b, "    GemBytes _ret = {call_expr};\n")
+      buf_push(b, "    if (_ret.data && _ret.len > GEM_MAX_STRLEN) gem_strlen_check((size_t)_ret.len, \"{c_sym}\");\n")
+      buf_push(b, "    return _ret.data ? gem_string_with_len((const char*)_ret.data, _ret.len) : GEM_NIL;\n")
+    else
+      buf_push(b, "    {call_expr};\n")
+      buf_push(b, "    return GEM_NIL;\n")
+    end
+
+    buf_push(b, "}")
+
+    push(forward_decls, "static GemVal gem_fn_{name}(void *_env, GemVal *args, int argc);")
+    emit_extern_c_decl(c_sym, params, ret_type, node)
+
+    to_string(b)
+  end
+
+  # extern blocking fn: args struct, pool worker, free callback, wrapper
+  compile_blocking_extern_fn = fn(node)
+    let {name, params, ret_type} = node
+    let c_sym = if node.c_name != nil then node.c_name else name end
+    let b = buf_new()
+
+    buf_push(b, "struct _blk_{name}_args \{\n")
+    for i = 0, len(params)
+      let ptype = params[i]["type"]
+      if ptype == "Int"
+        buf_push(b, "    int64_t _p{i};\n")
+      elif ptype == "Float"
+        buf_push(b, "    double _p{i};\n")
+      elif ptype == "String"
+        buf_push(b, "    char *_p{i};\n")
+      elif ptype == "Bool"
+        buf_push(b, "    int _p{i};\n")
+      elif ptype == "Ptr"
+        buf_push(b, "    void *_p{i};\n")
+      elif ptype == "Bytes"
+        buf_push(b, "    uint8_t *_p{i};\n")
+        buf_push(b, "    int64_t _p{i}_len;\n")
+      elif ptype == "Socket"
+        buf_push(b, "    int _p{i};\n")
+      end
+    end
+    if ret_type == "Int"
+      buf_push(b, "    int64_t _result;\n")
+    elif ret_type == "Float"
+      buf_push(b, "    double _result;\n")
+    elif ret_type == "String"
+      buf_push(b, "    char *_result;\n")
+    elif ret_type == "Bool"
+      buf_push(b, "    int _result;\n")
+    elif ret_type == "Ptr"
+      buf_push(b, "    void *_result;\n")
+    elif ret_type == "Bytes"
+      buf_push(b, "    GemBytes _result;\n")
+    end
+    buf_push(b, "};\n\n")
+
+    buf_push(b, "static void _blk_{name}_worker(void *_a) \{\n")
+    buf_push(b, "    struct _blk_{name}_args *a = (struct _blk_{name}_args *)_a;\n")
+
+    let w_args = ""
+    let w_first = true
+    for i = 0, len(params)
+      if not w_first
+        w_args = w_args + ", "
+      end
+      w_first = false
+      w_args = w_args + if params[i]["type"] == "Bytes" then "a->_p{i}, a->_p{i}_len" else "a->_p{i}" end
+    end
+    let w_call = "{c_sym}({w_args})"
+
+    if ret_type == "Nil"
+      buf_push(b, "    {w_call};\n")
+    else
+      buf_push(b, "    a->_result = {w_call};\n")
+    end
+    buf_push(b, "}\n\n")
+
+    # called on the last release (gem_io_submit_extern owns the struct): frees copied inputs, a malloc'd result, the struct
+    buf_push(b, "static void _blk_{name}_free(void *_a) \{\n")
+    buf_push(b, "    struct _blk_{name}_args *a = (struct _blk_{name}_args *)_a;\n")
+    for i = 0, len(params)
+      let pt = params[i]["type"]
+      if pt == "String" or pt == "Bytes"
+        buf_push(b, "    free(a->_p{i});\n")
+      end
+    end
+    if ret_type == "String"
+      buf_push(b, "    free(a->_result);\n")
+    elif ret_type == "Bytes"
+      buf_push(b, "    free((void *)a->_result.data);\n")
+    end
+    buf_push(b, "    free(a);\n")
+    buf_push(b, "}\n\n")
+
+    buf_push(b, "static GemVal gem_fn_{name}(void *_env, GemVal *args, int argc) \{\n")
+    emit_extern_validation(b, c_sym, params)
+
+    for i = 0, len(params)
+      let ptype = params[i]["type"]
+      if ptype == "Int"
+        buf_push(b, "    int64_t _p{i} = args[{i}].ival;\n")
+      elif ptype == "Float"
+        buf_push(b, "    double _p{i} = args[{i}].fval;\n")
+      elif ptype == "String"
+        buf_push(b, "    char* _p{i} = args[{i}].sval;\n")
+      elif ptype == "Bool"
+        buf_push(b, "    int _p{i} = args[{i}].bval;\n")
+      elif ptype == "Ptr"
+        buf_push(b, "    void* _p{i} = (void*)(intptr_t)args[{i}].ival;\n")
+      elif ptype == "Bytes"
+        buf_push(b, "    const uint8_t* _p{i} = (const uint8_t*)args[{i}].sval;\n")
+        buf_push(b, "    int64_t _p{i}_len = (int64_t)args[{i}].slen;\n")
+      elif ptype == "Socket"
+        buf_push(b, "    int _p{i} = gem_extern_socket_fd(args[{i}], \"{c_sym}\", {i});\n")
+      end
+    end
+
+    buf_push(b, "    if (gem_current_pid >= 0) \{\n")
+    buf_push(b, "        struct _blk_{name}_args *_ba = (struct _blk_{name}_args *)calloc(1, sizeof(struct _blk_{name}_args));\n")
+
+    # copy String/Bytes out of the arena: a killed caller's arena may be gone while the worker still reads them
+    for i = 0, len(params)
+      let ptype = params[i]["type"]
+      if ptype == "String"
+        buf_push(b, "        _ba->_p{i} = strdup(_p{i});\n")
+      elif ptype == "Bytes"
+        buf_push(b, "        _ba->_p{i} = (uint8_t*)malloc((size_t)_p{i}_len);\n")
+        buf_push(b, "        if (_p{i}_len > 0) memcpy(_ba->_p{i}, _p{i}, (size_t)_p{i}_len);\n")
+        buf_push(b, "        _ba->_p{i}_len = _p{i}_len;\n")
+      else
+        buf_push(b, "        _ba->_p{i} = _p{i};\n")
+      end
+    end
+
+    buf_push(b, "        GemIORequest *_req = gem_io_submit_extern(_blk_{name}_worker, _ba, _blk_{name}_free);\n")
+    buf_push(b, "        if (!_req) gem_error(\"{c_sym}: I/O queue full\");\n")
+    # Socket params stay open for the C side until the call returns, even if closed meanwhile (gem_res_busy_begin)
+    let sock_idx = ""
+    let n_socks = 0
+    for i = 0, len(params)
+      if params[i]["type"] == "Socket"
+        sock_idx = if n_socks == 0 then "{i}" else "{sock_idx}, {i}" end
+        n_socks += 1
+      end
+    end
+    if n_socks > 0
+      buf_push(b, "        static const int _sock_idx[] = \{{sock_idx}};\n")
+      buf_push(b, "        gem_res_busy_begin(_req, args, _sock_idx, {n_socks});\n")
+    end
+    buf_push(b, "        GemProcess *_proc = &gem_proc_table[gem_current_pid];\n")
+    buf_push(b, "        _proc->io_request = _req;\n")
+    buf_push(b, "        gem_io_pool_yield();\n")
+    buf_push(b, "        _proc->io_request = NULL;\n")
+    if n_socks > 0
+      buf_push(b, "        gem_res_busy_end(_req);\n")
+    end
+
+    # copy the result out before releasing; the release may free the struct
+    if ret_type == "String"
+      buf_push(b, "        GemVal _gv = gem_string(_ba->_result ? _ba->_result : \"\");\n")
+      buf_push(b, "        gem_io_release(_req);\n")
+      buf_push(b, "        return _gv;\n")
+    elif ret_type == "Bytes"
+      buf_push(b, "        GemBytes _raw = _ba->_result;\n")
+      buf_push(b, "        if (_raw.data && _raw.len > GEM_MAX_STRLEN) \{ gem_io_release(_req); gem_strlen_check((size_t)_raw.len, \"{c_sym}\"); }\n")
+      buf_push(b, "        GemVal _gv = _raw.data ? gem_string_with_len((const char*)_raw.data, _raw.len) : gem_string_with_len(\"\", 0);\n")
+      buf_push(b, "        gem_io_release(_req);\n")
+      buf_push(b, "        return _gv;\n")
+    elif ret_type == "Nil"
+      buf_push(b, "        gem_io_release(_req);\n")
+      buf_push(b, "        return GEM_NIL;\n")
+    else
+      let c_type = "int64_t"
+      let ret_val = "gem_int(_ret)"
+      if ret_type == "Float"
+        c_type = "double"
+        ret_val = "gem_float(_ret)"
+      elif ret_type == "Bool"
+        c_type = "int"
+        ret_val = "gem_bool(_ret)"
+      elif ret_type == "Ptr"
+        c_type = "void *"
+        ret_val = "gem_int((int64_t)(intptr_t)_ret)"
+      end
+      buf_push(b, "        {c_type} _ret = _ba->_result;\n")
+      buf_push(b, "        gem_io_release(_req);\n")
+      buf_push(b, "        return {ret_val};\n")
+    end
+    buf_push(b, "    }\n")
+
+    # outside any process: call directly
+    let d_args = ""
+    let d_first = true
+    for i = 0, len(params)
+      if not d_first
+        d_args = d_args + ", "
+      end
+      d_first = false
+      d_args = d_args + if params[i]["type"] == "Bytes" then "_p{i}, _p{i}_len" else "_p{i}" end
+    end
+    let d_call = "{c_sym}({d_args})"
+
+    buf_push(b, "    gem_native_call_fence();\n")
+    if ret_type == "Nil"
+      buf_push(b, "    {d_call};\n")
+      buf_push(b, "    return GEM_NIL;\n")
+    elif ret_type == "Int"
+      buf_push(b, "    int64_t _ret = {d_call};\n")
+      buf_push(b, "    return gem_int(_ret);\n")
+    elif ret_type == "Float"
+      buf_push(b, "    double _ret = {d_call};\n")
+      buf_push(b, "    return gem_float(_ret);\n")
+    elif ret_type == "String"
+      buf_push(b, "    char* _ret = {d_call};\n")
+      buf_push(b, "    GemVal _gv = gem_string(_ret ? _ret : \"\");\n")
+      buf_push(b, "    free(_ret);\n")
+      buf_push(b, "    return _gv;\n")
+    elif ret_type == "Bool"
+      buf_push(b, "    int _ret = {d_call};\n")
+      buf_push(b, "    return gem_bool(_ret);\n")
+    elif ret_type == "Ptr"
+      buf_push(b, "    void *_ret = {d_call};\n")
+      buf_push(b, "    return gem_int((int64_t)(intptr_t)_ret);\n")
+    elif ret_type == "Bytes"
+      buf_push(b, "    GemBytes _ret = {d_call};\n")
+      buf_push(b, "    if (_ret.data && _ret.len > GEM_MAX_STRLEN) \{ free((void*)_ret.data); gem_strlen_check((size_t)_ret.len, \"{c_sym}\"); }\n")
+      buf_push(b, "    GemVal _gv = _ret.data ? gem_string_with_len((const char*)_ret.data, _ret.len) : gem_string_with_len(\"\", 0);\n")
+      buf_push(b, "    if (_ret.data) free((void*)_ret.data);\n")
+      buf_push(b, "    return _gv;\n")
+    else
+      buf_push(b, "    {d_call};\n")
+      buf_push(b, "    return GEM_NIL;\n")
+    end
+
+    buf_push(b, "}")
+
+    push(forward_decls, "static GemVal gem_fn_{name}(void *_env, GemVal *args, int argc);")
+    emit_extern_c_decl(c_sym, params, ret_type, node)
+
+    to_string(b)
+  end
+
+  # Binds params and the rest param from args/argc. With `rebind` (the TCO rebind block) it assigns the declared
+  # ones instead; boxed params still get a fresh box so older closures keep their binding.
+  let emit_param_bindings_impl = fn(node, params, cap_set, rebind)
+    let b = buf_new()
+    let defaults = node.defaults
+    if defaults == nil
+      defaults = []
+    end
+    let decl_box = "GemVal *"
+    let decl_val = "GemVal "
+    if rebind
+      decl_box = ""
+      decl_val = ""
+    end
+    # defaults only see params and captures, not the body's lets
+    let saved_local_names = local_names
+    let entry_scope = set_union(sorted_array_to_set(params), closure_captures)
+    if node.rest_param != nil
+      set_add(entry_scope, node.rest_param)
+    end
+    local_names = set_intersect(local_names, entry_scope)
+    for i = 0, len(params)
+      let mp = mangle(params[i])
+      let has_def = i < len(defaults) and defaults[i] != nil
+      if has_def
+        let r = compile_expr(defaults[i])
+        # errors in a default point at its line (or the fn header)
+        let def_line = defaults[i].line
+        if def_line == nil
+          def_line = node.line
+        end
+        let set_def_line = if def_line != nil then setline_str(def_line, "    ") else "" end
+        if set_contains(cap_set, params[i])
+          buf_push(b, "    {decl_box}{mp} = gem_box_alloc();\n")
+          buf_push(b, "    if (argc > {i}) \{ *{mp} = args[{i}]; } else \{\n")
+          buf_push(b, set_def_line)
+          buf_push(b, r.setup)
+          buf_push(b, "    *{mp} = {r.expr};\n    }\n")
+        else
+          if not rebind
+            buf_push(b, "    GemVal {mp};\n")
+          end
+          buf_push(b, "    if (argc > {i}) \{ {mp} = args[{i}]; } else \{\n")
+          buf_push(b, set_def_line)
+          buf_push(b, r.setup)
+          buf_push(b, "    {mp} = {r.expr};\n    }\n")
+        end
+      else
+        if set_contains(cap_set, params[i])
+          buf_push(b, "    {decl_box}{mp} = gem_box_alloc();\n")
+          buf_push(b, "    *{mp} = (argc > {i}) ? args[{i}] : GEM_NIL;\n")
+        else
+          buf_push(b, "    {decl_val}{mp} = (argc > {i}) ? args[{i}] : GEM_NIL;\n")
+        end
+      end
+    end
+
+    if node.rest_param != nil
+      let N = len(params)
+      let mp_rest = mangle(node.rest_param)
+      if set_contains(cap_set, node.rest_param)
+        buf_push(b, "    {decl_box}{mp_rest} = gem_box_alloc();\n")
+        buf_push(b, "    *{mp_rest} = gem_table_new();\n")
+        buf_push(b, "    for (int _ri = {N}; _ri < argc; _ri++) gem_table_set(*{mp_rest}, gem_int(_ri - {N}), args[_ri]);\n")
+      else
+        buf_push(b, "    {decl_val}{mp_rest} = gem_table_new();\n")
+        buf_push(b, "    for (int _ri = {N}; _ri < argc; _ri++) gem_table_set({mp_rest}, gem_int(_ri - {N}), args[_ri]);\n")
+      end
+    end
+    local_names = saved_local_names
+    to_string(b)
+  end
+
+  let emit_param_bindings = fn(node, params, cap_set)
+    emit_param_bindings_impl(node, params, cap_set, false)
+  end
+
+  let emit_fn_body = fn(body)
+    let b = buf_new()
+    if len(body) > 0
+      for i = 0, len(body) - 1
+        buf_push(b, compile_stmt(body[i], 1))
+        buf_push(b, "\n")
+      end
+      buf_push(b, compile_stmt_return(body[-1], 1))
+      buf_push(b, "\n")
+    else
+      buf_push(b, return_nil_str("    ") + "\n")
+    end
+    to_string(b)
+  end
+
+  compile_fn = fn(node)
+    let {params, body, name} = node
+
+    let scope_vars = sorted_array_to_set(params)
+    if node.rest_param != nil
+      set_add(scope_vars, node.rest_param)
+    end
+    collect_top_let_names(body, scope_vars)
+
+    # every local of the fn, arm lets included: these hide builtins and fns of the same name
+    let shadowed_locals = set_union(scope_vars, {})
+    collect_shadow_lets_in_fn(body, shadowed_locals)
+
+    let saved_boxed = boxed_vars
+    let saved_top = in_top_level
+    let saved_local = local_names
+    let saved_fn_scope = fn_scope_locals
+    let saved_in_leaf = in_leaf_fn
+    let saved_ret_point = ret_point
+    local_names = shadowed_locals
+    # grows as compile_stmt reaches each let, so a read before a same-named let still hits the module slot
+    fn_scope_locals = sorted_array_to_set(params)
+    if node.rest_param != nil
+      set_add(fn_scope_locals, node.rest_param)
+    end
+    let saved_fn_closure_captures = closure_captures
+    closure_captures = {}
+    in_leaf_fn = fn_is_leaf(node, body)
+
+    let captured = find_captured_in_scope(body, scope_vars, is_global_name)
+    if node.defaults != nil
+      for d in node.defaults
+        if d != nil
+          walk_captures_node(d, scope_vars, captured, is_global_name)
+        end
+      end
+    end
+
+    # Box only captures some closure assigns; read-only ones are snapshotted into the env. A closure that assigns
+    # must share the outer box, since arena capture boxes are write-once as far as resets are concerned.
+    let cap_writes = find_capture_writes_in_scope(body, shadowed_locals)
+    if node.defaults != nil
+      for d in node.defaults
+        if d != nil
+          walk_writes_node(d, scope_vars, {}, cap_writes, false)
+        end
+      end
+    end
+    boxed_vars = set_intersect(captured, cap_writes)
+    in_top_level = false
+
+    let has_defs = false
+    if node.defaults != nil
+      for d in node.defaults
+        if d != nil
+          has_defs = true
+          break
+        end
+      end
+    end
+    let use_tco = fn_def_is_tco(node)
+    if use_tco
+      tco_fn_name = name
+      tco_params = params
+      tco_boxed = boxed_vars
+      tco_rebind = has_defs or node.rest_param != nil
+      tco_argv_max = 0
+    end
+
+    # SCC member: the body is gem_sccbody_<name> and gem_fn_<name> the trampoline; self tail calls still use the TCO loop
+    let scc_id = scc_member_to_id[name]
+    let saved_scc = current_scc_id
+    let body_fn_name = "gem_fn_{name}"
+    if scc_id != nil
+      current_scc_id = scc_id
+      body_fn_name = "gem_sccbody_{name}"
+    end
+
+    let b = buf_new()
+    buf_push(b, "static GemVal {body_fn_name}(void *_env, GemVal *args, int argc) \{\n")
+
+    if node.line != nil
+      buf_push(b, "#line {node.line} \"{escape_c_string(rel_path(file_of(node)))}\"\n")
+    end
+
+    let fn_line = if node.line != nil then node.line else 0 end
+    # frame first, so an error in a param default shows this fn
+    if in_leaf_fn
+      buf_push(b, leaf_entry_str(frame_name(name), rel_path(file_of(node)), fn_line, body))
+    else
+      buf_push(b, "    gem_push_frame(\"{escape_c_string(frame_name(name))}\", \"{escape_c_string(rel_path(file_of(node)))}\", {fn_line});\n")
+    end
+    buf_push(b, emit_param_bindings(node, params, boxed_vars))
+    # Return point after the param bindings, so the args are older than it; only fns that may recurse pay for one.
+    # A TCO fn reuses its loop mark. SCC bodies get none: the trampoline resets, and a TLB return carries the next args.
+    ret_point = nil
+    if not in_leaf_fn and scc_id == nil
+      if use_tco
+        ret_point = "_tco_mk.base"
+      elif node.may_recurse == true
+        ret_point = "_ret_pt"
+        buf_push(b, "    GemArenaPoint _ret_pt;\n")
+        buf_push(b, "    gem_arena_point(&_ret_pt);\n")
+      end
+    end
+
+    if use_tco and tco_rebind
+      # body in its own C block, out of scope at _tco_rebind; the rebind code is compiled first, against the entry scope
+      let rebind_c = emit_param_bindings_impl(node, params, boxed_vars, true)
+      let bb = buf_new()
+      if len(body) > 0
+        for i = 0, len(body) - 1
+          buf_push(bb, compile_stmt(body[i], 3))
+          buf_push(bb, "\n")
+        end
+        buf_push(bb, compile_stmt_return(body[-1], 3))
+        buf_push(bb, "\n")
+      else
+        buf_push(bb, return_nil_str("            ") + "\n")
+      end
+      let argv_n = tco_argv_max
+      if argv_n < 1
+        argv_n = 1
+      end
+      buf_push(b, "    GemVal _tco_argv[{argv_n}];\n")
+      buf_push(b, "    GemArenaMark _tco_mk;\n")
+      buf_push(b, "    gem_arena_mark(&_tco_mk);\n")
+      buf_push(b, "    while(1) \{\n")
+      buf_push(b, "        gem_yield_check();\n")
+      buf_push(b, "        \{\n")
+      buf_push(b, to_string(bb))
+      buf_push(b, "        \}\n")
+      buf_push(b, "    _tco_rebind: ;\n")
+      buf_push(b, rebind_c)
+      buf_push(b, "    \}\n")
+    elif use_tco
+      buf_push(b, "    GemArenaMark _tco_mk;\n")
+      buf_push(b, "    gem_arena_mark(&_tco_mk);\n")
+      buf_push(b, "    while(1) \{\n")
+      buf_push(b, "        gem_yield_check();\n")
+      if len(body) > 0
+        for i = 0, len(body) - 1
+          buf_push(b, compile_stmt(body[i], 2))
+          buf_push(b, "\n")
+        end
+        buf_push(b, compile_stmt_return(body[-1], 2))
+        buf_push(b, "\n")
+      else
+        buf_push(b, return_nil_str("        ") + "\n")
+      end
+      buf_push(b, "    \}\n")
+    else
+      buf_push(b, emit_fn_body(body))
+    end
+
+    buf_push(b, "}")
+
+    if use_tco
+      tco_fn_name = nil
+      tco_params = nil
+      tco_boxed = nil
+      tco_rebind = false
+      tco_argv_max = 0
+    end
+
+    if scc_id != nil
+      buf_push(b, "\n\n")
+      buf_push(b, scc_wrapper_for(node, scc_id))
+      current_scc_id = saved_scc
+    end
+
+    boxed_vars = saved_boxed
+    in_top_level = saved_top
+    local_names = saved_local
+    fn_scope_locals = saved_fn_scope
+    closure_captures = saved_fn_closure_captures
+    in_leaf_fn = saved_in_leaf
+    ret_point = saved_ret_point
+    to_string(b)
+  end
+
+  compile_closure_fn = fn(node, captures)
+    let {params, body} = node
+    let name = anon_name()
+
+    let inner_scope = sorted_array_to_set(params)
+    if node.rest_param != nil
+      set_add(inner_scope, node.rest_param)
+    end
+    collect_top_let_names(body, inner_scope)
+
+    let shadowed_locals = set_union(inner_scope, {})
+    collect_shadow_lets_in_fn(body, shadowed_locals)
+
+    let saved_boxed = boxed_vars
+    let saved_top = in_top_level
+    let saved_local = local_names
+    let saved_fn_scope = fn_scope_locals
+    let saved_closure_captures = closure_captures
+    let saved_current_closure_struct_name = current_closure_struct_name
+    let saved_current_closure_captures = current_closure_captures
+    let saved_stack_env_writes = stack_env_writes
+    let saved_in_leaf = in_leaf_fn
+    let saved_ret_point = ret_point
+    ret_point = nil
+    # a tail call in here belongs to the closure, not the enclosing TCO loop or SCC (wrong C fn for continue/goto)
+    let saved_tco_fn_name = tco_fn_name
+    let saved_scc_id = current_scc_id
+    tco_fn_name = nil
+    current_scc_id = nil
+    local_names = set_union(shadowed_locals, sorted_array_to_set(captures))
+    fn_scope_locals = sorted_array_to_set(params)
+    if node.rest_param != nil
+      set_add(fn_scope_locals, node.rest_param)
+    end
+    in_leaf_fn = fn_is_leaf(node, body)
+
+    let inner_captured = find_captured_in_scope(body, inner_scope, is_global_name)
+    if node.defaults != nil
+      for d in node.defaults
+        if d != nil
+          walk_captures_node(d, inner_scope, inner_captured, is_global_name)
+        end
+      end
+    end
+
+    # same boxing rule as compile_fn
+    let inner_writes = find_capture_writes_in_scope(body, shadowed_locals)
+    if node.defaults != nil
+      for d in node.defaults
+        if d != nil
+          walk_writes_node(d, inner_scope, {}, inner_writes, false)
+        end
+      end
+    end
+    let inner_boxed = set_intersect(inner_captured, inner_writes)
+
+    # env fields are all `GemVal *` (the runtime walks envs as [n][GemVal * x n]), so every capture is boxed here
+    boxed_vars = set_union(inner_boxed, sorted_array_to_set(captures))
+    in_top_level = false
+
+    let struct_name = "_closure_{name}"
+    let sb = buf_new()
+    buf_push(sb, "struct {struct_name} \{\n")
+    buf_push(sb, "    intptr_t _num_captures;\n")
+    for cap in captures
+      buf_push(sb, "    GemVal *{mangle(cap)};\n")
+    end
+    buf_push(sb, "};\n")
+    let struct_def = to_string(sb)
+
+    let fb = buf_new()
+    buf_push(fb, "static GemVal {name}(void *_env, GemVal *args, int argc) \{\n")
+    if len(captures) > 0
+      buf_push(fb, "    struct {struct_name} *_cls = (struct {struct_name} *)_env;\n")
+      for cap in captures
+        let mc = mangle(cap)
+        buf_push(fb, "    GemVal *{mc} = _cls->{mc};\n")
+      end
+    end
+
+    closure_captures = sorted_array_to_set(captures)
+    current_closure_struct_name = struct_name
+    current_closure_captures = captures
+    stack_env_writes = {}
+    if node.non_escaping == true and len(captures) > 0
+      let own = sorted_array_to_set(params)
+      if node.rest_param != nil
+        set_add(own, node.rest_param)
+      end
+      stack_env_writes = find_writes_in_closure_body(body, closure_captures, own)
+    end
+
+    let anon_line = if node.line != nil then node.line else 0 end
+    # frame first, as in compile_fn
+    if in_leaf_fn
+      buf_push(fb, leaf_entry_str("anonymous fn", rel_path(file_of(node)), anon_line, body))
+    else
+      buf_push(fb, "    gem_push_frame(\"anonymous fn\", \"{escape_c_string(rel_path(file_of(node)))}\", {anon_line});\n")
+    end
+    buf_push(fb, emit_param_bindings(node, params, inner_boxed))
+    # no return point for a non-escaping closure: it may write the creator's unboxed locals, which a reset wouldn't root
+    if not in_leaf_fn and node.non_escaping != true and node.may_recurse == true
+      ret_point = "_ret_pt"
+      buf_push(fb, "    GemArenaPoint _ret_pt;\n")
+      buf_push(fb, "    gem_arena_point(&_ret_pt);\n")
+    end
+    buf_push(fb, emit_fn_body(body))
+    buf_push(fb, "}")
+
+    boxed_vars = saved_boxed
+    in_top_level = saved_top
+    local_names = saved_local
+    fn_scope_locals = saved_fn_scope
+    closure_captures = saved_closure_captures
+    current_closure_struct_name = saved_current_closure_struct_name
+    current_closure_captures = saved_current_closure_captures
+    stack_env_writes = saved_stack_env_writes
+    in_leaf_fn = saved_in_leaf
+    ret_point = saved_ret_point
+    tco_fn_name = saved_tco_fn_name
+    current_scc_id = saved_scc_id
+
+    push(functions, struct_def + to_string(fb))
+
+    {fn_name: name, struct_name: struct_name, captures: captures}
+  end
+
+  # `extern include`: a path relative to the including .gem file that exists is emitted absolute, once (the C
+  # file is compiled elsewhere). Other paths go to cc's search, unless absolute or ./ ../ (an error if missing).
+  # With c_file known, #lines make cc report a missing header at the .gem line, then point back at the C file.
+  let emit_extern_includes = fn(ob, includes, c_file)
+    let phys = 0
+    let redirected = false
+    let seen = {}
+    for ei in includes
+      let path = ei.path
+      let line = ei.line
+      if line == nil then line = 0 end
+      let col = ei.col
+      if col == nil then col = 0 end
+      let span = len(path) + 2
+      if path == "" or str_replace(path, "\"", "") != path or str_replace(path, "\n", "") != path
+        sink.report(source_of(ei), file_of(ei), line, col, span, "invalid header path in extern include: \"{escape_c_string(path)}\"", nil)
+        continue
+      end
+      let is_abs = substr(path, 0, 1) == "/"
+      let candidate = path_join(dirname(file_of(ei)), path)
+      if file_exists(candidate) and not is_dir(candidate)
+        let full = if not is_abs then normalize_path(candidate) else path end
+        if not has_key(seen, full)
+          seen[full] = true
+          buf_push(ob, "#include \"{full}\"\n")
+          phys += 1
+        end
+      elif is_abs or substr(path, 0, 2) == "./" or substr(path, 0, 3) == "../"
+        if is_abs
+          sink.report(source_of(ei), file_of(ei), line, col, span, "header not found: {path}", nil)
+        else
+          sink.report(source_of(ei), file_of(ei), line, col, span, "header not found: {path} (looked in {dirname(rel_path(file_of(ei)))}/)", "a relative path is resolved against the directory of the .gem file that contains the extern include")
+        end
+      else
+        if c_file != nil and line > 0
+          buf_push(ob, "#line {line} \"{escape_c_string(rel_path(file_of(ei)))}\"\n")
+          phys += 1
+          redirected = true
+        end
+        buf_push(ob, "#include \"{path}\"\n")
+        phys += 1
+      end
+    end
+    if redirected
+      buf_push(ob, "#line {phys + 2} \"{escape_c_string(c_file)}\"\n")
+    end
+  end
+
+  let compile = fn(ast, c_file)
+    let fn_defs = []
+    let extern_fns_list = []
+    let extern_includes = []
+    let top_stmts = []
+
+    for s in ast.stmts
+      if s.tag == "fn_def"
+        push(fn_defs, s)
+      elif s.tag == "extern_fn"
+        push(extern_fns_list, s)
+      elif s.tag == "extern_include"
+        push(extern_includes, s)
+      elif s.tag == "export"
+        # dealt with at load time
+      else
+        push(top_stmts, s)
+      end
+    end
+
+    let extern_names = []
+    for ef in extern_fns_list
+      push(extern_names, ef.name)
+    end
+    let report_out_of_scope = fn(node, name, kind, decl)
+      # the let may be in another loaded file
+      let where = if decl == nil or decl.line == nil
+        ""
+      elif file_of(decl) == file_of(node)
+        " at line {decl.line}"
+      else
+        " at {rel_path(file_of(decl))}:{decl.line}"
+      end
+      let at = if where != "" then "{where}," else "" end
+      let hint = match kind
+      when "later"
+        "`{name}` is declared{at} after this use or in a block that does not contain it; a `let` is visible from its declaration to the end of its block"
+      when "later_closure"
+        "a closure sees only variables declared before it is created, and the `let` of `{name}`{where} comes after; declare it first (`let {name} = nil`) and assign it afterwards (`{name} = ...`)"
+      when "param_later"
+        "a parameter's default can use only the parameters before it"
+      else
+        let kw = if decl != nil then decl.block_kw end
+        let give = if kw != nil then "give the `{kw}` the value (`let {name} = {kw} ...`), or " else "" end
+        "`{name}` is declared{at} inside a block that has ended; {give}declare it before that block (`let {name} = nil`) and assign it inside"
+      end
+      sink.report(source_of(node), file_of(node), node.line, node.col, len(name), "undeclared identifier `{name}`", hint)
+    end
+    scope_shadowing_lets(fn_defs, top_stmts, builtin_fns, extern_names, report_out_of_scope)
+
+    # before any capture analysis: find_captured_in_scope reads non_escaping
+    for fd in fn_defs
+      mark_non_escaping_stmts(fd.body, fd)
+    end
+    mark_non_escaping_stmts(top_stmts, top_stmts)
+
+    mark_process_tail(fn_defs, top_stmts, extern_names)
+
+    # hoist arm lets live at a back-edge so they get a C local the reset can root (needs mark_process_tail's liveness)
+    for fd in fn_defs
+      lift_captured_arm_lets_in_fn(fd)
+    end
+    lift_captured_arm_lets_top_stmts(top_stmts)
+
+    for ef in extern_fns_list
+      set_add(defined_fns, ef.name)
+    end
+
+    for fd in fn_defs
+      set_add(defined_fns, fd.name)
+      let decl = "static GemVal gem_fn_{fd.name}(void *_env, GemVal *args, int argc);"
+      push(forward_decls, decl)
+      if scc_member_to_id[fd.name] != nil
+        push(forward_decls, "static GemVal gem_sccbody_{fd.name}(void *_env, GemVal *args, int argc);")
+      end
+    end
+
+    collect_top_let_names(top_stmts, top_level_vars)
+    # hoisted placeholders are main's locals, not module slots: as slots, the lets they stand for would write slots
+    for n in top_rescue_placeholders(top_stmts)
+      delete(top_level_vars, n)
+    end
+    # every `name = ...` in the program (the call graph saw all of it)
+    let assigned = {}
+    for _, r in pt_caller_records
+      for w in r.writes
+        if is_node(w.node, "assign")
+          set_add(assigned, w.name)
+        end
+      end
+    end
+    collect_module_namespaces(top_stmts, assigned, module_ns)
+    for binding, fields in module_ns
+      for field, target in fields
+        if ns_targets[target] == nil
+          ns_targets[target] = []
+        end
+        push(ns_targets[target], {binding: binding, field: field})
+      end
+    end
+    note_spawn_global_writes()
+    check_call_arities(fn_defs, extern_fns_list, top_stmts)
+    let top_captured = find_captured_in_scope(top_stmts, {}, is_global_name)
+    # module bindings are slots and never captured; main's other locals (in top-level loops/ifs) box like a fn's
+    let main_locals = {}
+    collect_shadow_lets_in_fn(top_stmts, main_locals)
+    for k, _ in top_level_vars
+      delete(main_locals, k)
+    end
+    let top_writes = find_capture_writes_in_scope(top_stmts, main_locals)
+    let main_boxed = set_intersect(set_intersect(top_captured, top_writes), main_locals)
+
+    for ef in extern_fns_list
+      push(functions, compile_extern_fn(ef))
+    end
+
+    for fd in fn_defs
+      push(functions, compile_fn(fd))
+    end
+
+    let saved_boxed = boxed_vars
+    let saved_local = local_names
+    let saved_fn_scope = fn_scope_locals
+    boxed_vars = main_boxed
+    in_top_level = true
+    local_names = {}
+    for k, _ in top_level_vars
+      set_add(local_names, k)
+    end
+    collect_shadow_lets_in_fn(top_stmts, local_names)
+    fn_scope_locals = {}
+    for k, _ in top_level_vars
+      set_add(fn_scope_locals, k)
+    end
+    let main_body = compile_stmts(top_stmts, 1)
+    in_top_level = false
+    boxed_vars = saved_boxed
+    local_names = saved_local
+    fn_scope_locals = saved_fn_scope
+
+    let has_main = false
+    for fd in fn_defs
+      if fd.name == "main"
+        has_main = true
+      end
+    end
+
+    let mb = buf_new()
+    buf_push(mb, "static GemVal gem_user_main(void *_env, GemVal *_args, int _argc) \{\n")
+    buf_push(mb, "    (void)_env; (void)_args; (void)_argc;\n")
+    buf_push(mb, "    gem_push_frame(\"main\", \"{escape_c_string(rel_path(source_name))}\", 0);\n")
+    if main_body != ""
+      buf_push(mb, main_body)
+    end
+    if has_main
+      buf_push(mb, "    GemVal _margs[1] = \{GEM_NIL};\n")
+      buf_push(mb, "    gem_fn_main(NULL, _margs, 0);\n")
+    end
+    buf_push(mb, "    gem_pop_frame();\n    return GEM_NIL;\n}\n\n")
+    buf_push(mb, "int main(int argc, char **argv) \{\n")
+    buf_push(mb, "    gem_init(argc, argv);\n")
+    buf_push(mb, "    gem_globals_init_lazy({len(keys(top_level_vars))});\n")
+    buf_push(mb, "    gem_scheduler_init();\n")
+    buf_push(mb, "    gem_run_main(gem_user_main, NULL);\n")
+    buf_push(mb, "    return 0;\n}\n")
+    let main_c = to_string(mb)
+
+    let ob = buf_new()
+    emit_extern_includes(ob, extern_includes, c_file)
+    buf_push(ob, "#include \"gem.h\"\n")
+
+    # extern fn prototypes unless an extern include declares them; with c_file each gets a #line for cc's clash errors
+    if len(extern_includes) == 0
+      for d in extern_c_decls
+        if c_file != nil
+          buf_push(ob, "#line {d.node.line} \"{escape_c_string(rel_path(file_of(d.node)))}\"\n")
+        end
+        buf_push(ob, d.decl)
+        buf_push(ob, "\n")
+      end
+      if c_file != nil and len(extern_c_decls) > 0
+        let so_far = to_string(ob)
+        let lines = len(so_far) - len(str_replace(so_far, "\n", ""))
+        buf_push(ob, "#line {lines + 2} \"{escape_c_string(c_file)}\"\n")
+      end
+    end
+
+    for i = 0, len(forward_decls)
+      buf_push(ob, forward_decls[i])
+      if i < len(forward_decls) - 1
+        buf_push(ob, "\n")
+      end
+    end
+    buf_push(ob, "\n")
+
+    let tlv_keys = sort(keys(top_level_vars))
+    for i = 0, len(tlv_keys)
+      buf_push(ob, "#define gem_gi_{tlv_keys[i]} {i}\n#define gem_g_{tlv_keys[i]} gem_global_get({i})\n")
+    end
+    buf_push(ob, "\n")
+
+    for i = 0, len(functions)
+      buf_push(ob, functions[i])
+      if i < len(functions) - 1
+        buf_push(ob, "\n\n")
+      end
+    end
+    buf_push(ob, "\n\n")
+
+    buf_push(ob, main_c)
+    to_string(ob)
+  end
+
+  {compile: compile}
+end
+
+export make_codegen
