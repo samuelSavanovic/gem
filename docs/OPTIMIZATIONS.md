@@ -185,6 +185,9 @@ parse-heavy profile (JSON decoding of numeric data) shows `strtod`.
 ### Table grow strategy (P2)
 `gem_table_grow` doubles capacity. Could use a growth factor of 1.5 to reduce memory waste, or start with capacity 0 (no allocation) for tables that might stay empty.
 
+### `sort` with a comparator is 2x slower on already sorted input than before its comparator resets (P2)
+A 1M-element `sort(xs, fn(a, b) a - b end)` on already sorted ints takes 123 ms, against 61 ms before `sort` reset after its comparator calls, and 231 ms against 214 ms on shuffled ones (macOS arm64, M1 Pro; CPython's `sorted` with `functools.cmp_to_key` takes 123 and 1,437 ms there). Removing the reset check from `gem_call_cmp` (runtime/gem_builtins_collection.c) leaves it as slow, and adding a single `__asm__ volatile("nop");` to the older code after the comparator call makes that as slow too, so the cost appears to be how cc lays out `gem_merge_sort`'s loop rather than the work the reset adds (OPTIMIZATIONS_LOG.md, "`sort` resets after its comparator calls"). Options: read the -O2 assembly of both versions; keep the comparator call and the reset check in a `noinline` helper so the merge loop's layout doesn't depend on them; a run-detecting merge (galloping, as timsort does) that makes fewer comparator calls on sorted input.
+
 ## Runtime I/O
 
 ### `read_file` holds the file twice at its peak (P2)
