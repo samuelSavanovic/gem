@@ -6,6 +6,15 @@ Kept for historical context — commit refs, design rationale, regression tests,
 
 ## Arena / Memory
 
+### `sort` resets after its comparator calls ✓ Done (2026-10-15)
+`sort` with a comparator takes a mark once it has copied the array and, after each comparator call, resets to it once a reset is due, with no roots, as a loop's back-edge does (`gem_call_cmp` in runtime/gem_builtins_collection.c). Before, what a comparator allocated stayed until a reset around the `sort`, and a comparator whose own loop reset left that loop's blocks behind at every call, so top-level code calling `sort` grew for good. `sort` is off the non-escaping allowlist of "Escape analysis for non-escaping closures" below (compiler/captures.gem): a non-escaping comparator assigns captures in its creator's C locals, which this reset can't see, so a capture it assigns lives in a pinned box instead. examples/239_sort_comparator_memory.gem and the `case_sort` of examples/122_closure_capture_roots.gem check it.
+
+macOS arm64 (M1 Pro), `runtime_stats().memory` before and after the `sort`, called from top-level code:
+- `GEM_RESET_STRESS=1`, a 3,000-element sort whose comparator runs a 3-iteration loop that pushes a short string onto a local array: grew 5.3 GB, now 160 KB.
+- Default threshold, a 300-element sort whose comparator runs a 12-iteration loop, each iteration building a 100 KB string by appending 10 bytes 10,000 times and pushing `to_string(i)` onto a local array: grew 344 MB, now under 1 MB.
+
+Cost, same machine: a 1M-element `sort(xs, fn(a, b) a - b end)` takes 231 ms on shuffled ints against 214 ms before (+8%), and 123 ms against 61 ms on already sorted ones (2x). Without the reset check in `gem_call_cmp` it takes the same; main's `gem_builtins_collection.c` with only `__asm__ volatile("nop");` added after the comparator call takes 254 and 133 ms, so the difference is in how cc lays out the merge loop, not in the work added.
+
 ### `GEM_DIAG=2` shows which loop pays for its resets ✓ Done (2026-10-09)
 `GEM_DIAG=1` prints the program's reset totals at exit, all processes together, which shows the cost but not the loop. `GEM_DIAG=2` also prints a `gem_reset:` line on stderr for every reset that takes 1 ms or more: the Unix time, the pid, the kind (young, full or return), its duration and the remembered-log walk's share of it, the bytes in its region, copied and scanned, and the innermost Gem function with the line it last ran (`gem_diag_trace` in runtime/gem_copy.c). With `GEM_DIAG=2 TARGETS=mini_redis benchmarks/soak/run.sh` it shows where mini_redis's reset time goes under the soak load: the store's gen_server loop pays nearly all of them, its young resets mostly in the remembered-log walk over `db.data` (OPTIMIZATIONS.md, "A kept table written once is walked whole at every reset") and its long pauses in full resets ("Full resets still copy all a loop keeps, in one pause").
 

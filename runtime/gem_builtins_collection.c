@@ -327,23 +327,40 @@ static int gem_default_cmp(const void *a, const void *b) {
    lives in this call's C frame, never in a global. It can also raise, which
    longjmps out of the sort: the merge sort below works on an arena copy and
    only writes the table back once it is done, so an error leaves the table
-   as it was, and the arena copy needs no freeing. */
-static int gem_call_cmp(GemVal cmp, GemVal a, GemVal b) {
-    GemVal cmp_args[2] = {a, b};
-    GemVal result = cmp.fn(cmp.env, cmp_args, 2);
-    if (result.type == VAL_INT) {
-        int64_t v = result.ival;
-        return (v > 0) - (v < 0);
-    }
-    if (result.type == VAL_FLOAT) return (result.fval > 0) - (result.fval < 0);
+   as it was, and the arena copy needs no freeing.
+   The sort takes a mark after its copy, and after each comparator call
+   resets to it once a reset is due, with no roots, as a loop's back-edge
+   would: what the comparator allocated is freed, and what it stored in
+   older tables or module slots is kept. The elements, the copy and the
+   comparator's env are older than the mark, and the result is a number.
+   The error and the reset are out of line, which keeps the inlined call
+   short. */
+__attribute__((noinline, cold, noreturn))
+static void gem_sort_bad_result(GemVal result) {
     char buf[160];
     snprintf(buf, sizeof(buf), "sort: the comparator must return a number (negative, zero or positive), got %s", gem_type_str(result));
     gem_error(buf);
-    return 0;
+    abort(); /* unreachable */
+}
+
+__attribute__((noinline, cold))
+static void gem_sort_reset(GemArenaMark *mark) {
+    gem_arena_reset_region(mark, NULL, 0, NULL, 0);
+}
+
+static inline int gem_call_cmp(GemVal cmp, GemArenaMark *mark, GemVal a, GemVal b) {
+    GemVal cmp_args[2] = {a, b};
+    GemVal result = cmp.fn(cmp.env, cmp_args, 2);
+    int order;
+    if (result.type == VAL_INT) order = (result.ival > 0) - (result.ival < 0);
+    else if (result.type == VAL_FLOAT) order = (result.fval > 0) - (result.fval < 0);
+    else gem_sort_bad_result(result);
+    if (__builtin_expect(gem_arena_reset_due(mark), 0)) gem_sort_reset(mark);
+    return order;
 }
 
 /* Stable merge sort of src[0..n) into dst (both n long; src is clobbered). */
-static void gem_merge_sort(GemVal cmp, GemVal *src, GemVal *dst, int n) {
+static void gem_merge_sort(GemVal cmp, GemArenaMark *mark, GemVal *src, GemVal *dst, int n) {
     /* Insertion-sort runs of 8 in src, then merge runs back and forth. */
     const int RUN = 8;
     for (int lo = 0; lo < n; lo += RUN) {
@@ -351,7 +368,7 @@ static void gem_merge_sort(GemVal cmp, GemVal *src, GemVal *dst, int n) {
         for (int i = lo + 1; i < hi; i++) {
             GemVal v = src[i];
             int j = i;
-            while (j > lo && gem_call_cmp(cmp, src[j - 1], v) > 0) {
+            while (j > lo && gem_call_cmp(cmp, mark, src[j - 1], v) > 0) {
                 src[j] = src[j - 1];
                 j--;
             }
@@ -365,7 +382,7 @@ static void gem_merge_sort(GemVal cmp, GemVal *src, GemVal *dst, int n) {
             int hi = lo + 2 * width < n ? lo + 2 * width : n;
             int i = lo, j = mid, k = lo;
             while (i < mid && j < hi) {
-                if (gem_call_cmp(cmp, from[j], from[i]) < 0) to[k++] = from[j++];
+                if (gem_call_cmp(cmp, mark, from[j], from[i]) < 0) to[k++] = from[j++];
                 else to[k++] = from[i++];
             }
             while (i < mid) to[k++] = from[i++];
@@ -392,7 +409,9 @@ GemVal gem_sort_fn(void *_env, GemVal *args, int argc) {
         int n = t->len;
         GemVal *buf = (GemVal *)gem_alloc((size_t)n * 2 * sizeof(GemVal));
         memcpy(buf, t->vals, (size_t)n * sizeof(GemVal));
-        gem_merge_sort(args[1], buf, buf + n, n);
+        GemArenaMark mark;
+        gem_arena_mark(&mark);
+        gem_merge_sort(args[1], &mark, buf, buf + n, n);
         /* The comparator may have resized the table meanwhile. */
         if (t->len != n) gem_error("sort: the comparator changed the length of the table being sorted");
         /* Again: the comparator may have spawned, putting the table in a

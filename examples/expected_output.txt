@@ -5002,3 +5002,10 @@ boom 3
 10
 60
 done
+garbage: sorted true, grew under 8 MB true
+kept: sorted true, true entries, intact true
+kept: true true
+nested: sorted true
+raise: ok=false unchanged true error starts true
+bad result: sort: the comparator must return a number (negative, zero or positive), got string
+spawning: sorted true
