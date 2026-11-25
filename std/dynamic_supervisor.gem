@@ -84,7 +84,7 @@ fn check_intensity(state)
   let now = time_ms()
   let recent = [now]
   for t in state.restart_times
-    if now - t <= state.max_seconds
+    if now - t <= state.period_ms
       push(recent, t)
     end
   end
@@ -332,13 +332,13 @@ end
 
 ## Spawns a dynamic supervisor with no children and returns `{pid, shutdown: nil}`.
 ## `opts.child` is the template `{start(args), restart, shutdown}`. Other options: `name`,
-## `max_restarts` (3) within `max_seconds` (5000, in ms despite the name).
+## `max_restarts` (3) within `period_ms` (5000).
 fn start(opts)
   if type(opts) != "table"
     error("dynamic_supervisor.start: expected an options table \{child, ...\}, got {type(opts)}")
   end
-  check_keys("dynamic_supervisor.start", "option", opts, ["child", "max_restarts", "max_seconds", "name"])
-  let {child, max_restarts = 3, max_seconds = 5000, name = nil} = opts
+  check_keys("dynamic_supervisor.start", "option", opts, ["child", "max_restarts", "period_ms", "name"])
+  let {child, max_restarts = 3, period_ms = 5000, name = nil} = opts
   if type(child) != "table"
     error("dynamic_supervisor.start: expected a child template \{start, restart, shutdown\}, got {type(child)}")
   end
@@ -355,8 +355,8 @@ fn start(opts)
   if type(max_restarts) != "int"
     error("dynamic_supervisor.start: max_restarts must be an int, got {type(max_restarts)}")
   end
-  if type(max_seconds) != "int"
-    error("dynamic_supervisor.start: max_seconds must be an int (milliseconds), got {type(max_seconds)}")
+  if type(period_ms) != "int"
+    error("dynamic_supervisor.start: period_ms must be an int, got {type(period_ms)}")
   end
   if name != nil
     if type(name) != "string"
@@ -380,7 +380,7 @@ fn start(opts)
       template: template,
       children: [],
       max_restarts: max_restarts,
-      max_seconds: max_seconds,
+      period_ms: period_ms,
       restart_times: [],
       retry_queued: false
     }, caller, ref)

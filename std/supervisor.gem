@@ -127,7 +127,7 @@ end
 fn note_restart(state, now)
   let recent = []
   for t in state.restart_times
-    if now - t <= state.max_seconds
+    if now - t <= state.period_ms
       push(recent, t)
     end
   end
@@ -363,21 +363,21 @@ end
 
 ## Spawns a supervisor, starts `spec.children` in order and returns `{pid, shutdown: nil}`.
 ## A child is `{id, start, restart, shutdown}`. Options: `strategy` ("one_for_one" or "one_for_all"), `name`,
-## `max_restarts` (3) within `max_seconds` (5000, in ms despite the name).
+## `max_restarts` (3) within `period_ms` (5000).
 fn start(spec)
   if type(spec) != "table"
     error("supervisor.start: expected a spec table \{strategy, children, ...\}, got {type(spec)}")
   end
-  check_keys("supervisor.start", "option", spec, ["strategy", "max_restarts", "max_seconds", "children", "name"])
-  let {strategy = "one_for_one", max_restarts = 3, max_seconds = 5000, children = [], name = nil} = spec
+  check_keys("supervisor.start", "option", spec, ["strategy", "max_restarts", "period_ms", "children", "name"])
+  let {strategy = "one_for_one", max_restarts = 3, period_ms = 5000, children = [], name = nil} = spec
   if not has_key(STRATEGIES, strategy)
     error("supervisor.start: unknown strategy \"{strategy}\"{value_hint(strategy, STRATEGIES)}")
   end
   if type(max_restarts) != "int"
     error("supervisor.start: max_restarts must be an int, got {type(max_restarts)}")
   end
-  if type(max_seconds) != "int"
-    error("supervisor.start: max_seconds must be an int (milliseconds), got {type(max_seconds)}")
+  if type(period_ms) != "int"
+    error("supervisor.start: period_ms must be an int, got {type(period_ms)}")
   end
   if name != nil
     if type(name) != "string"
@@ -397,7 +397,7 @@ fn start(spec)
       children: [],
       specs: specs,
       max_restarts: max_restarts,
-      max_seconds: max_seconds,
+      period_ms: period_ms,
       restart_times: [],
       retry_queued: false
     }, caller, ref)

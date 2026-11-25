@@ -148,9 +148,9 @@ print((pcall supervisor.start({children: [{id: "x", start: idle}, {id: "x", star
 print((pcall supervisor.start({children: ["x"]})).error)
 print((pcall supervisor.start({children: "abc"})).error)
 print((pcall supervisor.start({max_restarts: "3"})).error)
-print((pcall supervisor.start({max_seconds: 1.5})).error)
+print((pcall supervisor.start({period_ms: 1.5})).error)
 print((pcall dynamic_supervisor.start({child: {start: fn(a) idle() end}, max_restarts: 2.5})).error)
-print((pcall dynamic_supervisor.start({child: {start: fn(a) idle() end}, max_seconds: "5"})).error)
+print((pcall dynamic_supervisor.start({child: {start: fn(a) idle() end}, period_ms: "5"})).error)
 
 let t1 = task.async(fn() 1 end)
 print((pcall task.await(t1, "50")).error)

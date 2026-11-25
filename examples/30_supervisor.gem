@@ -161,7 +161,7 @@ spawn(fn()
   let sup_result = supervisor.start({
     strategy: "one_for_one",
     max_restarts: 2,
-    max_seconds: 5000,
+    period_ms: 5000,
     children: [
       {id: "fragile", start: fn() make_worker("fragile", me) end}
     ]

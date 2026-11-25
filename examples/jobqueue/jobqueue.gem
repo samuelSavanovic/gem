@@ -33,14 +33,14 @@ fn start(opts = {})
     strategy: "one_for_one",
     name: "jobqueue_sup",
     max_restarts: 20,
-    max_seconds: 10000,
+    period_ms: 10000,
     children: [
       {id: "workers", start: fn()
         dynamic_supervisor.start({
           name: WORKERS,
           child: {start: worker.start, restart: "transient", shutdown: 100},
           max_restarts: max_restarts,
-          max_seconds: restart_window_ms
+          period_ms: restart_window_ms
         })
       end},
       {id: "queue", start: fn() queue.start(queue_opts) end}

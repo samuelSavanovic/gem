@@ -3435,9 +3435,9 @@ supervisor.start: duplicate child id "x"
 supervisor.start: a child spec must be a table, got string
 supervisor.start: children must be an array of child specs, got string
 supervisor.start: max_restarts must be an int, got string
-supervisor.start: max_seconds must be an int (milliseconds), got float
+supervisor.start: period_ms must be an int, got float
 dynamic_supervisor.start: max_restarts must be an int, got float
-dynamic_supervisor.start: max_seconds must be an int (milliseconds), got string
+dynamic_supervisor.start: period_ms must be an int, got string
 task.await: timeout must be an int (milliseconds) or nil, got string
 task.await: timeout must be an int (milliseconds) or nil, got float
 still awaitable: 1
