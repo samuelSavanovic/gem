@@ -8,6 +8,8 @@
 
 GemArena gem_global_arena;
 size_t gem_reset_threshold = GEM_ARENA_RESET_THRESHOLD;
+size_t gem_idle_reset_threshold = GEM_ARENA_IDLE_RESET_THRESHOLD;
+size_t gem_idle_reset_gap;
 
 #define GEM_ARENA_INITIAL_BLOCK (64 * 1024)
 #define GEM_ARENA_MAX_BLOCK    (1024 * 1024)
@@ -64,6 +66,7 @@ void gem_arena_init(GemArena *arena) {
     arena->pin_seq = 0;
     arena->ret_min = 0;
     arena->ret_at = 0;
+    arena->wait_clock = 0;
 }
 
 GemArenaBlock *gem_arena_append_block(GemArena *arena, GemArenaBlock *after, size_t min_cap) {

@@ -726,6 +726,7 @@ static void gem_proc_set_state(int slot, GemProcState st) {
         case GEM_PROC_READY: gem_ready_set(slot); break;
         case GEM_PROC_WAITING:
             gem_n_msg_wait++;
+            p->arena.wait_clock = gem_mut_clock + 1;
             if (p->deadline_ms >= 0) gem_dl_push(slot, p->deadline_ms);
             break;
         case GEM_PROC_IO_WAIT:
@@ -735,6 +736,7 @@ static void gem_proc_set_state(int slot, GemProcState st) {
                 if (p->deadline_ms >= 0) gem_dl_push(slot, p->deadline_ms);
             } else {
                 p->wait_kind = GEM_WAIT_FD;
+                p->arena.wait_clock = gem_mut_clock + 1;
                 gem_waitlist_add(&gem_fd_waiters, slot);
                 if (p->deadline_ms >= 0) gem_dl_push(slot, p->deadline_ms);
             }
@@ -865,8 +867,6 @@ static void gem_free_proc_slot(int pid) {
     proc->crashed = 0;
     proc->io_request = NULL;
     proc->trap_exit = 0;
-    proc->read_buf = NULL;
-    proc->read_buf_cap = 0;
     proc->pcall_depth = 0;
     proc->pending_timers = 0;
     proc->gen++;

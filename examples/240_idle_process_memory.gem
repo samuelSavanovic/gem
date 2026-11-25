@@ -1,0 +1,40 @@
+# a process that waits for its messages gives back its garbage long before it has allocated 1 MB:
+# 100 workers answering 300 messages each end up holding next to none of what they allocated.
+let me = self()
+let workers = []
+for i = 0, 100
+  let w = spawn do
+    while true
+      receive
+      when {tag: "work", n}
+        let parts = []
+        for j = 0, 20
+          push(parts, "part {j} of message {n}")
+        end
+        send(me, {tag: "done", size: len(parts)})
+      when "stop"
+        return
+      end
+    end
+  end
+  push(workers, w)
+end
+
+let before = runtime_stats().memory
+let replies = 0
+for n = 0, 300
+  for w in workers
+    send(w, {tag: "work", n: n})
+  end
+  for w in workers
+    receive
+    when {tag: "done", size: 20} then replies += 1
+    end
+  end
+end
+let held = runtime_stats().memory - before
+print("replies", replies)
+print("held under 20 MB", held < 20 * 1024 * 1024)
+for w in workers
+  send(w, "stop")
+end

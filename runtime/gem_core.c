@@ -55,6 +55,8 @@ void gem_init(int argc, char **argv) {
         }
         gem_reset_threshold = (size_t)n;
     }
+    if (gem_idle_reset_threshold > gem_reset_threshold) gem_idle_reset_threshold = gem_reset_threshold;
+    gem_idle_reset_gap = gem_reset_threshold - gem_idle_reset_threshold;
 
     gem_arena_init(&gem_global_arena);
     gem_init_char_cache();

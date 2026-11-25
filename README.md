@@ -31,7 +31,7 @@ The [telnet honeypot](examples/honeypot/) ran on the open internet for 18 days w
 
 ![Honeypot resident memory over 18 days: 18 to 27 MB, one spike to 34 MB](examples/honeypot/rss.svg)
 
-The low point rose about 4 MB over the run while sessions per day more than doubled. About 2 MB of that is garbage in the arenas of the six long-lived processes: a loop resets only once it has allocated 1 MB, and a process that does a little work now and then takes days to get there. I haven't traced the rest.
+The low point rose about 4 MB over the run while sessions per day more than doubled. About 2 MB of that was garbage in the arenas of the six long-lived processes: the build that ran reset a loop only once it had allocated 1 MB, and a process that does a little work now and then took days to get there. A loop in a process that waits (in `receive`, `sleep` or on a socket) resets after 64 KB. I haven't traced the rest.
 
 [mini_redis](examples/mini_redis/) is the other long-lived example: a keyspace held in one process's loop, a process per connection and pub/sub fan-out.
 

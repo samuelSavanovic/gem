@@ -349,6 +349,12 @@ GemVal gem_tcp_accept_fn(void *_env, GemVal *args, int argc) {
     return gem_tcp_register(fd);
 }
 
+/* read() lands here and is copied out before anything can yield, so one buffer serves every process.
+   tcp_read takes at most GEM_TCP_SCRATCH_MAX bytes per call, whatever max_bytes asks for. */
+#define GEM_TCP_SCRATCH_MAX (1024 * 1024)
+static char *gem_tcp_scratch;
+static size_t gem_tcp_scratch_cap;
+
 GemVal gem_tcp_read_fn(void *_env, GemVal *args, int argc) {
     (void)_env;
     GemVal sock = gem_tcp_arg0(args, argc);
@@ -380,25 +386,27 @@ GemVal gem_tcp_read_fn(void *_env, GemVal *args, int argc) {
         gem_error(errbuf);
     }
     if (ent->ptr) return gem_tls_ops->read(sock, max_bytes, has_timeout, timeout_ms);
+    size_t want = max_bytes < GEM_TCP_SCRATCH_MAX ? max_bytes : GEM_TCP_SCRATCH_MAX;
 
     if (gem_current_pid >= 0) {
         GemProcess *proc = gem_tcp_begin_wait();
         int own_deadline = has_timeout && timeout_ms > 0;
 
-        if (proc->read_buf_cap < max_bytes) {
-            proc->read_buf = (char *)gem_alloc(max_bytes);
-            proc->read_buf_cap = max_bytes;
+        if (gem_tcp_scratch_cap < want) {
+            free(gem_tcp_scratch);
+            gem_tcp_scratch = (char *)malloc(want);
+            if (!gem_tcp_scratch) { fprintf(stderr, "gem: out of memory (tcp_read)\n"); exit(1); }
+            gem_tcp_scratch_cap = want;
         }
-        char *buf = proc->read_buf;
 
         int64_t deadline = own_deadline ? gem_now_ms() + timeout_ms : -1;
         proc->deadline_ms = deadline;
         while (1) {
-            ssize_t n = read(fd, buf, max_bytes);
+            ssize_t n = read(fd, gem_tcp_scratch, want);
             if (n > 0) {
                 proc->deadline_ms = -1;
                 char *s = (char *)gem_alloc(n + 1);
-                memcpy(s, buf, n);
+                memcpy(s, gem_tcp_scratch, n);
                 s[n] = '\0';
                 GemVal r; r.type = VAL_STRING; r.magic = GEM_MAGIC; r.sval = s; r.slen = (int)n;
                 return r;
@@ -439,8 +447,8 @@ GemVal gem_tcp_read_fn(void *_env, GemVal *args, int argc) {
         }
     }
 
-    char *buf = (char *)gem_alloc(max_bytes + 1);
-    ssize_t n = read(fd, buf, max_bytes);
+    char *buf = (char *)gem_alloc(want + 1);
+    ssize_t n = read(fd, buf, want);
     if (n < 0) {
         char errbuf[256];
         snprintf(errbuf, sizeof(errbuf), "tcp_read: read failed: %s", strerror(errno));

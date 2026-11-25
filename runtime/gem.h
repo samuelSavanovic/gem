@@ -43,6 +43,7 @@ typedef struct {
     uint64_t pin_seq;               /* stamp for the next pinned box (see GemPinEntry.seq) */
     size_t ret_min;                 /* return-reset hysteresis (gem_arena_reset_return) */
     size_t ret_at;                  /* bytes_allocated after the last return reset */
+    uint64_t wait_clock;            /* gem_mut_clock + 1 when the process last blocked in receive or sleep, or on a socket */
 } GemArena;
 
 void gem_arena_init(GemArena *arena);
@@ -55,6 +56,10 @@ void gem_arena_free_blocks(GemArenaBlock *block);
    (gem_arena_reset_region), so reset work stays amortized O(1) per allocated byte */
 #ifndef GEM_ARENA_RESET_THRESHOLD
 #define GEM_ARENA_RESET_THRESHOLD (1 * 1024 * 1024)
+#endif
+/* the minimum for a loop whose process has blocked in receive or sleep, or on a socket, since the loop's last reset */
+#ifndef GEM_ARENA_IDLE_RESET_THRESHOLD
+#define GEM_ARENA_IDLE_RESET_THRESHOLD (64 * 1024)
 #endif
 /* debug runtime (-DGEM_DEBUG, make debug / make asan): GEM_ASSERT checks invariants, resets poison what
    they give back, freed blocks stay PROT_NONE for a while, and resets run a budgeted heap check
@@ -89,6 +94,10 @@ void __asan_unpoison_memory_region(void const volatile *addr, size_t size);
 
 /* GEM_ARENA_RESET_THRESHOLD, or GEM_RESET_STRESS bytes read at init (=1 resets at almost every back-edge) */
 extern size_t gem_reset_threshold;
+/* GEM_ARENA_IDLE_RESET_THRESHOLD, or gem_reset_threshold when that is lower */
+extern size_t gem_idle_reset_threshold;
+/* gem_reset_threshold - gem_idle_reset_threshold */
+extern size_t gem_idle_reset_gap;
 
 /* Region marks. A loop (while, TCO fn, mutual-TCO trampoline) takes a mark at entry and calls
    gem_arena_reset_region at its back-edge with the values live there. A reset only frees memory allocated
@@ -117,7 +126,9 @@ typedef struct {
     size_t trigger;            /* reset once bytes_allocated exceeds this */
     size_t old_bytes;          /* bytes kept between base and young */
     size_t old_limit;          /* full reset once old_bytes exceeds this */
-    size_t rem_window;         /* remembered-log entries from base.clock on after its last whole compaction */
+    /* the two 32-bit fields keep a mark at 160 bytes; at 168, setting one up at every loop entry takes more instructions */
+    uint32_t rem_window;       /* remembered-log entries from base.clock on after its last whole compaction */
+    uint32_t idle_extra;       /* see gem_arena_idle_due */
 } GemArenaMark;
 
 extern GemArena gem_global_arena;
@@ -878,8 +889,6 @@ typedef struct {
     int64_t deadline_ms;          /* -1 = no deadline; else absolute time in ms */
     int timed_out;
     int reductions;
-    char *read_buf;               /* reusable tcp_read buffer (arena-allocated) */
-    size_t read_buf_cap;
     GemPcallFrame pcall_stack[GEM_MAX_PCALL_DEPTH];
     int pcall_depth;
     int call_depth;               /* saved gem_call_depth at last yield (restored on resume) */
@@ -1199,11 +1208,22 @@ static inline void gem_arena_mark(GemArenaMark *m) {
     m->old_bytes = 0;
     m->old_limit = 0;
     m->rem_window = 0;
+    m->idle_extra = 0;
+}
+
+/* the process blocked since the loop's last reset (or its start) and the loop has allocated
+   max(gem_idle_reset_threshold, the last reset's budget) since. trigger is that point plus
+   max(gem_reset_threshold, budget), and idle_extra is clamp(budget - idle threshold, 0, gap) (at most UINT32_MAX),
+   0 for a fresh mark. */
+static inline int gem_arena_idle_due(const GemArena *a, const GemArenaMark *m) {
+    return a->wait_clock > m->young.clock &&
+           a->bytes_allocated > m->trigger - gem_idle_reset_gap + m->idle_extra;
 }
 
 static inline int gem_arena_reset_due(const GemArenaMark *m) {
-    return gem_current_pid >= 0 &&
-           gem_proc_table[gem_current_pid].arena.bytes_allocated > m->trigger;
+    if (gem_current_pid < 0) return 0;
+    const GemArena *a = &gem_proc_table[gem_current_pid].arena;
+    return a->bytes_allocated > m->trigger || gem_arena_idle_due(a, m);
 }
 
 /* due once the call's unfreed memory reaches the threshold: resets during the call only free memory newer

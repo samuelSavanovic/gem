@@ -586,7 +586,7 @@ void gem_pin_free_all(GemProcess *proc) {
    - older tables, buffers, pinned boxes, mailbox nodes: found via the write barrier's remembered log
      (gem_table_written), the arena's buffer list, the pin-set and the mailbox, and fixed up in place.
      Arena envs and capture boxes are write-once and strings immutable, so older ones can't point in.
-   - module slots, the mailbox, read_buf: walked here.
+   - module slots, the mailbox: walked here.
    - other processes: never. spawn and send deep-copy, and a copied-in pinned box becomes ours (gem_copy_new_box).
    Enclosing loops' marks are all older than ours, so nesting is fine.
 
@@ -598,7 +598,9 @@ void gem_pin_free_all(GemProcess *proc) {
    trampoline resets instead. A longjmp out skips it.
 
    Hysteresis: the next reset fires after max(threshold, 2*copied + scanned/2) more bytes after a young
-   reset, max(threshold, scanned/2) after a full one, so the work stays paid for by allocation. */
+   reset, max(threshold, scanned/2) after a full one, so the work stays paid for by allocation. Once the
+   process has blocked in receive or sleep, or on a socket, since the loop's last reset,
+   gem_idle_reset_threshold stands in for threshold. */
 
 /* Always counted; runtime_stats() reads them. GEM_DIAG=1 prints a summary at exit, GEM_DIAG=2 a line per
    slow reset. Only the log-walk timing depends on GEM_DIAG. */
@@ -982,7 +984,7 @@ static void gem_region_reset_impl(GemArenaMark *mark, GemVal **roots, int n_root
             size_t mid = blo + (bhi - blo) / 2;
             if (arena->rem[mid].epoch < mark->base.clock) blo = mid + 1; else bhi = mid;
         }
-        int whole = full || arena->rem_len - blo > 2 * mark->rem_window + 4096;
+        int whole = full || arena->rem_len - blo > 2 * (size_t)mark->rem_window + 4096;
         size_t from = whole ? blo : rem_start;
         GemArenaBlock *bb = mark->base.block;
         GemRegion kept;
@@ -1002,7 +1004,7 @@ static void gem_region_reset_impl(GemArenaMark *mark, GemVal **roots, int n_root
         /* charge a cache line per entry, the tables are likely cold */
         scanned += (arena->rem_len - from) * 64;
         arena->rem_len = w;
-        if (whole) mark->rem_window = w - blo;
+        if (whole) mark->rem_window = w - blo > UINT32_MAX ? UINT32_MAX : (uint32_t)(w - blo);
         free(kept.ranges);
     }
     if (gem_diag_state > 0) {
@@ -1036,10 +1038,6 @@ static void gem_region_reset_impl(GemArenaMark *mark, GemVal **roots, int n_root
         }
         proc->mailbox.head = head;
         proc->mailbox.tail = tail;
-    }
-    if (proc->read_buf && gem_region_contains(&region, proc->read_buf)) {
-        proc->read_buf = NULL;
-        proc->read_buf_cap = 0;
     }
     gem_copy_map_cleanup(&map);
 
@@ -1102,8 +1100,10 @@ static void gem_region_reset_impl(GemArenaMark *mark, GemVal **roots, int n_root
         mark->old_bytes += copied;
         budget = 2 * copied + scanned / 2;
     }
-    if (budget < gem_reset_threshold) budget = gem_reset_threshold;
-    mark->trigger = arena->bytes_allocated + budget;
+    mark->trigger = arena->bytes_allocated + (budget > gem_reset_threshold ? budget : gem_reset_threshold);
+    size_t extra = budget > gem_idle_reset_threshold ? budget - gem_idle_reset_threshold : 0;
+    if (extra > gem_idle_reset_gap) extra = gem_idle_reset_gap;
+    mark->idle_extra = extra > UINT32_MAX ? UINT32_MAX : (uint32_t)extra;
 #ifdef GEM_DEBUG
     gem_debug_check_reset(proc, mark, &region, roots, n_roots, pinned_roots, n_pinned, region_used + copied);
 #endif
@@ -1168,6 +1168,7 @@ void gem_arena_reset_return(const GemArenaPoint *pt, GemVal *ret, int own_frames
     mark.base = *pt;
     mark.young = *pt;
     mark.trigger = 0;
+    mark.idle_extra = 0;
     mark.old_bytes = 0;
     mark.old_limit = 0;
     mark.rem_window = 0;
