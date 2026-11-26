@@ -15,6 +15,9 @@ fn escape_c_string(s)
       buf_push(b, "\\r")
     elif ch == "\t"
       buf_push(b, "\\t")
+    elif ch == "?" and i > 0 and s[i - 1] == "?"
+      # no trigraphs
+      buf_push(b, "\\?")
     elif ord(ch) < 32 or ord(ch) >= 127
       # control bytes and non-ASCII (cc warns on bad UTF-8): 3-digit octal, so a following digit isn't absorbed
       let o = ord(ch)

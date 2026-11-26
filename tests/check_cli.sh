@@ -106,6 +106,14 @@ fi
 run_check "-l after the source is the program's" "-lgemcli" 0 "$GEM" "$tmp/c/args.gem" -lgemcli
 run_check "-- passes the rest to the program" "--check" 0 "$GEM" "$tmp/c/args.gem" -- --check -o x
 run_check "-- before the source file is unknown" "" 2 "$GEM" -- "$tmp/c/args.gem"
+total=$((total + 1))
+printf 'print("a??>b", {"k??=": 1})\n' > "$tmp/c/tri.gem"
+err=$("$GEM" "$tmp/c/tri.gem" -o "$tmp/c/tri" 2>&1 >/dev/null)
+if [ -n "$err" ] || [ "$("$tmp/c/tri")" != 'a??>b {"k??=": 1}' ]; then
+  echo "FAIL: trigraphs in string literals reach cc"
+  echo "  stderr: $err"
+  fails=$((fails + 1))
+fi
 check "gem: -l requires an argument
 usage: gem <file.gem> [options] [args...]   (gem --help for more)" 2 -l
 check "gem: -L requires an argument

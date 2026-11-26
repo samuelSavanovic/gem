@@ -2,6 +2,25 @@
 
 A tree-sitter grammar for Gem, used with Helix. The generated parser is checked in under `src/`, and `queries/` has the highlight queries.
 
+## Using it in Helix
+
+Register the language and point the grammar at this directory in `~/.config/helix/languages.toml`:
+
+```toml
+[[language]]
+name = "gem"
+scope = "source.gem"
+file-types = ["gem"]
+comment-token = "#"
+indent = { tab-width = 2, unit = "  " }
+
+[[grammar]]
+name = "gem"
+source = { path = "/path/to/gem/editors/tree-sitter-gem" }
+```
+
+Then run the build and copy steps below.
+
 ## After changing the grammar
 
 When `grammar.js` or a query changes (a new builtin, keyword or construct):

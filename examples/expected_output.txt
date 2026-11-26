@@ -5011,3 +5011,15 @@ bad result: sort: the comparator must return a number (negative, zero or positiv
 spawning: sorted true
 replies 30000
 held under 20 MB true
+??= 3
+??/ 3
+??' 3
+??( 3
+??) 3
+??! 3
+??< 3
+??> 3
+??- 3
+a???>b 6
+1 x1??!
+true true

@@ -91,7 +91,7 @@ GemVal gem_random_fn(void *_env, GemVal *args, int argc) {
         if (n <= 0) { gem_error("random: argument must be positive"); }
         return gem_int((int64_t)(gem_rng_next() % (uint64_t)n));
     }
-    return gem_float((double)gem_rng_next() / (double)UINT64_MAX);
+    return gem_float((double)(gem_rng_next() >> 11) * 0x1p-53);
 }
 
 

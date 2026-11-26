@@ -12,11 +12,10 @@ cd examples/gemgrep
 ```
 
 ```
-27:/* macOS's regcomp reads `\<`, `\>`, `\b`, `\w`, `\s` and backreferences
-36:/* 0, or the regcomp error code for rx_error. REG_NEWLINE: a range that
-42:    int rc = regcomp(&r->re, pattern, flags);
-47:/* The message for regcomp's error `code`: glibc's text, which is GNU
-77:        regfree(&r->re);
+22:/* macOS's regcomp reads `\<`, `\>`, `\b`, `\w`, `\s` and backreferences as glibc does only under
+30:/* 0, or the regcomp error code for rx_error. REG_NEWLINE: `^` and `$` match at each newline in a
+35:    int rc = regcomp(&r->re, pattern, flags);
+68:        regfree(&r->re);
 regex.gem:8
 walk.gem:2
 ./README.md

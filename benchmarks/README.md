@@ -64,7 +64,7 @@ benchmarks/gemgrep/run.sh [case...]          # about a minute
 MB=512 benchmarks/gemgrep/run.sh             # a bigger corpus (default 128 MB)
 ```
 
-logstat and lox need only `python3`; gemgrep also needs GNU grep (`ggrep` on macOS, `brew install grep`). Each script generates or ships its input, runs the Gem program and the reference on it, prints wall time and peak RSS, and stops if their outputs differ. The programs' READMEs have the full tables.
+logstat and lox need only `python3`; gemgrep compares against GNU grep (`ggrep` on macOS, `brew install grep`) and falls back to the system `grep` without it. Each script generates or ships its input, runs the Gem program and the reference on it, prints wall time and peak RSS, and stops if their outputs differ. The programs' READMEs have the full tables.
 
 ## mini_redis
 

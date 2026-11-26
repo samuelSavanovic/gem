@@ -10,7 +10,7 @@ Syntax highlighting for Gem.
 - `extern fn` declarations with their type annotations (`Int`, `Float`, `String`, ...)
 - Builtin functions
 - `#` comments
-- Bracket matching, auto-closing pairs, and indentation after `fn`, `if`, `while` and the like, dedenting on `end`, `else` and `elif`
+- Bracket matching, auto-closing pairs, and indentation after `fn`, `if`, `while` and the like, dedenting on `end`, `else`, `elif` and `when`
 
 Files ending in `.gem` open as Gem.
 

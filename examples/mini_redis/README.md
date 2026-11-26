@@ -31,7 +31,7 @@ Replies, error messages included, match Redis 7.0 byte for byte for the commands
 | Sets | `SADD`, `SREM`, `SISMEMBER`, `SMEMBERS`, `SCARD`, `SPOP` (no count) |
 | Pub/sub | `SUBSCRIBE`, `UNSUBSCRIBE`, `PUBLISH` |
 
-Commands can be multibulk or inline (`GET k\r\n`, as `nc` sends them), pipelined or not. That covers every `redis-benchmark` test except the sorted-set ones.
+Commands can be multibulk or inline (`GET k\r\n`, as `nc` sends them), pipelined or not. That covers every `redis-benchmark` test except the sorted-set ones and `XADD`.
 
 There are no sorted sets, streams, transactions, Lua, blocking commands, pattern subscriptions, RESP3, AUTH, databases other than 0, persistence, replication or `SCAN`, no command options added after Redis 6 (`EXPIRE ... NX`, `SET ... GET`), and no quotes in inline commands.
 
