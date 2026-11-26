@@ -25,17 +25,6 @@ fn error_reason(message)
   substr(message, at + 3)
 end
 
-# "" is the working directory when no operand names it; its files get no "./"
-fn join(dir, name)
-  if dir == ""
-    return name
-  end
-  if string.ends_with(dir, "/")
-    return dir + name
-  end
-  "{dir}/{name}"
-end
-
 # like grep -r, follows no symlink it finds on the way, only the ones named on the command line
 fn walk_dir(dir, out)
   let listing = if dir == "" then "." else dir end
@@ -47,7 +36,7 @@ fn walk_dir(dir, out)
   let names = r.value
   sort(names)
   for name in names
-    let path = join(dir, name)
+    let path = path_join(dir, name)
     if fs_is_symlink(path)
       continue
     end

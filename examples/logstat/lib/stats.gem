@@ -41,10 +41,7 @@ end
 
 ## The `n` groups with the most `metric` (all of them for 0), ties by key.
 fn top(s, metric, n)
-  let rows = []
-  for key, g in s.groups
-    push(rows, g)
-  end
+  let rows = values(s.groups)
   sort(rows, fn(a, b)
     let d = b[metric] - a[metric]
     if d != 0

@@ -1,7 +1,9 @@
 ## Runs a seeded load through a fresh jobqueue system, waits for it to drain, checks the invariants.
 
+load "std/table"
 load "std/string"
 load "std/dynamic_supervisor"
+load "std/task"
 load "./jobqueue"
 load "./schedule"
 load "./invariants"
@@ -31,18 +33,14 @@ fn sample()
   let p = jobqueue.pids()
   let q = process_info(p.queue)
   let w = if p.workers != nil then process_info(p.workers) end
-  let out = {
+  {
     processes: len(processes()),
     queue_monitors: len(q.monitors),
     queue_links: len(q.links),
     queue_mailbox: q.mailbox_len,
-    workers_links: nil,
+    workers_links: if w != nil then len(w.links) end,
     rss: memory_kb().rss
   }
-  if w != nil
-    out.workers_links = len(w.links)
-  end
-  out
 end
 
 # kills up to `opts.storm` workers every `opts.storm_every_ms`, `opts.storm_bursts` times
@@ -51,12 +49,8 @@ fn storm(opts)
     sleep(opts.storm_every_ms)
     let r = pcall dynamic_supervisor.which_children("jobqueue_workers")
     if r.ok
-      let n = 0
-      for c in r.value
-        if n < opts.storm
-          kill(c.pid, "storm")
-          n += 1
-        end
+      for c in table.slice(r.value, 0, opts.storm)
+        kill(c.pid, "storm")
       end
     end
   end
@@ -131,10 +125,7 @@ fn percentile(xs, q)
 end
 
 fn latencies(done)
-  let out = []
-  for k, notes in done
-    push(out, notes[0].latency)
-  end
+  let out = table.map(values(done)) do |notes| notes[0].latency end
   sort(out, fn(a, b) a - b end)
   out
 end
@@ -149,16 +140,18 @@ fn run(opts)
   let storm_pid = if opts.storm > 0 then spawn_monitor(fn() storm(opts) end).pid end
   let t0 = time_ms()
   let collector = self()
-  spawn do
+  let submitter = task.async do
+    let rejected = []
     for id = 1, n + 1
       let r = jobqueue.submit(schedule.job(opts, id), collector)
       if not r.ok
-        send(collector, {tag: "rejected", error: r.error})
+        push(rejected, r.error)
       end
     end
+    rejected
   end
-  let rejected = []
   let c = collect(n, t0 + opts.timeout_ms)
+  let rejected = task.await(submitter, opts.timeout_ms)
   let wall = c.last_at - t0
   if storm_pid != nil
     receive
@@ -219,12 +212,8 @@ fn format(s)
     push(lines, "invariants    ok")
   else
     push(lines, "invariants    FAILED ({len(s.violations)})")
-    let shown = 0
-    for v in s.violations
-      if shown < 20
-        push(lines, "  {v}")
-        shown += 1
-      end
+    for v in table.slice(s.violations, 0, 20)
+      push(lines, "  {v}")
     end
   end
   string.join(lines, "\n")

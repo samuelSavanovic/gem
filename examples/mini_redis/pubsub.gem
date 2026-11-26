@@ -1,6 +1,7 @@
 ## The gen_server that keeps channel subscriptions and fans published messages out. A subscriber
 ## gets `{tag: "message", channel, payload}` for every message on a channel it's subscribed to.
 
+load "std/log"
 load "std/gen_server"
 
 let NAME = "mini_redis_pubsub"
@@ -81,13 +82,15 @@ let MODULE = {
       {reply: nil, state: s}
     end
   end,
-  handle_cast: fn(msg, s) {state: s} end,
+  handle_cast: fn(msg, s)
+    error("pubsub: unknown cast {msg}")
+  end,
   handle_info: fn(msg, s)
     match msg
     when {tag: "DOWN", pid: pid}
       forget(s, pid)
     else
-      nil
+      log.warn("pubsub: unexpected message {msg}")
     end
     {state: s}
   end

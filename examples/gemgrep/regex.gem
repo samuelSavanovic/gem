@@ -93,12 +93,8 @@ fn compile(pattern, {icase = false, word = false, line = false} = {})
   else
     pattern
   end
-  let group = 0
-  if line or word
-    group = 1
-    if not line
-      group = 2
-    end
+  let group = if line then 1 elif word then 2 else 0 end
+  if group > 0
     let shifted = shift_backrefs(pattern, group)
     if shifted == nil
       return {ok: false, error: "Invalid back reference"}

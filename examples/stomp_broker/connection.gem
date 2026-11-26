@@ -1,6 +1,7 @@
 ## One client connection: a reader process that parses frames, and a writer that runs the protocol
 ## and owns the socket's writes.
 
+load "std/log"
 load "std/gen_server"
 load "std/string"
 load "./frame"
@@ -97,7 +98,7 @@ fn writer_loop(conn)
     when {tag: "DOWN", pid: pid}
       if not resubscribe(conn, pid) then return nil end
     when other
-      nil
+      log.warn("connection: unexpected message {other}")
     end
   end
 end

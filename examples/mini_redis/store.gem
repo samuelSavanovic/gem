@@ -1,5 +1,6 @@
 ## The gen_server that owns the database; connections send it commands in batches and get encoded replies.
 
+load "std/log"
 load "std/gen_server"
 load "./keyspace"
 load "./resp"
@@ -24,11 +25,15 @@ let MODULE = {
     end
     {reply: out, state: db}
   end,
-  handle_cast: fn(msg, db) {state: db} end,
+  handle_cast: fn(msg, db)
+    error("store: unknown cast {msg}")
+  end,
   handle_info: fn(msg, db)
     if msg == "expire_tick"
       keyspace.expire_cycle(db, time_ms())
       send_after(self(), "expire_tick", EXPIRE_TICK_MS)
+    else
+      log.warn("store: unexpected message {msg}")
     end
     {state: db}
   end

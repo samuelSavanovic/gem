@@ -54,7 +54,8 @@ fn scan(source)
     elif has_key(WITH_EQUAL, ch)
       if i < n and ord(source, i) == 61
         i += 1
-        push(tokens, token(ch + "=", ch + "=", nil, line))
+        let op = "{ch}="
+        push(tokens, token(op, op, nil, line))
       else
         push(tokens, token(ch, ch, nil, line))
       end

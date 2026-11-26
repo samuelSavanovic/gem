@@ -3,6 +3,7 @@
 ## Events are tables with a `kind` (and `session`, the session's pid). One database file per week,
 ## `dir/honeypot-YYYY-MM-DD.db`, named after the week's Monday (UTC).
 
+load "std/log"
 load "std/sqlite"
 load "std/string"
 load "std/table"
@@ -131,7 +132,7 @@ fn prune(dir, keep, current = nil)
   for i = 0, len(weeks) - keep
     if weeks[i] != current
       for suffix in ["", "-wal", "-shm"]
-        remove_file(path_join(dir, weeks[i] + suffix))
+        remove_file(path_join(dir, "{weeks[i]}{suffix}"))
       end
     end
   end
@@ -381,7 +382,7 @@ fn loop(st)
       write_pending(st)
       return nil
     when other
-      nil
+      log.warn("recorder: unexpected message {substr(to_string(other), 0, 200)}")
     end
   end
 end

@@ -2,19 +2,17 @@
 ## outcome the one the schedule injected, the retry counts that follow, and the system back at its
 ## baseline once the load has drained.
 
+load "std/string"
 load "./schedule"
 
 ## "ok", "crash", "killed", "deadline", or for failures the schedule didn't inject: "storm" (a burst
 ## killed the worker), "shutdown" (its supervisor gave up), "noproc" (it died before the queue saw
 ## it start) or "other"
 fn classify(outcome)
-  if outcome == "ok" or outcome == "killed" or outcome == "deadline" or outcome == "storm" or outcome == "shutdown" or outcome == "noproc"
+  if outcome in ["ok", "killed", "deadline", "storm", "shutdown", "noproc"]
     return outcome
   end
-  if find(outcome, "jobqueue: injected crash", 0) == 0
-    return "crash"
-  end
-  "other"
+  if string.starts_with(outcome, "jobqueue: injected crash") then "crash" else "other" end
 end
 
 let EXTERNAL = {storm: true, shutdown: true, noproc: true}

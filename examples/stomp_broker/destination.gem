@@ -7,17 +7,13 @@
 ##
 ## `conn_pid` is a connection's writer; it gets `{tag: "deliver", frame}`.
 
+load "std/table"
+load "std/log"
 load "std/gen_server"
 
 fn remove_subs(state, keep)
-  let kept = []
-  for s in state.subs
-    if keep(s)
-      push(kept, s)
-    end
-  end
-  state.subs = kept
-  if state.next >= len(kept)
+  state.subs = table.filter(state.subs, keep)
+  if state.next >= len(state.subs)
     state.next = 0
   end
 end
@@ -85,7 +81,7 @@ fn server(name, kind)
       when {tag: "DOWN", pid: dead}
         remove_subs(state, fn(s) s.conn_pid != dead end)
       else
-        nil
+        log.warn("destination: unexpected message {msg}")
       end
       {state: state}
     end

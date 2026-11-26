@@ -3,6 +3,7 @@
 ## Event kinds: `login` (user, password, ok), `command` (line), `url` (url, via) and `echo` (the
 ## bytes an `echo -e` decoded).
 
+load "std/table"
 load "std/string"
 load "./device"
 
@@ -98,11 +99,11 @@ fn password_line(sh, text, events)
       sh.closed = "max_logins"
       return "\nLogin incorrect\n"
     end
-    return "\nLogin incorrect\n" + login_prompt()
+    return "\nLogin incorrect\n{login_prompt()}"
   end
   sh.stage = "shell"
   sh.logged_in = true
-  "\n" + device.MOTD + device.PROMPT
+  "\n{device.MOTD}{device.PROMPT}"
 end
 
 # FNV-1a of user and password mapped to [0, 1)
@@ -610,11 +611,7 @@ fn applet_echo(sh, args, events)
     escapes = escapes or find(args[k], "e", 0) >= 0
     k += 1
   end
-  let words = []
-  for w = k, len(args)
-    push(words, args[w])
-  end
-  let text = string.join(words, " ")
+  let text = string.join(table.slice(args, k), " ")
   if escapes
     text = decode_escapes(text)
     push(events, {kind: "echo", bytes: text})
@@ -744,7 +741,7 @@ end
 fn applet_hostname(sh, args, events)
   let name = first_operand(args, {})
   if name == nil
-    return result(sh.hostname + "\n")
+    return result("{sh.hostname}\n")
   end
   sh.hostname = name
   result("")

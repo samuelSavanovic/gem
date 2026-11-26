@@ -40,6 +40,7 @@ fn text(data, rx, opts, name)
   let count = 0
   let lineno = 0
   let pos = 0
+  let base = if name != nil then "{name}:" else "" end
   let out = build_string do |add|
     while pos < size
       let stop = find(data, "\n", pos)
@@ -53,10 +54,7 @@ fn text(data, rx, opts, name)
           return nil
         end
         if printing
-          let prefix = if name != nil then name + ":" else "" end
-          if opts.number
-            prefix = "{prefix}{lineno}:"
-          end
+          let prefix = if opts.number then "{base}{lineno}:" else base end
           emit(add, data, rx, opts, prefix, pos, stop)
         end
       end

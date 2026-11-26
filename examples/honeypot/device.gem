@@ -1,6 +1,8 @@
 ## Canned output of the fake device, a cheap ARMv7 IoT box on BusyBox. Line ends are "\n"; the
 ## session turns them into CR LF.
 
+load "std/hex"
+
 let HOSTNAME = "localhost"
 
 let BANNER = "\n"
@@ -59,20 +61,8 @@ nobody:x:65534:65534:nobody:/nonexistent:/bin/false
 
 """
 
-let HEX_DIGITS = "0123456789abcdef"
-
-fn unhex(hex)
-  let out = buf_new()
-  let i = 0
-  while i < len(hex)
-    if hex[i] == " " or hex[i] == "\n"
-      i += 1
-    else
-      buf_push(out, chr(find(HEX_DIGITS, hex[i], 0) * 16 + find(HEX_DIGITS, hex[i + 1], 0)))
-      i += 2
-    end
-  end
-  to_string(out)
+fn unhex(text)
+  hex.decode(str_replace(str_replace(text, " ", ""), "\n", ""))
 end
 
 # start of a fake busybox: ELF and program headers of a 32-bit LE ARM (EABI5) binary. No "\n" (the

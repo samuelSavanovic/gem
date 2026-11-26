@@ -1,5 +1,7 @@
 ## A set of strings with O(1) add, remove, membership and random pick. Backs Redis sets and expiry.
 
+load "std/table"
+
 # `items` holds the members and `pos` maps each to its index; removing moves the last into the hole
 
 fn new()
@@ -48,11 +50,7 @@ end
 
 ## A copy the caller may keep, in no particular order.
 fn members(s)
-  let out = []
-  for m in s.items
-    push(out, m)
-  end
-  out
+  table.copy(s.items)
 end
 
 export new, size, has, add, remove, pick, members

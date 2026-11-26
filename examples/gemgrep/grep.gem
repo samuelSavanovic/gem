@@ -2,6 +2,7 @@
 ## `out` gets stdout text a file's lines at a time; `err` one message at a time, without its newline.
 ## Returns grep's exit status: 0 when a line was selected, 1 when none was, 2 after an error.
 
+load "std/table"
 load "std/task"
 load "./regex"
 load "./search"
@@ -12,10 +13,7 @@ let BATCH = 32
 let WORKERS = 4
 
 fn compile(opts)
-  let pattern = opts.pattern
-  if opts.fixed
-    pattern = regex.quote(pattern)
-  end
+  let pattern = if opts.fixed then regex.quote(opts.pattern) else opts.pattern end
   regex.compile(pattern, {icase: opts.icase, word: opts.word, line: opts.line})
 end
 
@@ -46,11 +44,7 @@ fn search_file(entry, rx, opts, with_filename)
 end
 
 fn search_files(entries, rx, opts, with_filename)
-  let results = []
-  for entry in entries
-    push(results, search_file(entry, rx, opts, with_filename))
-  end
-  results
+  table.map(entries) do |entry| search_file(entry, rx, opts, with_filename) end
 end
 
 # the regex is compiled again in the task: a handle belongs to the process that made it, and it's
@@ -71,18 +65,10 @@ fn batches(entries)
   let out = []
   let i = 0
   while i < len(entries)
-    let batch = []
-    for j = i, min(i + BATCH, len(entries))
-      push(batch, entries[j])
-    end
-    push(out, batch)
+    push(out, table.slice(entries, i, BATCH))
     i += BATCH
   end
   out
-end
-
-fn min(a, b)
-  if a < b then a else b end
 end
 
 # returns whether it selected a line

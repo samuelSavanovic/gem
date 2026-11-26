@@ -1,6 +1,7 @@
 # lexer, parser and resolver on their own, then whole programs, error cases included, and the bench
 # programs at small sizes against bench/*.expected
 
+load "std/table"
 load "std/string"
 load "std/test"
 load "./lexer"
@@ -28,11 +29,7 @@ fn output(source)
 end
 
 fn types(tokens)
-  let ts = []
-  for t in tokens
-    push(ts, t.type)
-  end
-  ts
+  table.map(tokens) do |t| t.type end
 end
 
 # lexer

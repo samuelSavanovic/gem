@@ -1,5 +1,6 @@
 ## Finds or starts the destination process for a name; `/queue/...` names are queues, all others topics.
 
+load "std/log"
 load "std/gen_server"
 load "std/dynamic_supervisor"
 load "std/string"
@@ -11,10 +12,7 @@ let DESTINATIONS = "stomp_destinations"
 let NAME = "stomp_registry"
 
 fn kind_of(name)
-  if string.starts_with(name, "/queue/")
-    return "queue"
-  end
-  "topic"
+  if string.starts_with(name, "/queue/") then "queue" else "topic" end
 end
 
 fn remember(state, name, pid)
@@ -71,7 +69,7 @@ let SERVER = {
         delete(state.by_name, name)
       end
     else
-      nil
+      log.warn("registry: unexpected message {msg}")
     end
     {state: state}
   end

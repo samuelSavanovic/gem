@@ -2,6 +2,7 @@
 ## `status` is jlox's exit status: 0, 65 for a syntax or resolution error (nothing runs), 70 for a
 ## runtime error. `errors` holds the messages in the order jlox prints them.
 
+load "std/table"
 load "./lexer"
 load "./parser"
 load "./resolver"
@@ -11,10 +12,7 @@ load "./interp"
 fn run(source, opts = {})
   let scanned = lexer.scan(source)
   let parsed = parser.parse(scanned.tokens)
-  let errors = scanned.errors
-  for e in parsed.errors
-    push(errors, e)
-  end
+  let errors = table.concat(scanned.errors, parsed.errors)
   if len(errors) > 0
     return {status: 65, errors: errors}
   end

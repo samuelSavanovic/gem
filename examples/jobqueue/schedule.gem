@@ -25,10 +25,7 @@ end
 ## Job `id` of the workload `opts` (`seed`, `retries`, `deadline_ms`, 0 meaning none) as
 ## `{id, kind, payload, max_retries, deadline_ms}`.
 fn job(opts, id)
-  let deadline = opts.deadline_ms
-  if deadline == 0
-    deadline = nil
-  end
+  let deadline = if opts.deadline_ms != 0 then opts.deadline_ms end
   {
     id: id,
     kind: KINDS[hash(opts.seed, id, 1) % 10],

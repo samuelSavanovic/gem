@@ -1,6 +1,8 @@
 ## The gen_server that owns the jobs: hands them to pool workers, kills a worker whose job outlives its
 ## deadline, retries a failed job with exponential backoff, and dead-letters one out of retries.
 
+load "std/table"
+load "std/log"
 load "std/gen_server"
 load "std/dynamic_supervisor"
 load "./fifo"
@@ -161,13 +163,12 @@ fn on_deadline(s, pid, ref)
 end
 
 fn remove_idle(s, pid)
-  for i, p in s.idle
-    if p == pid
-      remove_at(s.idle, i)
-      return true
-    end
+  let i = table.index_of(s.idle, pid)
+  if i < 0
+    return false
   end
-  false
+  remove_at(s.idle, i)
+  true
 end
 
 fn on_down(s, pid, reason)
@@ -251,10 +252,7 @@ fn status_of(rec)
 end
 
 fn stats_of(s)
-  let st = {}
-  for k, v in s.stats
-    st[k] = v
-  end
+  let st = table.copy(s.stats)
   st.pending = fifo.size(s.pending)
   st.busy = len(s.busy)
   st.idle = len(s.idle)
@@ -281,17 +279,9 @@ fn handle_call(msg, from, s)
   when {tag: "stats"}
     {reply: stats_of(s), state: s}
   when {tag: "dead_letters"}
-    let out = []
-    for id in s.dead
-      push(out, status_of(s.jobs["{id}"]))
-    end
-    {reply: out, state: s}
+    {reply: table.map(s.dead) do |id| status_of(s.jobs["{id}"]) end, state: s}
   when {tag: "report"}
-    let out = []
-    for k, rec in s.jobs
-      push(out, status_of(rec))
-    end
-    {reply: out, state: s}
+    {reply: table.map(values(s.jobs), status_of), state: s}
   else
     {reply: nil, state: s}
   end
@@ -306,7 +296,7 @@ fn handle_cast(msg, s)
   when {tag: "done", pid: pid, ref: ref, result: result}
     on_done(s, pid, ref, result)
   else
-    nil
+    error("queue: unknown cast {msg}")
   end
   {state: s}
 end
@@ -325,7 +315,7 @@ fn handle_info(msg, s)
     find_sup(s)
     dispatch(s)
   else
-    nil
+    log.warn("queue: unexpected message {msg}")
   end
   {state: s}
 end

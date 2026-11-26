@@ -1,6 +1,8 @@
 ## One client connection: reads commands, runs them, writes replies, and delivers pub/sub messages
 ## once the client subscribes.
 
+load "std/table"
+load "std/log"
 load "std/string"
 load "./resp"
 load "./keyspace"
@@ -81,15 +83,9 @@ fn cmd_subscribe(conn, args)
 end
 
 fn cmd_unsubscribe(conn, args)
-  let channels = []
-  for i = 1, len(args)
-    push(channels, args[i])
-  end
-  if len(args) == 1
-    channels = keys(conn.channels)
-    if len(channels) == 0
-      return emit(conn, ["unsubscribe", nil, 0])
-    end
+  let channels = if len(args) == 1 then keys(conn.channels) else table.slice(args, 1) end
+  if len(channels) == 0
+    return emit(conn, ["unsubscribe", nil, 0])
   end
   for channel in channels
     if has_key(conn.channels, channel)
@@ -275,7 +271,7 @@ fn next_chunk(conn)
     when {tag: "message", channel: channel, payload: payload}
       if not deliver(conn, channel, payload) then return nil end
     when other
-      nil
+      log.warn("connection: unexpected message {other}")
     end
   end
 end

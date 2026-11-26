@@ -1,6 +1,7 @@
 ## A pool worker: announces itself, runs the jobs the queue sends, retires after idling. Faults from
 ## the schedule are injected into each run.
 
+load "std/log"
 load "std/gen_server"
 load "./schedule"
 
@@ -59,7 +60,7 @@ fn serve(config)
       let result = run_job(job)
       gen_server.cast(queue, {tag: "done", pid: self(), ref: ref, result: result})
     when other
-      nil
+      log.warn("worker: unexpected message {other}")
     after config.idle_ms
       # the queue says no when it has just sent this worker a job
       running = not gen_server.call(queue, {tag: "retire", pid: self()})
