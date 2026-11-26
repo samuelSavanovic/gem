@@ -28,9 +28,7 @@ The directory has a `gem.toml`, which makes it a project root, so modules load b
 
 | File | What it holds |
 |---|---|
-| `main.gem` | the command: reads each input, prints the report |
-| `lib/args.gem` | command-line parsing and the usage text |
-| `lib/source.gem` | the lines of a file or of stdin |
+| `main.gem` | the command line (`std/args`), reads each input with `std/io`, prints the report |
 | `lib/clf.gem` | parses one log line |
 | `lib/stats.gem` | per-group counts and the top N |
 | `lib/report.gem` | the text table and the JSON |
@@ -43,8 +41,8 @@ The directory has a `gem.toml`, which makes it a project root, so modules load b
 
 | | time | peak RSS |
 |---|---|---|
-| logstat, stdin | 1.62 s | 4 MB |
-| logstat, file | 1.69 s | 240 MB |
-| Python | 2.06 s | 22 MB |
+| logstat, stdin | 1.77 s | 4 MB |
+| logstat, file | 2.05 s | 6 MB |
+| Python | 2.26 s | 22 MB |
 
-A file is read whole with `read_file`, so memory grows with the file. Stdin is read a line at a time.
+Files and stdin are both read a line at a time, so memory stays flat.

@@ -15,7 +15,7 @@ build/gem examples/honeypot/test.gem                     # the tests (part of ma
 telnet 127.0.0.1 2323        # or nc 127.0.0.1 2323, which skips negotiation as most bots do
 ```
 
-Each limit under [Limits](#limits) that has a flag takes a positive int: `--max-sessions`, `--max-per-ip`, `--max-session-ms`, `--max-bytes`, `--max-logins`, `--max-commands`, `--max-backlog` and `--idle-ms`. There are also `--accept-on` (which login attempt succeeds), `--metrics-ms` (how often metrics are sampled), `--keep-weeks`, and `--commit ID`, which is stored in each metrics row to name the build.
+Each limit under [Limits](#limits) that has a flag takes a positive int: `--max-sessions`, `--max-per-ip`, `--max-session-ms`, `--max-bytes`, `--max-logins`, `--max-commands`, `--max-backlog` and `--idle-ms`. There are also `--accept-on` (which login attempt succeeds), `--metrics-ms` (how often metrics are sampled), `--keep-weeks`, and `--commit ID`, which is stored in each metrics row to name the build. `--help` lists every flag.
 
 ## Data
 

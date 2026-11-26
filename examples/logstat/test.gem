@@ -3,10 +3,8 @@
 load "std/json"
 load "std/string"
 load "std/test"
-load "lib/args"
 load "lib/clf"
 load "lib/report"
-load "lib/source"
 load "lib/stats"
 
 let LINE = '203.0.113.9 - ann [04/Oct/2026:13:55:36 +0000] "GET /a?x=1 HTTP/1.1" 404 512'
@@ -91,31 +89,6 @@ test.case("report: text and JSON") do
   test.assert_eq([j.requests, j.errors, j.by, j.distinct], [3, 1, "status", 2])
   test.assert_eq(j.rows[1], {key: "503", requests: 1, bytes: 0, errors: 1})
   test.assert(string.contains(report.text(stats.new("ip"), [], "bytes"), "errors 0 (0.0%)"))
-end
-
-test.case("args") do
-  test.assert_eq(args.parse([]).value.files, [])
-  let o = args.parse(["--by=ip", "--sort", "bytes", "--top", "0", "--json", "a.log", "-"]).value
-  test.assert_eq([o.by, o.sort, o.top, o.json, o.files], ["ip", "bytes", 0, true, ["a.log", "-"]])
-  test.assert(args.parse(["-h"]).value.help)
-  test.assert_eq(args.parse(["--by", "agent"]).error, "can't group by agent: use ip, user, method, path, status, hour")
-  test.assert_eq(args.parse(["--sort"]).error, "--sort needs a value")
-  test.assert_eq(args.parse(["--top", "-1"]).error, "--top needs a count, got -1")
-  test.assert_eq(args.parse(["--top", "x"]).error, "--top needs a count, got x")
-  test.assert_eq(args.parse(["-x"]).error, "unknown option -x")
-  test.assert_eq(args.parse(["--json=1"]).error, "unknown option --json=1")
-end
-
-test.case("source: lines of a file") do
-  let path = "/tmp/gem_logstat_test_{epoch_ms()}.log"
-  write_file(path, "a\r\nb\n\nc")
-  let seen = []
-  source.each_line(path) do |line, n|
-    push(seen, "{n}:{line}")
-  end
-  remove_file(path)
-  test.assert_eq(seen, ["1:a", "2:b", "3:", "4:c"])
-  test.assert_throws(fn() source.each_line(path, fn(line, n) nil end) end)
 end
 
 test.run()

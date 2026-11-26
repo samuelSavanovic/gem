@@ -1,42 +1,44 @@
 # logstat: summarizes web server access logs. `logstat --help` for usage.
 
-load "std/table"
-load "lib/args"
+load "std/args"
+load "std/io"
 load "lib/clf"
 load "lib/report"
-load "lib/source"
 load "lib/stats"
 
 let MAX_REPORTED = 5
 
+let SPEC = {
+  name: "logstat",
+  usage: "[options] [file ...]",
+  about: "Summarizes access logs (Common or Combined Log Format). Reads stdin when no file is given, or for a file named -.",
+  options: {
+    by: {default: "path", choices: stats.FIELDS, value: "FIELD", help: "group by"},
+    sort: {default: "requests", choices: stats.METRICS, value: "METRIC", help: "order groups by"},
+    top: {default: 10, value: "N", help: "show the first N groups, 0 for all"},
+    json: {type: "flag", help: "print JSON instead of a table"},
+    quiet: {type: "flag", help: "don't report malformed lines on stderr"}
+  }
+}
+
 fn display_name(name)
-  if name == "-"
-    return "stdin"
-  end
-  name
+  if name == "-" then "stdin" else name end
 end
 
 fn main()
-  let parsed = args.parse(table.slice(argv(), 1))
-  if not parsed.ok
-    eprint("logstat: {parsed.error}")
-    eprint("try 'logstat --help'")
+  let opts = args.parse(SPEC)
+  if opts.top < 0
+    eprint("logstat: --top must be 0 or more, got {opts.top}")
     exit(2)
-  end
-  let opts = parsed.value
-  if opts.help
-    print(args.USAGE)
-    return nil
   end
 
   let s = stats.new(opts.by)
-  let files = opts.files
-  if len(files) == 0
-    files = ["-"]
-  end
+  let files = if len(opts.args) == 0 then ["-"] else opts.args end
   for name in files
+    let n = 0
     let r = pcall do
-      source.each_line(name) do |line, n|
+      io.lines(name) do |line|
+        n += 1
         let req = clf.parse(line)
         if req == nil
           stats.malformed(s)

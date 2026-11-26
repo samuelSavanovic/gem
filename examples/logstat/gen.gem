@@ -4,7 +4,7 @@
 #
 # the same count and seed always give the same log; about one line in 20,000 is malformed on purpose
 
-load "std/table"
+load "std/args"
 
 let PATHS = ["/", "/login", "/logout", "/search", "/static/app.js", "/static/app.css",
   "/favicon.ico", "/api/items", "/api/orders", "/api/users/me", "/healthz"]
@@ -48,13 +48,9 @@ fn line_for(rng, i, stamp)
 end
 
 fn main()
-  let args = table.slice(argv(), 1)
-  if len(args) < 1
-    eprint("usage: gen N [seed]")
-    exit(2)
-  end
-  let count = to_int(args[0])
-  let rng = if len(args) > 1 then to_int(args[1]) else 42 end
+  let pos = args.parse({name: "gen", usage: "LINES [SEED]", min_args: 1, max_args: 2}).args
+  let count = to_int(pos[0])
+  let rng = if len(pos) > 1 then to_int(pos[1]) else 42 end
 
   let second = -1
   let stamp = ""

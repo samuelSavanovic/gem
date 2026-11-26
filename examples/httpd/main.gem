@@ -1,56 +1,47 @@
-# a small public website on std/http that records everything its clients do. Defaults: port 8080 on
-# 127.0.0.1, files from static/, data in httpd_data/.
+# a small public website on std/http that records everything its clients do; `httpd --help` for the options
 
-load "std/string"
+load "std/args"
 load "./server"
 
-let INT_FLAGS = {
-  "--port": "port", "--keep-weeks": "keep_weeks", "--max-connections": "max_connections",
-  "--max-per-ip": "max_per_ip", "--max-body": "max_body", "--idle-ms": "idle_ms",
-  "--request-ms": "request_ms", "--write-ms": "write_ms", "--max-backlog": "max_backlog",
-  "--metrics-ms": "metrics_ms"
+let SPEC = {
+  name: "httpd",
+  max_args: 0,
+  options: {
+    port: {default: 8080, help: "port to listen on"},
+    bind: {default: "127.0.0.1", value: "ADDRESS", help: "address to listen on"},
+    static: {default: "static", value: "DIR", help: "the files under /static/"},
+    data: {value: "DIR", help: "where the weekly databases go (default: httpd_data)"},
+    keep_weeks: {type: "int", value: "N", help: "weeks of databases to keep"},
+    log: {type: "flag", help: "also print each event on stdout"},
+    commit: {value: "ID", help: "names the build in each metrics row"},
+    max_connections: {type: "int", value: "N", help: "connections at once"},
+    max_per_ip: {type: "int", value: "N", help: "connections per client address"},
+    max_body: {type: "int", value: "BYTES", help: "largest request body"},
+    idle_ms: {type: "int", value: "MS", help: "an idle connection is closed after this"},
+    request_ms: {type: "int", value: "MS", help: "longest time to read a request"},
+    write_ms: {type: "int", value: "MS", help: "a client that doesn't read is dropped after this"},
+    max_backlog: {type: "int", value: "N", help: "messages the recorder holds before it drops events"},
+    metrics_ms: {type: "int", value: "MS", help: "how often metrics are sampled"}
+  }
 }
 
-let STRING_FLAGS = {"--bind": "host", "--static": "static", "--data": "data", "--commit": "commit"}
-
-fn usage()
-  eprint("usage: httpd [--bind ADDRESS] [--static DIR] [--data DIR] [--log] [--commit ID]")
-  eprint("             [{string.join(sort(keys(INT_FLAGS)), " N] [")} N]")
-  exit(2)
-end
-
-fn int_arg(value)
-  let r = pcall to_int(value)
-  if not r.ok or r.value < 1 then usage() end
-  r.value
-end
-
 fn main()
-  let args = argv()
-  let opts = {host: "127.0.0.1", port: 8080, static: "static"}
-  let i = 1
-  while i < len(args)
-    if args[i] == "--log"
-      opts.log = true
-      i += 1
+  let opts = args.parse(SPEC)
+  let cfg = {host: opts.bind}
+  for name, v in opts
+    if v == nil or name == "args" or name == "bind"
       continue
     end
-    if i + 1 >= len(args)
-      usage()
+    if type(v) == "int" and v < 1
+      eprint("httpd: --{str_replace(name, "_", "-")} must be 1 or more, got {v}")
+      exit(2)
     end
-    if has_key(INT_FLAGS, args[i])
-      opts[INT_FLAGS[args[i]]] = int_arg(args[i + 1])
-    elif has_key(STRING_FLAGS, args[i])
-      opts[STRING_FLAGS[args[i]]] = args[i + 1]
-    else
-      usage()
-    end
-    i += 2
+    cfg[name] = v
   end
-  if not is_dir(opts.static)
-    eprint("httpd: {opts.static} is not a directory (--static DIR)")
+  if not is_dir(cfg.static)
+    eprint("httpd: {cfg.static} is not a directory (--static DIR)")
     exit(2)
   end
-  server.start(opts)
-  eprint("httpd listening on {opts.host}:{opts.port}")
+  server.start(cfg)
+  eprint("httpd listening on {cfg.host}:{cfg.port}")
 end

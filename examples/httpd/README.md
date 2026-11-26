@@ -12,7 +12,7 @@ cd examples/httpd
 ../../build/gem test.gem                     # the tests (part of make test)
 ```
 
-These flags take a positive int: `--max-connections` (default 1,000), `--max-per-ip` (32), `--max-body` (65,536 bytes), `--idle-ms`, `--request-ms` and `--write-ms` (10,000 each), `--max-backlog` (the recorder's, 10,000), `--port`, `--metrics-ms` (how often metrics are sampled) and `--keep-weeks`. `--commit ID` is stored in each metrics row to name the build.
+These flags take a positive int: `--max-connections` (default 1,000), `--max-per-ip` (32), `--max-body` (65,536 bytes), `--idle-ms`, `--request-ms` and `--write-ms` (10,000 each), `--max-backlog` (the recorder's, 10,000), `--port`, `--metrics-ms` (how often metrics are sampled) and `--keep-weeks`. `--commit ID` is stored in each metrics row to name the build. `--help` lists every flag.
 
 | Path | What it serves |
 |---|---|

@@ -129,13 +129,14 @@ test.case("options") do
   let r = options.parse(["--jobs", "50", "--workers", "3", "--crash", "0.25", "--deadline", "0", "--storm", "2"])
   test.assert(r.ok)
   test.assert_eq([r.value.jobs, r.value.pool, r.value.crash, r.value.deadline_ms, r.value.storm], [50, 3, 0.25, 0, 2])
-  test.assert_eq(options.parse(["--jobs", "x"]).error, "--jobs expects an int >= 0, got \"x\"")
-  test.assert_eq(options.parse(["--workers", "0"]).error, "--workers expects an int >= 1, got \"0\"")
-  test.assert_eq(options.parse(["--crash", "1.5"]).error, "--crash expects a probability from 0 to 1, got \"1.5\"")
+  test.assert_eq(options.parse(["--jobs", "x"]).error, "--jobs expects an integer, got 'x'")
+  test.assert_eq(options.parse(["--workers", "0"]).error, "--workers must be 1 or more, got 0")
+  test.assert_eq(options.parse(["--jobs", "-1"]).error, "--jobs must be 0 or more, got -1")
+  test.assert_eq(options.parse(["--crash", "1.5"]).error, "--crash expects a probability from 0 to 1, got 1.5")
   test.assert_eq(options.parse(["--jobs"]).error, "--jobs needs a value")
   test.assert_eq(options.parse(["--crash", "0.6", "--hang", "0.6"]).error, "--crash, --hang, --slow and --kill add up to more than 1")
-  test.assert(find(options.parse(["--nope", "1"]).error, "unknown option --nope", 0) == 0)
-  test.assert(not options.parse(["--help"]).ok)
+  test.assert_eq(options.parse(["--nope", "1"]).error, "unknown option '--nope'")
+  test.assert(options.parse(["--help"]).value.help != nil)
 end
 
 test.case("percentiles") do

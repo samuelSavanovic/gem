@@ -1,6 +1,4 @@
-# a job queue with a supervised worker pool under seeded fault injection
-#
-#   jobqueue [--jobs N] [--workers W] [--crash P] [--hang P] [--slow P] [--seed S] ...
+# a job queue with a supervised worker pool under seeded fault injection; `jobqueue --help` for the options
 
 load "std/table"
 load "./options"
@@ -9,8 +7,13 @@ load "./driver"
 fn main()
   let parsed = options.parse(table.slice(argv(), 1))
   if not parsed.ok
-    eprint(parsed.error)
+    eprint("jobqueue: {parsed.error}")
+    eprint("try 'jobqueue --help'")
     exit(2)
+  end
+  if parsed.value.help != nil
+    write_stdout(parsed.value.help)
+    return nil
   end
   let summary = driver.run(parsed.value)
   print(driver.format(summary))

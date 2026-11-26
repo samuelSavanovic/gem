@@ -1,94 +1,78 @@
-## jobqueue's command line: `{ok: true, value: opts}` or `{ok: false, error: msg}`.
+## jobqueue's command line: `{ok: true, value: opts}`, `{ok: true, value: {help: text}}` or `{ok: false, error: msg}`.
 
-let USAGE = """
-usage: jobqueue [options]
-  --jobs N             jobs to run (10000)
-  --workers W          most workers at once (16)
-  --seed S             seed of the workload and the fault schedule (1)
-  --crash P            chance an attempt raises (0)
-  --hang P             chance an attempt never finishes (0)
-  --slow P             chance an attempt first sleeps --slow-ms (0)
-  --kill P             chance an attempt kills its worker (0)
-  --slow-ms MS         how long a slow attempt sleeps (20)
-  --retries R          retries per job before it is dead-lettered (3)
-  --deadline MS        per-attempt deadline, 0 for none (100)
-  --backoff MS         first retry delay, doubled per retry (10)
-  --backoff-max MS     longest retry delay (1000)
-  --idle MS            a worker idle that long exits (200)
-  --max-restarts N     worker restarts allowed per --restart-window (1000)
-  --restart-window MS  (1000)
-  --storm N            kill N workers per burst (0: no storm)
-  --storm-every MS     time between bursts (100)
-  --storm-bursts K     bursts (10)
-  --timeout MS         give up on the run after MS (120000)
-"""
+load "std/args"
 
-# flag -> [key, least value]
-let INTS = {
-  "--jobs": ["jobs", 0], "--workers": ["pool", 1], "--seed": ["seed", 0],
-  "--slow-ms": ["slow_ms", 0], "--retries": ["retries", 0], "--deadline": ["deadline_ms", 0],
-  "--backoff": ["backoff_ms", 1], "--backoff-max": ["backoff_max_ms", 1], "--idle": ["idle_ms", 1],
-  "--max-restarts": ["max_restarts", 0], "--restart-window": ["restart_window_ms", 1],
-  "--storm": ["storm", 0], "--storm-every": ["storm_every_ms", 1], "--storm-bursts": ["storm_bursts", 0],
-  "--timeout": ["timeout_ms", 1]
-}
-let FLOATS = {"--crash": "crash", "--hang": "hang", "--slow": "slow", "--kill": "kill"}
-
-fn defaults()
-  {
-    jobs: 10000, pool: 16, seed: 1, crash: 0.0, hang: 0.0, slow: 0.0, kill: 0.0,
-    slow_ms: 20, retries: 3, deadline_ms: 100, backoff_ms: 10, backoff_max_ms: 1000,
-    idle_ms: 200, max_restarts: 1000, restart_window_ms: 1000,
-    storm: 0, storm_every_ms: 100, storm_bursts: 10, timeout_ms: 120000
+let SPEC = {
+  name: "jobqueue",
+  about: "Runs a job queue on a supervised worker pool under seeded fault injection.",
+  max_args: 0,
+  options: {
+    jobs: {default: 10000, value: "N", help: "jobs to run"},
+    workers: {default: 16, value: "W", help: "most workers at once"},
+    seed: {default: 1, value: "S", help: "seed of the workload and the fault schedule"},
+    crash: {default: 0.0, value: "P", help: "chance an attempt raises"},
+    hang: {default: 0.0, value: "P", help: "chance an attempt never finishes"},
+    slow: {default: 0.0, value: "P", help: "chance an attempt first sleeps --slow-ms"},
+    kill: {default: 0.0, value: "P", help: "chance an attempt kills its worker"},
+    slow_ms: {default: 20, value: "MS", help: "how long a slow attempt sleeps"},
+    retries: {default: 3, value: "R", help: "retries per job before it is dead-lettered"},
+    deadline: {default: 100, value: "MS", help: "per-attempt deadline, 0 for none"},
+    backoff: {default: 10, value: "MS", help: "first retry delay, doubled per retry"},
+    backoff_max: {default: 1000, value: "MS", help: "longest retry delay"},
+    idle: {default: 200, value: "MS", help: "a worker idle that long exits"},
+    max_restarts: {default: 1000, value: "N", help: "worker restarts allowed per --restart-window"},
+    restart_window: {default: 1000, value: "MS", help: "the window --max-restarts counts in"},
+    storm: {default: 0, value: "N", help: "kill N workers per burst, 0 for no storm"},
+    storm_every: {default: 100, value: "MS", help: "time between bursts"},
+    storm_bursts: {default: 10, value: "K", help: "bursts"},
+    timeout: {default: 120000, value: "MS", help: "give up on the run after MS"}
   }
-end
+}
+
+# option -> its key in opts, where the two differ
+let KEYS = {
+  workers: "pool", deadline: "deadline_ms", backoff: "backoff_ms", backoff_max: "backoff_max_ms",
+  idle: "idle_ms", restart_window: "restart_window_ms", storm_every: "storm_every_ms",
+  timeout: "timeout_ms"
+}
+let AT_LEAST_ONE = ["workers", "backoff", "backoff_max", "idle", "restart_window", "storm_every", "timeout"]
+let CHANCES = ["crash", "hang", "slow", "kill"]
 
 fn fail(msg)
   {ok: false, error: msg}
 end
 
-fn parse_value(opts, flag, text)
-  if has_key(INTS, flag)
-    let spec = INTS[flag]
-    let r = pcall to_int(text)
-    if not r.ok or r.value < spec[1]
-      return "{flag} expects an int >= {spec[1]}, got \"{text}\""
-    end
-    opts[spec[0]] = r.value
-    return nil
+fn parse(list)
+  let r = args.try_parse(SPEC, list)
+  if not r.ok
+    return r
   end
-  let r = pcall to_float(text)
-  if not r.ok or r.value < 0.0 or r.value > 1.0
-    return "{flag} expects a probability from 0 to 1, got \"{text}\""
+  let raw = r.value
+  if raw.help != nil
+    return {ok: true, value: {help: raw.help}}
   end
-  opts[FLOATS[flag]] = r.value
-  nil
-end
-
-fn parse(args)
-  let opts = defaults()
-  let i = 0
-  while i < len(args)
-    let flag = args[i]
-    if flag == "--help" or flag == "-h"
-      return fail(USAGE)
+  let opts = {}
+  for name, _ in SPEC.options
+    let v = raw[name]
+    let flag = "--{str_replace(name, "_", "-")}"
+    let least = if name in AT_LEAST_ONE then 1 else 0 end
+    if name in CHANCES
+      if v > 1.0 or v < 0.0
+        return fail("{flag} expects a probability from 0 to 1, got {v}")
+      end
+    elif v < least
+      return fail("{flag} must be {least} or more, got {v}")
     end
-    if not has_key(INTS, flag) and not has_key(FLOATS, flag)
-      return fail("unknown option {flag}\n{USAGE}")
-    end
-    if i + 1 >= len(args)
-      return fail("{flag} needs a value")
-    end
-    let problem = parse_value(opts, flag, args[i + 1])
-    if problem != nil
-      return fail(problem)
-    end
-    i += 2
+    opts[if has_key(KEYS, name) then KEYS[name] else name end] = v
   end
   if opts.crash + opts.hang + opts.slow + opts.kill > 1.0
     return fail("--crash, --hang, --slow and --kill add up to more than 1")
   end
   {ok: true, value: opts}
+end
+
+fn defaults()
+  parse([]).value
 end
 
 export parse, defaults

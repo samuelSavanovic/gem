@@ -1,60 +1,45 @@
-# telnet honeypot: a fake BusyBox device that records what clients try. Defaults: port 2323 on
-# 127.0.0.1, data in honeypot_data/.
+# telnet honeypot: a fake BusyBox device that records what clients try; `honeypot --help` for the options
 
-load "std/string"
+load "std/args"
 load "./server"
 
-let INT_FLAGS = {
-  "--keep-weeks": "keep_weeks", "--max-sessions": "max_sessions", "--max-per-ip": "max_per_ip",
-  "--max-session-ms": "max_session_ms", "--max-bytes": "max_bytes", "--max-logins": "max_logins",
-  "--max-commands": "max_commands", "--max-backlog": "max_backlog", "--idle-ms": "idle_ms",
-  "--accept-on": "accept_on", "--metrics-ms": "metrics_ms"
+let SPEC = {
+  name: "honeypot",
+  max_args: 0,
+  options: {
+    port: {default: 2323, help: "port to listen on"},
+    bind: {default: "127.0.0.1", value: "ADDRESS", help: "address to listen on"},
+    data: {value: "DIR", help: "where the weekly databases go (default: honeypot_data)"},
+    keep_weeks: {type: "int", value: "N", help: "weeks of databases to keep"},
+    log: {type: "flag", help: "also print each event on stdout"},
+    commit: {value: "ID", help: "names the build in each metrics row"},
+    max_sessions: {type: "int", value: "N", help: "sessions at once"},
+    max_per_ip: {type: "int", value: "N", help: "sessions per client address"},
+    max_session_ms: {type: "int", value: "MS", help: "longest session"},
+    max_bytes: {type: "int", value: "N", help: "most bytes a client may send"},
+    max_logins: {type: "int", value: "N", help: "failed logins before the session ends"},
+    max_commands: {type: "int", value: "N", help: "command lines per session"},
+    max_backlog: {type: "int", value: "N", help: "messages the recorder holds before it drops events"},
+    idle_ms: {type: "int", value: "MS", help: "a silent client is disconnected after this"},
+    accept_on: {type: "int", value: "N", help: "which login attempt succeeds"},
+    metrics_ms: {type: "int", value: "MS", help: "how often metrics are sampled"}
+  }
 }
 
-fn usage()
-  eprint("usage: honeypot [--port N] [--bind ADDRESS] [--data DIR] [--log] [--commit ID]")
-  eprint("                [{string.join(sort(keys(INT_FLAGS)), " N] [")} N]")
-  exit(2)
-end
-
-fn int_arg(value)
-  let r = pcall to_int(value)
-  if not r.ok or r.value < 1 then usage() end
-  r.value
-end
-
 fn main()
-  let args = argv()
-  let port = 2323
-  let host = "127.0.0.1"
-  let opts = {}
-  let i = 1
-  while i < len(args)
-    if args[i] == "--log"
-      opts.log = true
-      i += 1
+  let opts = args.parse(SPEC)
+  let cfg = {}
+  for name, v in opts
+    if v == nil or name == "args" or name == "port" or name == "bind"
       continue
     end
-    if i + 1 >= len(args)
-      usage()
+    if type(v) == "int" and v < 1
+      eprint("honeypot: --{str_replace(name, "_", "-")} must be 1 or more, got {v}")
+      exit(2)
     end
-    let value = args[i + 1]
-    if args[i] == "--port"
-      port = int_arg(value)
-    elif args[i] == "--bind"
-      host = value
-    elif args[i] == "--data"
-      opts.data = value
-    elif args[i] == "--commit"
-      opts.commit = value
-    elif has_key(INT_FLAGS, args[i])
-      opts[INT_FLAGS[args[i]]] = int_arg(value)
-    else
-      usage()
-    end
-    i += 2
+    cfg[name] = v
   end
-  let listener = tcp_listen(host, port)
-  server.start(listener, opts)
-  eprint("honeypot listening on {host}:{port}")
+  let listener = tcp_listen(opts.bind, opts.port)
+  server.start(listener, cfg)
+  eprint("honeypot listening on {opts.bind}:{opts.port}")
 end

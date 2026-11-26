@@ -1,34 +1,18 @@
-# a Redis-compatible in-memory server: mini_redis [--port 6379] [--bind 127.0.0.1]
+# a Redis-compatible in-memory server; `mini_redis --help` for the options
 
+load "std/args"
 load "./server"
 
-fn usage()
-  eprint("usage: mini_redis [--port N] [--bind ADDRESS]")
-  exit(2)
-end
-
 fn main()
-  let args = argv()
-  let port = 6379
-  let host = "127.0.0.1"
-  let i = 1
-  while i < len(args)
-    if i + 1 >= len(args)
-      usage()
-    end
-    let value = args[i + 1]
-    if args[i] == "--port"
-      let r = pcall to_int(value)
-      if not r.ok then usage() end
-      port = r.value
-    elif args[i] == "--bind"
-      host = value
-    else
-      usage()
-    end
-    i += 2
-  end
-  let listener = tcp_listen(host, port)
+  let opts = args.parse({
+    name: "mini_redis",
+    max_args: 0,
+    options: {
+      port: {default: 6379, help: "port to listen on"},
+      bind: {default: "127.0.0.1", value: "ADDRESS", help: "address to listen on"}
+    }
+  })
+  let listener = tcp_listen(opts.bind, opts.port)
   server.start(listener)
-  print("mini_redis listening on {host}:{port}")
+  print("mini_redis listening on {opts.bind}:{opts.port}")
 end
