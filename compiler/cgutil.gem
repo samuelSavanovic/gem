@@ -192,8 +192,22 @@ fn any_child(node, f)
   false
 end
 
+# an arm's pattern bindings (lets) followed by its body, so the bindings are in scope there
+fn arm_stmts(bindings, body)
+  let out = []
+  if bindings != nil
+    for b in bindings
+      push(out, b)
+    end
+  end
+  for s in body
+    push(out, s)
+  end
+  out
+end
+
 fn is_node(node, tag)
   type(node) == "table" and node.tag == tag
 end
 
-export escape_c_string, pad_for, c_int_literal, format_float, set_add, set_contains, set_union, set_intersect, sorted_array_to_set, find_closest_export, is_node, each_child, any_child
+export escape_c_string, pad_for, c_int_literal, format_float, set_add, set_contains, set_union, set_intersect, sorted_array_to_set, find_closest_export, is_node, each_child, any_child, arm_stmts

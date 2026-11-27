@@ -1,0 +1,98 @@
+# a closure shares a match or receive pattern binding with its arm, as it shares a let
+fn from_match(msg)
+  match msg
+  when {v: w}
+    return fn()
+      w = w + "!"
+      w
+    end
+  end
+end
+
+fn from_receive()
+  send(self(), {v: "b"})
+  receive
+  when {v: w}
+    return fn()
+      w = w + "?"
+      w
+    end
+  end
+end
+
+fn churn()
+  let i = 0
+  while i < 40
+    let junk = "j{i}"
+    i += 1
+  end
+end
+
+# loops before and around a closure over a binding still reset, with a later let of the same name
+fn later_let()
+  let before = runtime_stats().resets
+  let j = 0
+  while j < 300000
+    let s = "x{j}"
+    j += 1
+  end
+  let fs = []
+  let i = 0
+  while i < 3
+    i += 1
+    match {v: "a{i}"}
+    when {v: x}
+      push(fs, fn()
+        x = x + "!"
+        x
+      end)
+    end
+  end
+  let x = "later"
+  print(x)
+  for f in fs
+    print(f())
+  end
+  print(if runtime_stats().resets > before then "reset" else "no reset" end)
+end
+
+fn main()
+  let bump = from_match({v: "a"})
+  let ask = from_receive()
+  for i = 0, 20
+    churn()
+    bump()
+    ask()
+  end
+  print(bump())
+  print(ask())
+
+  match {v: "orig"}
+  when {v: w}
+    let f = fn() w end
+    w = "changed"
+    print(f())
+  end
+  send(self(), {v: "orig"})
+  receive
+  when {v: w}
+    let f = fn() w end
+    w = "changed"
+    print(f())
+  end
+
+  let fs = []
+  for i = 0, 3
+    match {n: i}
+    when {n: k}
+      push(fs, fn()
+        k += 10
+        k
+      end)
+    end
+  end
+  for f in fs
+    print(f(), f())
+  end
+  later_let()
+end

@@ -3,7 +3,7 @@
 # Anything a closure in the body captures is live across the back-edge, except closures passed straight to
 # spawn: spawn copies their captures into the child, so they only need to live until the call.
 
-load "./cgutil" (each_child, any_child)
+load "./cgutil" (each_child, any_child, arm_stmts)
 
 fn is_liveness_node(node, tag)
   type(node) == "table" and node.tag == tag
@@ -446,17 +446,7 @@ _transfer_stmt = fn(s, live_out, ctx)
       lset_union_into(merged, live_out)
     end
     for w in whens
-      # bindings run before the body
-      let arm_stmts = []
-      if w.bindings != nil
-        for b in w.bindings
-          push(arm_stmts, b)
-        end
-      end
-      for bs in w.body
-        push(arm_stmts, bs)
-      end
-      let live_arm = _transfer_stmts(arm_stmts, live_out, ctx)
+      let live_arm = _transfer_stmts(arm_stmts(w.bindings, w.body), live_out, ctx)
       _uses_expr(w.value, live_arm)
       lset_union_into(merged, live_arm)
     end
@@ -479,16 +469,7 @@ _transfer_stmt = fn(s, live_out, ctx)
       return merged
     end
     for arm in arms
-      let arm_stmts = []
-      if arm.pattern.bindings != nil
-        for b in arm.pattern.bindings
-          push(arm_stmts, b)
-        end
-      end
-      for bs in arm.body
-        push(arm_stmts, bs)
-      end
-      let live_arm = _transfer_stmts(arm_stmts, live_out, ctx)
+      let live_arm = _transfer_stmts(arm_stmts(arm.pattern.bindings, arm.body), live_out, ctx)
       if arm.pattern.condition != nil
         _uses_expr(arm.pattern.condition, live_arm)
       end
@@ -617,15 +598,13 @@ collect_closure_captures_in_node = fn(node, defined, caps)
     collect_closure_captures_in_node(node.target, defined, caps)
     for w in node.whens
       collect_closure_captures_in_node(w.value, defined, caps)
-      collect_closure_captures_in_stmts(w.body, defined, caps)
-      collect_closure_captures_in_stmts(w.bindings, defined, caps)
+      collect_closure_captures_in_stmts(arm_stmts(w.bindings, w.body), defined, caps)
     end
     collect_closure_captures_in_stmts(node.else, defined, caps)
   when {tag: "receive_match"}
     for arm in node.arms
       collect_closure_captures_in_node(arm.pattern.condition, defined, caps)
-      collect_closure_captures_in_stmts(arm.pattern.bindings, defined, caps)
-      collect_closure_captures_in_stmts(arm.body, defined, caps)
+      collect_closure_captures_in_stmts(arm_stmts(arm.pattern.bindings, arm.body), defined, caps)
     end
     collect_closure_captures_in_node(node.after_ms, defined, caps)
     collect_closure_captures_in_stmts(node.after_body, defined, caps)

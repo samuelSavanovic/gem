@@ -1531,10 +1531,10 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
       elif set_contains(local_names, name)
         if set_contains(closure_captures, name)
           push(roots, mangle(name))
-        elif set_contains(boxed_vars, name)
-          push(pinned_roots, mangle(name))
         elif not set_contains(fn_scope_locals, name)
           return {ok: false, reason: "live var `{name}` has no C local at this loop's back-edge (declared in a nested if/match arm?)"}
+        elif set_contains(boxed_vars, name)
+          push(pinned_roots, mangle(name))
         else
           push(roots, "&{mangle(name)}")
         end

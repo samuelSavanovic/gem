@@ -1,7 +1,7 @@
 # Free variables, captures and closure writes: what a closure captures and which locals need a pinned box.
 # `is_global(name)` comes from codegen: true for a named fn or an unshadowed builtin.
 
-load "./cgutil" (set_add, set_contains, set_union, set_intersect, sorted_array_to_set, is_node, each_child, any_child)
+load "./cgutil" (set_add, set_contains, set_union, set_intersect, sorted_array_to_set, is_node, each_child, any_child, arm_stmts)
 load "./scope" (collect_block_lets)
 
 fn collect_free_node(node, defined, free, is_global)
@@ -243,12 +243,7 @@ fn walk_captures_node(node, scope_vars, captured, is_global)
     walk_captures_node(target, scope_vars, captured, is_global)
     for i = 0, len(whens)
       walk_captures_node(whens[i].value, scope_vars, captured, is_global)
-      if whens[i].bindings != nil
-        for bi = 0, len(whens[i].bindings)
-          walk_captures_node(whens[i].bindings[bi], scope_vars, captured, is_global)
-        end
-      end
-      walk_captures(whens[i].body, scope_vars, captured, is_global)
+      walk_captures(arm_stmts(whens[i].bindings, whens[i].body), scope_vars, captured, is_global)
     end
     if el != nil
       walk_captures(el, scope_vars, captured, is_global)
@@ -256,12 +251,7 @@ fn walk_captures_node(node, scope_vars, captured, is_global)
   when {tag: "receive_match", arms: rm_arms, after_ms: rm_after_ms, after_body: rm_after_body}
     for i = 0, len(rm_arms)
       walk_captures_node(rm_arms[i].pattern.condition, scope_vars, captured, is_global)
-      if rm_arms[i].pattern.bindings != nil
-        for bi = 0, len(rm_arms[i].pattern.bindings)
-          walk_captures_node(rm_arms[i].pattern.bindings[bi], scope_vars, captured, is_global)
-        end
-      end
-      walk_captures(rm_arms[i].body, scope_vars, captured, is_global)
+      walk_captures(arm_stmts(rm_arms[i].pattern.bindings, rm_arms[i].body), scope_vars, captured, is_global)
     end
     if rm_after_ms != nil
       walk_captures_node(rm_after_ms, scope_vars, captured, is_global)
@@ -370,16 +360,7 @@ fn walk_writes_node(node, scope_vars, defined, writes, inside_anon)
     for i = 0, len(whens)
       let w = whens[i]
       walk_writes_node(w.value, scope_vars, match_def, writes, inside_anon)
-      let d = set_union(match_def, {})
-      if w.bindings != nil
-        for bi = 0, len(w.bindings)
-          walk_writes_node(w.bindings[bi], scope_vars, d, writes, inside_anon)
-          if is_node(w.bindings[bi], "let")
-            set_add(d, w.bindings[bi].name)
-          end
-        end
-      end
-      walk_writes(w.body, scope_vars, d, writes, inside_anon)
+      walk_writes(arm_stmts(w.bindings, w.body), scope_vars, match_def, writes, inside_anon)
     end
     if el != nil
       walk_writes(el, scope_vars, defined, writes, inside_anon)
@@ -392,16 +373,7 @@ fn walk_writes_node(node, scope_vars, defined, writes, inside_anon)
     for i = 0, len(rm_arms)
       let arm = rm_arms[i]
       walk_writes_node(arm.pattern.condition, scope_vars, recv_def, writes, inside_anon)
-      let d = set_union(recv_def, {})
-      if arm.pattern.bindings != nil
-        for bi = 0, len(arm.pattern.bindings)
-          walk_writes_node(arm.pattern.bindings[bi], scope_vars, d, writes, inside_anon)
-          if is_node(arm.pattern.bindings[bi], "let")
-            set_add(d, arm.pattern.bindings[bi].name)
-          end
-        end
-      end
-      walk_writes(arm.body, scope_vars, d, writes, inside_anon)
+      walk_writes(arm_stmts(arm.pattern.bindings, arm.body), scope_vars, recv_def, writes, inside_anon)
     end
     if rm_after_ms != nil
       walk_writes_node(rm_after_ms, scope_vars, recv_def, writes, inside_anon)
