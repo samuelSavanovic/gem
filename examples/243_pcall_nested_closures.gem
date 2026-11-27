@@ -1,0 +1,73 @@
+# a closure made inside a pcall block outlives it, wherever the block makes it: a receive arm, a table, a default
+fn in_receive_arm(start)
+  let count = start
+  let inc = nil
+  send(self(), "go")
+  pcall(fn()
+    receive
+    when "go" then
+      inc = fn()
+        count += 1
+        count
+      end
+    end
+  end)
+  inc
+end
+
+fn in_table(start)
+  let count = start
+  let obj = nil
+  pcall(fn()
+    obj = {inc: fn()
+      count += 1
+      count
+    end}
+  end)
+  obj.inc
+end
+
+fn in_default(start)
+  let count = start
+  let inc = nil
+  pcall(fn(g = fn()
+      count += 1
+      count
+    end)
+    inc = g
+  end)
+  inc
+end
+
+# pcall blocks in a receive arm and in a table still write the caller's locals
+fn pcall_in_arm()
+  let total = 0
+  send(self(), 5)
+  receive
+  when n then
+    pcall(fn() total += n end)
+  end
+  let t = {run: fn() pcall(fn() total += 10 end) end}
+  t.run()
+  total
+end
+
+# overwrites the stack the makers ran on
+fn churn(n, acc)
+  if n == 0
+    return acc
+  end
+  let b = "s{n * 3}"
+  churn(n - 1, acc + len(b)) + 0
+end
+
+fn main()
+  for make in [in_receive_arm, in_table, in_default]
+    let inc = make(100)
+    churn(40, 0)
+    print(inc())
+    churn(40, 0)
+    print(inc())
+  end
+  print(pcall_in_arm())
+end

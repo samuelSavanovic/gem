@@ -468,48 +468,13 @@ let non_escape_callees = {}
 set_add(non_escape_callees, "pcall")
 
 fn contains_anon_fn(node)
-  if node == nil
-    return false
-  end
   if type(node) != "table"
-    return false
-  end
-  if node.tag == nil
     return false
   end
   if node.tag == "anon_fn"
     return true
   end
-  for nk, v in node
-    if nk != "tag" and type(v) == "table"
-      let vks = keys(v)
-      if len(vks) > 0 and type(vks[0]) == "int"
-        let vi = 0
-        while vi < len(v)
-          if type(v[vi]) == "table"
-            if contains_anon_fn(v[vi])
-              return true
-            end
-          end
-          vi += 1
-        end
-      else
-        if contains_anon_fn(v)
-          return true
-        end
-      end
-    end
-  end
-  false
-end
-
-fn body_has_anon_fn(stmts)
-  for s in stmts
-    if contains_anon_fn(s)
-      return true
-    end
-  end
-  false
+  any_child(node, contains_anon_fn)
 end
 
 # is `name` bound anywhere under node (let, param, loop var, pattern)? then a call to it may not be the builtin
@@ -549,29 +514,14 @@ fn mark_non_escaping(node, shadowed)
   if node.tag == "call" and node.func != nil and is_node(node.func, "var") and set_contains(non_escape_callees, node.func.name) and not set_contains(shadowed, node.func.name)
     if node.args != nil
       for a in node.args
-        if is_node(a, "anon_fn") and not body_has_anon_fn(a.body)
+        if is_node(a, "anon_fn") and not contains_anon_fn(a.body) and not contains_anon_fn(a.defaults)
           a.non_escaping = true
         end
       end
     end
   end
 
-  for nk, v in node
-    if nk != "tag" and type(v) == "table"
-      let vks = keys(v)
-      if len(vks) > 0 and type(vks[0]) == "int"
-        let vi = 0
-        while vi < len(v)
-          if type(v[vi]) == "table"
-            mark_non_escaping(v[vi], shadowed)
-          end
-          vi += 1
-        end
-      else
-        mark_non_escaping(v, shadowed)
-      end
-    end
-  end
+  each_child(node, fn(c) mark_non_escaping(c, shadowed) end)
 end
 
 # `scope`: the fn_def or top-level statement list; binding `pcall` anywhere in it turns marking off for all of it
