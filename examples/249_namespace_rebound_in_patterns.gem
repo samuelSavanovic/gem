@@ -1,0 +1,34 @@
+# a module namespace rebound in a `when` value or a receive `after` time is seen as rebound
+load "./modules/block_value_ns" as bvns
+load "./modules/ns_items" as items
+
+fn in_after()
+  receive
+  when "never" then
+    nil
+  after (fn()
+    bvns = {f: fn(v) "replaced {v}" end}
+    0
+  end)()
+    nil
+  end
+  print(bvns.f(1))
+end
+
+fn in_when()
+  match 1
+  when (fn()
+    items = {count: fn() "replaced" end}
+    0
+  end)() then
+    nil
+  else
+    nil
+  end
+  print(items.count())
+end
+
+fn main()
+  in_after()
+  in_when()
+end
