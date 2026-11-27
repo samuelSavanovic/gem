@@ -1,0 +1,17 @@
+# a mutual tail-call cycle stays a loop when a pcall block assigns a parameter
+fn even(n, acc)
+  if n == 0
+    return acc
+  end
+  pcall(fn() acc += 1 end)
+  odd(n - 1, acc)
+end
+
+fn odd(n, acc)
+  if n == 0
+    return acc
+  end
+  even(n - 1, acc)
+end
+
+print(even(300000, 0))

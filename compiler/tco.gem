@@ -2,7 +2,7 @@
 
 load "./cgutil" (set_add, set_contains, sorted_array_to_set, is_node, any_child)
 load "./scope" (collect_top_let_names)
-load "./captures" (find_capture_writes_in_scope)
+load "./captures" (find_capture_writes_in_scope, find_captured_in_scope)
 
 fn is_self_tail_call(fn_name, node)
   if node == nil
@@ -200,12 +200,13 @@ fn find_tail_call_sccs(fn_defs, caller_records, name_to_fn)
         why = "{name} has more than 16 parameters"
         break
       end
-      # boxed params (a closure assigns them) aren't handled by the trampoline
+      # boxed params (captured by an escaping closure and assigned by some closure) aren't handled by the trampoline
       let scope_vars = sorted_array_to_set(fd.params)
       let cap_writes = find_capture_writes_in_scope(fd.body, scope_vars)
+      let captured = find_captured_in_scope(fd.body, scope_vars, fn(n) false end)
       let any_boxed = false
       for p in fd.params
-        if set_contains(cap_writes, p)
+        if set_contains(cap_writes, p) and set_contains(captured, p)
           any_boxed = true
           break
         end
