@@ -157,9 +157,9 @@ fn walk_node(node, scope, acc)
 
   when {tag: "receive_match", arms: arms}
     for arm in arms
-      walk_node(arm.pattern.condition, scope, acc)
-      if arm.pattern.bindings != nil
-        for b in arm.pattern.bindings
+      walk_node(arm.value, scope, acc)
+      if arm.bindings != nil
+        for b in arm.bindings
           record_match_binding(b, scope, acc)
         end
       end

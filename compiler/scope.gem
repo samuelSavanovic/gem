@@ -285,13 +285,7 @@ shadow_node = fn(node, env, mode, ctx)
   elif tag == "receive_match"
     if node.arms != nil
       for a in node.arms
-        let cond = nil
-        let bindings = nil
-        if a.pattern != nil
-          cond = a.pattern.condition
-          bindings = a.pattern.bindings
-        end
-        shadow_arm(cond, bindings, a.body, env, mode, ctx, "receive")
+        shadow_arm(a.value, a.bindings, a.body, env, mode, ctx, "receive")
       end
     end
     shadow_node(node.after_ms, env, mode, ctx)
@@ -444,8 +438,8 @@ collect_shadow_lets_in_node = fn(node, result)
     end
     if node.arms != nil
       for a in node.arms
-        if a.pattern != nil and a.pattern.bindings != nil
-          for b in a.pattern.bindings
+        if a.bindings != nil
+          for b in a.bindings
             if type(b) == "table" and b.name != nil and (b.tag == "let" or b.tag == "var")
               set_add(result, b.name)
             end
@@ -467,4 +461,4 @@ collect_shadow_lets_in_fn = fn(stmts, result)
   collect_shadow_lets_in_stmts(stmts, result)
 end
 
-export collect_block_lets, collect_top_let_names, scope_shadowing_lets, collect_module_namespaces, collect_shadow_lets_in_fn
+export collect_top_let_names, scope_shadowing_lets, collect_module_namespaces, collect_shadow_lets_in_fn

@@ -161,8 +161,8 @@ fn find_closest_export(field, exports)
   nil
 end
 
-# f(child) for every node directly below `node`, looking through lists and untagged records (table entries,
-# receive arms and their patterns), in `for k, v in node` order
+# f(child) for every node directly below `node`, looking through lists and untagged records (table entries),
+# in `for k, v in node` order
 fn each_child(node, f)
   for k, v in node
     if type(v) == "table" and k != "liveness_result"
@@ -210,4 +210,112 @@ fn is_node(node, tag)
   type(node) == "table" and node.tag == tag
 end
 
-export escape_c_string, pad_for, c_int_literal, format_float, set_add, set_contains, set_union, set_intersect, sorted_array_to_set, find_closest_export, is_node, each_child, any_child, arm_stmts
+# A fn literal's defaults (evaluated with its params bound) followed by its body
+fn fn_stmts(node)
+  let out = []
+  if node.defaults != nil
+    for d in node.defaults
+      if d != nil
+        push(out, d)
+      end
+    end
+  end
+  for s in node.body
+    push(out, s)
+  end
+  out
+end
+
+# Walks lowered statements in order with `bound`, the names bound at each point: the lets before it in its
+# list (a block's lets count for the rest of the list holding it), arm bindings, match and receive temporaries,
+# and the params of the fn literals it enters. Calls v.read(name, bound) on a var, v.write(name, bound) on
+# `name = ...`, and v.closure(node, bound) on a fn literal, whose defaults and body it walks when that returns
+# true. If v.node is set, v.node(node, bound) sees each node first and returns true when it walked the node
+# itself. Named fns are not entered.
+fn walk_scoped(stmts, bound, v)
+  if stmts == nil
+    return nil
+  end
+  let b = set_union(bound, {})
+  for s in stmts
+    walk_scoped_node(s, b, v)
+    if is_node(s, "let")
+      b[s.name] = true
+    elif is_node(s, "block")
+      for inner in s.stmts
+        if is_node(inner, "let")
+          b[inner.name] = true
+        end
+      end
+    end
+  end
+  nil
+end
+
+fn walk_scoped_fn(node, bound, v)
+  let b = set_union(bound, sorted_array_to_set(node.params))
+  if node.rest_param != nil
+    b[node.rest_param] = true
+  end
+  walk_scoped(fn_stmts(node), b, v)
+end
+
+fn walk_scoped_node(node, bound, v)
+  if type(node) != "table" or node.tag == nil
+    return nil
+  end
+  if v.node != nil and v.node(node, bound) == true
+    return nil
+  end
+  let tag = node.tag
+  if tag == "var"
+    v.read(node.name, bound)
+  elif tag == "assign"
+    v.write(node.name, bound)
+    walk_scoped_node(node.value, bound, v)
+  elif tag == "anon_fn"
+    if v.closure(node, bound) == true
+      walk_scoped_fn(node, bound, v)
+    end
+  elif tag == "fn_def"
+    return nil
+  elif tag == "if"
+    walk_scoped_node(node.cond, bound, v)
+    walk_scoped(node.then, bound, v)
+    walk_scoped(node.else, bound, v)
+  elif tag == "while"
+    walk_scoped_node(node.cond, bound, v)
+    walk_scoped(node.body, bound, v)
+  elif tag == "block"
+    walk_scoped(node.stmts, bound, v)
+  elif tag == "match"
+    walk_scoped_node(node.target, bound, v)
+    walk_scoped_arms(node.whens, with_name(bound, node.target_var), v)
+    walk_scoped(node.else, bound, v)
+  elif tag == "receive_match"
+    let b = with_name(bound, node.recv_var)
+    walk_scoped_arms(node.arms, b, v)
+    walk_scoped_node(node.after_ms, b, v)
+    walk_scoped(node.after_body, b, v)
+  else
+    each_child(node, fn(c) walk_scoped_node(c, bound, v) end)
+  end
+  nil
+end
+
+fn walk_scoped_arms(arms, bound, v)
+  for w in arms
+    walk_scoped_node(w.value, bound, v)
+    walk_scoped(arm_stmts(w.bindings, w.body), bound, v)
+  end
+end
+
+fn with_name(set, name)
+  let out = set_union(set, {})
+  if name != nil
+    out[name] = true
+  end
+  out
+end
+
+export escape_c_string, pad_for, c_int_literal, format_float, set_add, set_contains, set_union, set_intersect, sorted_array_to_set, find_closest_export, is_node, each_child, any_child, arm_stmts, fn_stmts, walk_scoped, walk_scoped_fn, walk_scoped_node

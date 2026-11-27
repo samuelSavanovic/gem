@@ -300,9 +300,9 @@ fn build_call_graph(fn_defs, top_stmts, builtin_names = {}, extern_names = [])
 
     if node.tag == "receive_match"
       for arm in node.arms
-        collect_calls(arm.pattern.condition, false, caller_id)
-        if arm.pattern.bindings != nil
-          for bd in arm.pattern.bindings
+        collect_calls(arm.value, false, caller_id)
+        if arm.bindings != nil
+          for bd in arm.bindings
             collect_calls(bd, false, caller_id)
           end
         end

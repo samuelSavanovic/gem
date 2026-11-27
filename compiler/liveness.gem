@@ -3,7 +3,7 @@
 # Anything a closure in the body captures is live across the back-edge, except closures passed straight to
 # spawn: spawn copies their captures into the child, so they only need to live until the call.
 
-load "./cgutil" (each_child, any_child, arm_stmts)
+load "./cgutil" (each_child, any_child, arm_stmts, walk_scoped, walk_scoped_fn, walk_scoped_node)
 
 fn is_liveness_node(node, tag)
   type(node) == "table" and node.tag == tag
@@ -53,152 +53,16 @@ fn lset_add_array(s, arr)
   end
 end
 
-let _collect_free_node = nil
-let _collect_free_stmts = nil
-
-_collect_free_node = fn(node, defined, free)
-  if node == nil
-    return nil
-  end
-  if type(node) != "table" or node.tag == nil
-    return nil
-  end
-
-  match node
-  when {tag: "var", name: name}
-    if defined[name] != true
+# names a fn literal reads or assigns that neither it nor `defined` binds
+fn closure_free(node, defined)
+  let free = {}
+  let note = fn(name, bound)
+    if bound[name] != true
       free[name] = true
     end
-  when {tag: "int"}
-    return nil
-  when {tag: "float"}
-    return nil
-  when {tag: "string"}
-    return nil
-  when {tag: "bool"}
-    return nil
-  when {tag: "nil"}
-    return nil
-  when {tag: "break"}
-    return nil
-  when {tag: "continue"}
-    return nil
-  when {tag: "let", value: value}
-    _collect_free_node(value, defined, free)
-  when {tag: "assign", name: name, value: value}
-    if defined[name] != true
-      free[name] = true
-    end
-    _collect_free_node(value, defined, free)
-  when {tag: "anon_fn", params: params, body: body}
-    let inner = lset_copy(defined)
-    lset_add_array(inner, params)
-    if node.rest_param != nil
-      inner[node.rest_param] = true
-    end
-    _collect_free_stmts(body, inner, free)
-    if node.defaults != nil
-      for d in node.defaults
-        if d != nil
-          _collect_free_node(d, inner, free)
-        end
-      end
-    end
-  when {tag: "fn_def"}
-    return nil
-  when {tag: "if", cond: cond, then: thens, else: el}
-    _collect_free_node(cond, defined, free)
-    _collect_free_stmts(thens, defined, free)
-    if el != nil
-      _collect_free_stmts(el, defined, free)
-    end
-  when {tag: "while", cond: cond, body: body}
-    _collect_free_node(cond, defined, free)
-    _collect_free_stmts(body, defined, free)
-  when {tag: "match", target: target, target_var: target_var, whens: whens, else: el}
-    _collect_free_node(target, defined, free)
-    let mdef = lset_copy(defined)
-    if target_var != nil
-      mdef[target_var] = true
-    end
-    for w in whens
-      _collect_free_node(w.value, mdef, free)
-      let armdef = lset_copy(mdef)
-      if w.bindings != nil
-        for b in w.bindings
-          _collect_free_node(b, armdef, free)
-          if is_liveness_node(b, "let")
-            armdef[b.name] = true
-          end
-        end
-      end
-      _collect_free_stmts(w.body, armdef, free)
-    end
-    if el != nil
-      _collect_free_stmts(el, defined, free)
-    end
-  when {tag: "receive_match", arms: arms, after_ms: after_ms, after_body: after_body}
-    let rdef = lset_copy(defined)
-    if node.recv_var != nil
-      rdef[node.recv_var] = true
-    end
-    for arm in arms
-      _collect_free_node(arm.pattern.condition, rdef, free)
-      let armdef = lset_copy(rdef)
-      if arm.pattern.bindings != nil
-        for b in arm.pattern.bindings
-          _collect_free_node(b, armdef, free)
-          if is_liveness_node(b, "let")
-            armdef[b.name] = true
-          end
-        end
-      end
-      _collect_free_stmts(arm.body, armdef, free)
-    end
-    if after_ms != nil
-      _collect_free_node(after_ms, rdef, free)
-    end
-    if after_body != nil
-      _collect_free_stmts(after_body, rdef, free)
-    end
-  when {tag: "table", entries: entries}
-    for e in entries
-      _collect_free_node(e.value, defined, free)
-    end
-  when {tag: "array", elements: elements}
-    for e in elements
-      _collect_free_node(e, defined, free)
-    end
-  when {tag: "interp", parts: parts}
-    for p in parts
-      _collect_free_node(p, defined, free)
-    end
-  when {tag: "block", stmts: stmts}
-    _collect_free_stmts(stmts, defined, free)
-  when {tag: "return", value: value}
-    if value != nil
-      _collect_free_node(value, defined, free)
-    end
-  else
-    each_child(node, fn(c) _collect_free_node(c, defined, free) end)
   end
-end
-
-_collect_free_stmts = fn(stmts, defined, free)
-  let d = lset_copy(defined)
-  for s in stmts
-    _collect_free_node(s, d, free)
-    if is_liveness_node(s, "let")
-      d[s.name] = true
-    elif is_liveness_node(s, "block")
-      # a block node's lets belong to the enclosing list
-      for inner in s.stmts
-        if is_liveness_node(inner, "let")
-          d[inner.name] = true
-        end
-      end
-    end
-  end
+  walk_scoped_fn(node, defined, {read: note, write: note, closure: fn(c, bound) true end})
+  free
 end
 
 fn _has_break_here(node)
@@ -270,32 +134,11 @@ _uses_expr = fn(node, into)
     for p in parts
       _uses_expr(p, into)
     end
-  when {tag: "anon_fn", params: params, body: body}
-    let inner = sorted_params_to_set(params)
-    if node.rest_param != nil
-      inner[node.rest_param] = true
-    end
-    let free = {}
-    _collect_free_stmts(body, inner, free)
-    if node.defaults != nil
-      for d in node.defaults
-        if d != nil
-          _collect_free_node(d, inner, free)
-        end
-      end
-    end
-    lset_union_into(into, free)
+  when {tag: "anon_fn"}
+    lset_union_into(into, closure_free(node, {}))
   else
     each_child(node, fn(c) _uses_expr(c, into) end)
   end
-end
-
-fn sorted_params_to_set(arr)
-  let s = {}
-  for x in arr
-    s[x] = true
-  end
-  s
 end
 
 
@@ -406,9 +249,9 @@ _transfer_stmt = fn(s, live_out, ctx)
       return merged
     end
     for arm in arms
-      let live_arm = _transfer_stmts(arm_stmts(arm.pattern.bindings, arm.body), live_out, ctx)
-      if arm.pattern.condition != nil
-        _uses_expr(arm.pattern.condition, live_arm)
+      let live_arm = _transfer_stmts(arm_stmts(arm.bindings, arm.body), live_out, ctx)
+      if arm.value != nil
+        _uses_expr(arm.value, live_arm)
       end
       lset_union_into(merged, live_arm)
     end
@@ -480,74 +323,25 @@ fn compute_loop_live_at_backedge(while_node, live_after_loop)
   {ok: false, reason: "liveness fixpoint did not converge"}
 end
 
-
-# free vars of every closure in the body, minus the lets defined before it
-let collect_closure_captures_in_node = nil
-collect_closure_captures_in_node = fn(node, defined, caps)
-  if node == nil
-    return nil
+# free vars of every closure in the body, minus the lets defined before it. spawn(fn ... end) copies its
+# closure's captures into the child at the call, so that closure (and those nested in it) doesn't count.
+fn collect_closure_captures_in_stmts(stmts, defined, caps)
+  let v = {read: fn(name, bound) nil end, write: fn(name, bound) nil end}
+  v.closure = fn(node, bound)
+    lset_union_into(caps, closure_free(node, bound))
+    false
   end
-  if type(node) != "table" or node.tag == nil
-    return nil
-  end
-  if node.tag == "anon_fn"
-    let inner = lset_copy(defined)
-    lset_add_array(inner, node.params)
-    if node.rest_param != nil
-      inner[node.rest_param] = true
+  v.node = fn(node, bound)
+    if not liveness_is_spawn_with_closure(node)
+      return false
     end
-    let free = {}
-    _collect_free_stmts(node.body, inner, free)
-    if node.defaults != nil
-      for d in node.defaults
-        if d != nil
-          _collect_free_node(d, inner, free)
-        end
-      end
+    walk_scoped_node(node.func, bound, v)
+    for i = 1, len(node.args)
+      walk_scoped_node(node.args[i], bound, v)
     end
-    lset_union_into(caps, free)
-    return nil
+    true
   end
-  if node.tag == "fn_def"
-    return nil
-  end
-  # spawn(fn ... end) copies captures into the child at the call, so skip arg 0 (nested closures run there too)
-  if liveness_is_spawn_with_closure(node)
-    collect_closure_captures_in_node(node.func, defined, caps)
-    let i = 1
-    while i < len(node.args)
-      collect_closure_captures_in_node(node.args[i], defined, caps)
-      i += 1
-    end
-    return nil
-  end
-  match node
-  when {tag: "if"}
-    collect_closure_captures_in_node(node.cond, defined, caps)
-    collect_closure_captures_in_stmts(node.then, defined, caps)
-    collect_closure_captures_in_stmts(node.else, defined, caps)
-  when {tag: "while"}
-    collect_closure_captures_in_node(node.cond, defined, caps)
-    collect_closure_captures_in_stmts(node.body, defined, caps)
-  when {tag: "block"}
-    collect_closure_captures_in_stmts(node.stmts, defined, caps)
-  when {tag: "match"}
-    collect_closure_captures_in_node(node.target, defined, caps)
-    for w in node.whens
-      collect_closure_captures_in_node(w.value, defined, caps)
-      collect_closure_captures_in_stmts(arm_stmts(w.bindings, w.body), defined, caps)
-    end
-    collect_closure_captures_in_stmts(node.else, defined, caps)
-  when {tag: "receive_match"}
-    for arm in node.arms
-      collect_closure_captures_in_node(arm.pattern.condition, defined, caps)
-      collect_closure_captures_in_stmts(arm_stmts(arm.pattern.bindings, arm.body), defined, caps)
-    end
-    collect_closure_captures_in_node(node.after_ms, defined, caps)
-    collect_closure_captures_in_stmts(node.after_body, defined, caps)
-  else
-    each_child(node, fn(c) collect_closure_captures_in_node(c, defined, caps) end)
-  end
+  walk_scoped(stmts, defined, v)
 end
 
 fn is_spawn_callee_name(name)
@@ -568,25 +362,6 @@ fn liveness_is_spawn_with_closure(node)
     return false
   end
   is_liveness_node(node.args[0], "anon_fn")
-end
-
-fn collect_closure_captures_in_stmts(stmts, defined, caps)
-  if stmts == nil
-    return nil
-  end
-  let d = lset_copy(defined)
-  for s in stmts
-    collect_closure_captures_in_node(s, d, caps)
-    if is_liveness_node(s, "let")
-      d[s.name] = true
-    elif is_liveness_node(s, "block")
-      for inner in s.stmts
-        if is_liveness_node(inner, "let")
-          d[inner.name] = true
-        end
-      end
-    end
-  end
 end
 
 # Walks a fn body or the top level backward and sets `liveness_result` on every `process_tail` while,
@@ -688,14 +463,12 @@ _attach_node = fn(s, live_out, ctx)
     if s.arms != nil
       for arm in s.arms
         _attach_stmts(arm.body, live_out, ctx)
-        if arm.pattern != nil
-          if arm.pattern.condition != nil
-            _scan_anons(arm.pattern.condition)
-          end
-          if arm.pattern.bindings != nil
-            for b in arm.pattern.bindings
-              _scan_anons(b)
-            end
+        if arm.value != nil
+          _scan_anons(arm.value)
+        end
+        if arm.bindings != nil
+          for b in arm.bindings
+            _scan_anons(b)
           end
         end
       end

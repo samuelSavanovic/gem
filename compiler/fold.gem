@@ -215,8 +215,8 @@ fold = fn(node)
     if node.else != nil then fold_stmts(node.else) end
   when {tag: "receive_match"}
     for arm in node.arms
-      arm.pattern.condition = fold(arm.pattern.condition)
-      fold_stmts(arm.pattern.bindings)
+      arm.value = fold(arm.value)
+      fold_stmts(arm.bindings)
       fold_stmts(arm.body)
     end
     if node.after_ms != nil then node.after_ms = fold(node.after_ms) end

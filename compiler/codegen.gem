@@ -3,9 +3,9 @@
 load "./liveness" (compute_live_for_pt_loops_in_stmts)
 load "./errors" (make_error_sink)
 load "./builtins" (BUILTIN_FNS, LEAF_BUILTINS, DIRECT_BUILTINS)
-load "./cgutil" (escape_c_string, pad_for, c_int_literal, format_float, set_add, set_contains, set_union, set_intersect, sorted_array_to_set, find_closest_export, is_node, each_child, any_child)
+load "./cgutil" (escape_c_string, pad_for, c_int_literal, format_float, set_add, set_contains, set_union, set_intersect, sorted_array_to_set, find_closest_export, is_node, each_child, any_child, fn_stmts)
 load "./scope" (collect_top_let_names, scope_shadowing_lets, collect_module_namespaces, collect_shadow_lets_in_fn)
-load "./captures" (collect_free_vars, collect_free_node, walk_captures_node, walk_writes_node, find_captured_in_scope, find_capture_writes_in_scope, find_writes_in_closure_body, mark_non_escaping_stmts)
+load "./captures" (closure_free_vars, find_captured_in_scope, find_capture_writes_in_scope, find_writes_in_closure_body, mark_non_escaping_stmts)
 load "./tco" (fn_def_is_tco, find_tail_call_sccs)
 load "./append" (decompose_concat, expr_has_var, find_append_vars)
 load "./callgraph" (build_call_graph, mark_recursive_fns)
@@ -1043,18 +1043,7 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
   end
 
   compile_anon_fn = fn(node)
-    let inner_defined = sorted_array_to_set(node.params)
-    if node.rest_param != nil
-      set_add(inner_defined, node.rest_param)
-    end
-    let free = collect_free_vars(node.body, inner_defined, is_global_name)
-    if node.defaults != nil
-      for d in node.defaults
-        if d != nil
-          collect_free_node(d, inner_defined, free, is_global_name)
-        end
-      end
-    end
+    let free = closure_free_vars(node, {}, is_global_name)
     # module slots are never captured; a free name nothing binds is left out so the body reports it undeclared
     let captures = []
     for cap in sort(keys(free))
@@ -1761,7 +1750,7 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
 
     for i = 0, len(arms)
       let arm = arms[i]
-      let cond_r = compile_expr(arm.pattern.condition)
+      let cond_r = compile_expr(arm.value)
       if i == 0
         buf_push(b, cond_r.setup)
         buf_push(b, "{p3}if (gem_truthy({cond_r.expr})) \{\n")
@@ -1815,8 +1804,8 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
         buf_push(b, "{p}} else if ({matched_tmp} == {i}) \{\n")
       end
       let saved_arm = set_union(fn_scope_locals, {})
-      if arm.pattern.bindings != nil
-        for binding in arm.pattern.bindings
+      if arm.bindings != nil
+        for binding in arm.bindings
           buf_push(b, compile_stmt(binding, indent + 1))
           buf_push(b, "\n")
         end
@@ -2375,25 +2364,11 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
     closure_captures = {}
     in_leaf_fn = fn_is_leaf(node, body)
 
-    let captured = find_captured_in_scope(body, scope_vars, is_global_name)
-    if node.defaults != nil
-      for d in node.defaults
-        if d != nil
-          walk_captures_node(d, scope_vars, captured, is_global_name)
-        end
-      end
-    end
+    let captured = find_captured_in_scope(fn_stmts(node), scope_vars, is_global_name)
 
     # Box only captures some closure assigns; read-only ones are snapshotted into the env. A closure that assigns
     # must share the outer box, since arena capture boxes are write-once as far as resets are concerned.
-    let cap_writes = find_capture_writes_in_scope(body, shadowed_locals)
-    if node.defaults != nil
-      for d in node.defaults
-        if d != nil
-          walk_writes_node(d, scope_vars, {}, cap_writes, false)
-        end
-      end
-    end
+    let cap_writes = find_capture_writes_in_scope(fn_stmts(node), shadowed_locals)
     boxed_vars = set_intersect(captured, cap_writes)
     in_top_level = false
 
@@ -2569,24 +2544,10 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
     end
     in_leaf_fn = fn_is_leaf(node, body)
 
-    let inner_captured = find_captured_in_scope(body, inner_scope, is_global_name)
-    if node.defaults != nil
-      for d in node.defaults
-        if d != nil
-          walk_captures_node(d, inner_scope, inner_captured, is_global_name)
-        end
-      end
-    end
+    let inner_captured = find_captured_in_scope(fn_stmts(node), inner_scope, is_global_name)
 
     # same boxing rule as compile_fn
-    let inner_writes = find_capture_writes_in_scope(body, shadowed_locals)
-    if node.defaults != nil
-      for d in node.defaults
-        if d != nil
-          walk_writes_node(d, inner_scope, {}, inner_writes, false)
-        end
-      end
-    end
+    let inner_writes = find_capture_writes_in_scope(fn_stmts(node), shadowed_locals)
     let inner_boxed = set_intersect(inner_captured, inner_writes)
 
     # env fields are all `GemVal *` (the runtime walks envs as [n][GemVal * x n]), so every capture is boxed here

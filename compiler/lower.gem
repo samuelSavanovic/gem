@@ -1,8 +1,7 @@
 # Desugars what the parser keeps as written, before fold and codegen:
 #   for_in / for_range       -> block of let / while / assign
 #   if/match/receive as value -> moved into statements before it, value in a temp
-#   match_arm + patterns     -> when_clause {value, bindings}
-#   receive arms             -> {pattern: {condition, bindings}, body}
+#   match_arm + patterns     -> when_clause {value, bindings, body}, in match whens and receive arms
 
 load "./cgutil" (each_child)
 load "./ast" (make_program, make_int, make_float, make_string, make_bool, make_nil_node, make_var, make_binop, make_unop, make_call, make_dot, make_index, make_anon_fn, make_table, make_table_entry, make_array, make_interp, make_let, make_assign, make_dot_assign, make_index_assign, make_fn_def, make_if, make_while, make_match, make_when, make_receive_match, make_return, make_break, make_continue, make_export, make_extern_fn, make_extern_param, make_extern_include, make_error_expr, make_error_stmt)
@@ -769,8 +768,7 @@ fn lower_receive(node, state)
   let recv_var_expr = make_var(recv_var)
   let arms = []
   for arm in node.arms
-    let lowered = lower_arm(arm, recv_var_expr, state)
-    push(arms, {pattern: {condition: lowered.value, bindings: lowered.bindings}, body: lowered.body})
+    push(arms, lower_arm(arm, recv_var_expr, state))
   end
   let after_ms = if node.after_ms != nil then lower_node(node.after_ms, state) end
   let after_body = lower_stmts_or_nil(node.after_body, state)
