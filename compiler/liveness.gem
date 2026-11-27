@@ -53,69 +53,6 @@ fn lset_add_array(s, arr)
   end
 end
 
-let _is_stc = nil
-fn liveness_is_self_tail_call(fn_name, node)
-  _is_stc(fn_name, node)
-end
-
-fn liveness_has_self_tail_call(fn_name, stmts)
-  if len(stmts) == 0
-    return false
-  end
-  _is_stc(fn_name, stmts[len(stmts) - 1])
-end
-
-_is_stc = fn(fn_name, node)
-  if node == nil
-    return false
-  end
-  if type(node) != "table" or node.tag == nil
-    return false
-  end
-  match node
-  when {tag: "call", func: func}
-    return is_liveness_node(func, "var") and func.name == fn_name
-  when {tag: "return", value: value}
-    if value != nil
-      return _is_stc(fn_name, value)
-    end
-    return false
-  when {tag: "if", then: then_body, else: else_body}
-    if liveness_has_self_tail_call(fn_name, then_body)
-      return true
-    end
-    if else_body != nil
-      return liveness_has_self_tail_call(fn_name, else_body)
-    end
-    return false
-  when {tag: "match", whens: whens, else: else_body}
-    for i = 0, len(whens)
-      if liveness_has_self_tail_call(fn_name, whens[i].body)
-        return true
-      end
-    end
-    if else_body != nil
-      return liveness_has_self_tail_call(fn_name, else_body)
-    end
-    return false
-  when {tag: "receive_match", arms: arms, after_body: after_body}
-    for i = 0, len(arms)
-      if liveness_has_self_tail_call(fn_name, arms[i].body)
-        return true
-      end
-    end
-    if after_body != nil
-      return liveness_has_self_tail_call(fn_name, after_body)
-    end
-    return false
-  when {tag: "block", stmts: stmts}
-    return liveness_has_self_tail_call(fn_name, stmts)
-  else
-    nil
-  end
-  return false
-end
-
 let _collect_free_node = nil
 let _collect_free_stmts = nil
 
@@ -776,20 +713,6 @@ _attach_node = fn(s, live_out, ctx)
     return _attach_stmts(s.stmts, live_out, ctx)
   end
 
-  if s.tag == "for" or s.tag == "for_kv" or s.tag == "for_range"
-    if s.iter != nil
-      _scan_anons(s.iter)
-    end
-    if s.from != nil
-      _scan_anons(s.from)
-    end
-    if s.to != nil
-      _scan_anons(s.to)
-    end
-    _attach_stmts(s.body, live_out, nil)
-    return _transfer_stmt(s, live_out, ctx)
-  end
-
   _scan_anons(s)
   return _transfer_stmt(s, live_out, ctx)
 end
@@ -798,4 +721,4 @@ fn compute_live_for_pt_loops_in_stmts(stmts)
   _attach_stmts(stmts, {}, nil)
 end
 
-export compute_loop_live_at_backedge, compute_live_for_pt_loops_in_stmts, liveness_has_self_tail_call, liveness_loop_has_break, sorted_params_to_set, lset_eq, lset_copy, is_spawn_callee_name
+export compute_live_for_pt_loops_in_stmts, is_spawn_callee_name

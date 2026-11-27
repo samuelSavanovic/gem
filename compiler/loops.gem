@@ -94,11 +94,6 @@ captured_arm_lets_node = fn(node, scope)
   if node.tag == "if"
     captured_arm_lets_node(node.cond, scope)
     captured_arm_lets_stmts(node.then, scope)
-    if node.elifs != nil
-      for ei in node.elifs
-        captured_arm_lets_stmts(ei.body, scope)
-      end
-    end
     captured_arm_lets_stmts(node.else, scope)
     return nil
   end
@@ -107,41 +102,11 @@ captured_arm_lets_node = fn(node, scope)
     captured_arm_lets_stmts(node.body, scope)
     return nil
   end
-  if node.tag == "for" or node.tag == "for_kv" or node.tag == "for_range"
-    let body_scope = set_union(scope, {})
-    if node.var != nil
-      set_add(body_scope, node.var)
-    end
-    if node.kvar != nil
-      set_add(body_scope, node.kvar)
-    end
-    if node.vvar != nil
-      set_add(body_scope, node.vvar)
-    end
-    if node.name != nil and (node.tag == "for" or node.tag == "for_range")
-      set_add(body_scope, node.name)
-    end
-    for k, v in node
-      if k != "tag" and k != "body" and type(v) == "table"
-        captured_arm_lets_node(v, scope)
-      end
-    end
-    captured_arm_lets_stmts(node.body, body_scope)
-    return nil
-  end
   if node.tag == "match"
     captured_arm_lets_node(node.target, scope)
     if node.whens != nil
       for w in node.whens
-        let arm_scope = set_union(scope, {})
-        if w.bindings != nil
-          for b in w.bindings
-            if type(b) == "table" and b.tag == "var" and b.name != nil
-              set_add(arm_scope, b.name)
-            end
-          end
-        end
-        captured_arm_lets_stmts(w.body, arm_scope)
+        captured_arm_lets_stmts(w.body, scope)
       end
     end
     captured_arm_lets_stmts(node.else, scope)
@@ -150,15 +115,7 @@ captured_arm_lets_node = fn(node, scope)
   if node.tag == "receive_match"
     if node.arms != nil
       for a in node.arms
-        let arm_scope = set_union(scope, {})
-        if a.pattern != nil and a.pattern.bindings != nil
-          for b in a.pattern.bindings
-            if type(b) == "table" and b.tag == "var" and b.name != nil
-              set_add(arm_scope, b.name)
-            end
-          end
-        end
-        captured_arm_lets_stmts(a.body, arm_scope)
+        captured_arm_lets_stmts(a.body, scope)
       end
     end
     if node.after_body != nil

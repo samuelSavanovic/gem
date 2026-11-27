@@ -270,12 +270,6 @@ shadow_node = fn(node, env, mode, ctx)
   elif tag == "if"
     shadow_node(node.cond, env, mode, ctx)
     shadow_stmts(node.then, env, cm, ctx, "if")
-    if node.elifs != nil
-      for ei in node.elifs
-        shadow_node(ei.cond, env, mode, ctx)
-        shadow_stmts(ei.body, env, cm, ctx, "if")
-      end
-    end
     shadow_stmts(node.else, env, cm, ctx, "if")
   elif tag == "while"
     shadow_node(node.cond, env, mode, ctx)
@@ -418,31 +412,10 @@ collect_shadow_lets_in_node = fn(node, result)
   end
   if node.tag == "if"
     collect_shadow_lets_in_stmts(node.then, result)
-    if node.elifs != nil
-      for ei in node.elifs
-        collect_shadow_lets_in_stmts(ei.body, result)
-      end
-    end
     collect_shadow_lets_in_stmts(node.else, result)
     return nil
   end
   if node.tag == "while"
-    collect_shadow_lets_in_stmts(node.body, result)
-    return nil
-  end
-  if node.tag == "for" or node.tag == "for_kv" or node.tag == "for_range"
-    if node.var != nil
-      set_add(result, node.var)
-    end
-    if node.kvar != nil
-      set_add(result, node.kvar)
-    end
-    if node.vvar != nil
-      set_add(result, node.vvar)
-    end
-    if node.name != nil and (node.tag == "for" or node.tag == "for_range")
-      set_add(result, node.name)
-    end
     collect_shadow_lets_in_stmts(node.body, result)
     return nil
   end
