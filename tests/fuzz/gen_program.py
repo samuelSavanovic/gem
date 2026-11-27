@@ -10,7 +10,9 @@ builds of one program must print the same: default against
 GEM_RESET_STRESS=1, -O2 against -O0. They lean on what region resets have
 to get right: values kept across loop iterations, tables created before a
 loop and filled inside it, module state written in loops, closures that
-assign their captures, self tail calls, a mutual tail-call chain of up
+assign their captures (also from table literals, parameter defaults
+and match arms whose bindings they capture), break, continue and return
+inside loops, self tail calls, a mutual tail-call chain of up
 to 50,000 calls, non-tail recursion (up to 5 levels), pcall, string
 building, and messages between processes.
 
@@ -35,6 +37,8 @@ class Gen:
         self.fns = []        # (name, nargs): user fns taking (d, ints...) and returning an int
         self.lines = []
         self.work = 1        # iterations of the loops around the code being generated
+        self.loops = 0       # loops around the code being generated, inside the current fn body
+        self.ret_ok = False  # inside a gen_fn body, where `return <int>` fits
 
     def fresh(self, base):
         self.n += 1
@@ -158,6 +162,10 @@ class Gen:
             opts += ["push", "push"]
         if sc["rec"]:
             opts.append("setfield")
+        if self.loops:
+            opts.append("jump")
+        if depth < 2:
+            opts += ["tablefn", "patcap"]
         opts.append("global")
         k = r.choice(opts)
         if k == "let_int":
@@ -213,10 +221,11 @@ class Gen:
             self.emit(ind, "let {} = 0".format(v))
             n = self.bound([2, 20, 300])
             self.emit(ind, "while {} < {}".format(v, n))
+            # counted first, so a `continue` can't skip it
+            self.emit(ind + 1, "{} += 1".format(v))
             inner = self.copy_scope(sc)
             inner["int"].append(v)
             self.in_loop(n, lambda: self.loop_body(inner, ind + 1, depth))
-            self.emit(ind + 1, "{} += 1".format(v))
             self.emit(ind, "end")
         elif k == "forin":
             arr = self.arr_expr(sc)
@@ -228,6 +237,52 @@ class Gen:
             inner["arr"] = []
             self.in_loop(64, lambda: self.block(inner, ind + 1, r.randrange(1, 3), depth + 1))
             self.emit(ind, "end")
+        elif k == "jump":
+            j = r.choice(["break", "continue"] + (["return"] if self.ret_ok else []))
+            if j == "return":
+                j = "return {}".format(self.int_expr(sc))
+            self.emit(ind, "if {} then {} end".format(self.cond(sc), j))
+        elif k == "tablefn":
+            cnt = self.fresh("c")
+            t = self.fresh("t")
+            n = self.bound([3, 30, 200])
+            self.emit(ind, "let {} = 0".format(cnt))
+            self.emit(ind, "let {} = {{n: {}, f: fn(x)".format(t, self.int_expr(sc)))
+            self.emit(ind + 1, "{} = ({} + x) % {}".format(cnt, cnt, MOD))
+            inner = self.copy_scope(sc)
+            inner["int"].append("x")
+            self.in_closure(n, lambda: self.block(inner, ind + 1, r.randrange(1, 3), depth + 1))
+            self.emit(ind + 1, cnt)
+            self.emit(ind, "end}")
+            v = self.fresh("k")
+            self.emit(ind, "for {} = 0, {}".format(v, n))
+            self.emit(ind + 1, "{}.f({})".format(t, v))
+            self.emit(ind, "end")
+            if self.work <= 20:
+                self.emit(ind, "print(\"tablefn\", {}, {}.n)".format(cnt, t))
+            sc["int"].append(cnt)
+        elif k == "patcap":
+            v = self.fresh("m")
+            nb = self.fresh("nb")
+            sb = self.fresh("sb")
+            f = self.fresh("f")
+            kk = self.fresh("k")
+            self.emit(ind, "let {} = match {{n: {}, s: {}}}".format(v, self.int_expr(sc), self.str_expr(sc)))
+            self.emit(ind, "when {{n: {}, s: {}}}".format(nb, sb))
+            self.emit(ind + 1, "let {} = fn(x)".format(f))
+            self.emit(ind + 2, "{} = ({} + x) % {}".format(nb, nb, MOD))
+            self.emit(ind + 2, "{} = clip({} + \"y\")".format(sb, sb))
+            self.emit(ind + 2, nb)
+            self.emit(ind + 1, "end")
+            self.emit(ind + 1, "for {} = 0, {}".format(kk, self.bound([3, 50, 400])))
+            self.emit(ind + 2, "{}({})".format(f, kk))
+            self.emit(ind + 2, "junk({})".format(kk))
+            self.emit(ind + 1, "end")
+            self.emit(ind + 1, '"{{{}}}:{{{}}}"'.format(sb, nb))
+            self.emit(ind, "else")
+            self.emit(ind + 1, '""')
+            self.emit(ind, "end")
+            sc["str"].append(v)
         elif k == "push":
             a = r.choice(sc["arr"])
             self.emit(ind, "if len({}) < 64 then push({}, {}) end".format(a, a, self.int_expr(sc)))
@@ -291,8 +346,18 @@ class Gen:
     def in_loop(self, n, body):
         saved = self.work
         self.work *= max(n, 1)
+        self.loops += 1
         body()
+        self.loops -= 1
         self.work = saved
+
+    # the body of a fn literal called n times: no enclosing loop to break out of, no int to return
+    def in_closure(self, n, body):
+        saved = (self.work, self.loops, self.ret_ok)
+        self.work *= max(n, 1)
+        self.loops, self.ret_ok = 0, False
+        body()
+        self.work, self.loops, self.ret_ok = saved
 
     def loop_body(self, sc, ind, depth):
         # allocate garbage in most loops, so resets have work to do
@@ -319,13 +384,28 @@ class Gen:
         name = "f{}".format(idx)
         nargs = r.randrange(1, 3)
         params = ["x{}".format(i) for i in range(nargs)]
-        self.emit(0, "fn {}(d, {})".format(name, ", ".join(params)))
         sc = {"int": ["d"] + params, "str": [], "arr": [], "rec": []}
         shape = r.choice(["tail", "nontail", "plain", "plain"])
         # a fn body's loops get a smaller budget since callers may loop around it, and fns call no fns
         # (main does), so calls can't nest into exponential work
         self.work = 100
+        self.ret_ok = True
         saved_fns, self.fns = self.fns, []
+        if self.chance(0.3):
+            # a fn literal as a parameter default, with a loop of its own; callers never pass it
+            self.emit(0, "fn {}(d, {}, h = fn(y)".format(name, ", ".join(params)))
+            self.emit(1, "let t = y")
+            self.emit(1, "for k = 0, {}".format(r.choice([2, 10])))
+            self.emit(2, "t = (t + k) % {}".format(MOD))
+            self.emit(2, "junk(k)")
+            self.emit(1, "end")
+            self.emit(1, "t")
+            self.emit(0, "end)")
+            h = self.fresh("i")
+            self.emit(1, "let {} = h({})".format(h, params[0]))
+            sc["int"].append(h)
+        else:
+            self.emit(0, "fn {}(d, {})".format(name, ", ".join(params)))
         if shape == "tail":
             # self tail call carrying an accumulator through the iterations
             self.emit(1, "if d <= 0 then return {} end".format(self.int_expr(sc, 1)))
@@ -345,6 +425,7 @@ class Gen:
         self.emit(0, "end")
         self.emit(0, "")
         self.work = 1
+        self.ret_ok = False
         self.fns = saved_fns + [(name, nargs)]
 
     def program(self):
