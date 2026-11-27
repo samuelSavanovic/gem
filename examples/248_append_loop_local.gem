@@ -1,0 +1,36 @@
+# `x = x + ...` on a variable the loop body declares (a for variable, a let, a pattern binding)
+fn main()
+  let n = 0
+  for w in ["a", "b"]
+    w = w + "!"
+    n += 1
+  end
+  print(n)
+
+  let out = []
+  let i = 0
+  while i < 3
+    let s = "s{i}"
+    s = s + "-"
+    s = s + "x"
+    push(out, s)
+    i += 1
+  end
+  print(out)
+
+  let m = 0
+  for x in [{s: "a"}, {s: "b"}]
+    match x
+    when {s: s} then
+      s = s + "!"
+      m += 1
+    end
+  end
+  print(m)
+
+  let acc = ""
+  for i = 0, 5
+    acc = acc + "{i}"
+  end
+  print(acc)
+end

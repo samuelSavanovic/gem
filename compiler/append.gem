@@ -129,7 +129,8 @@ fn stmt_has_non_append_ref(stmt, name)
     return expr_has_var(stmt.value, name)
   end
   if stmt.tag == "let"
-    return expr_has_var(stmt.value, name)
+    # a loop-local of that name: the buffer would be finished out of its scope
+    return stmt.name == name or expr_has_var(stmt.value, name)
   end
   if stmt.tag == "dot_assign"
     return expr_has_var(stmt.object, name) or expr_has_var(stmt.value, name)
@@ -165,6 +166,9 @@ fn stmt_has_non_append_ref(stmt, name)
           if expr_has_var(w.value, name)
             return true
           end
+        end
+        if w.bindings != nil and stmts_have_non_append_ref(w.bindings, name)
+          return true
         end
         if w.body != nil
           if stmts_have_non_append_ref(w.body, name)
