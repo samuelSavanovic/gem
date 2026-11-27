@@ -5023,3 +5023,11 @@ held under 20 MB true
 a???>b 6
 1 x1??!
 true true
+nil
+nil
+{n: 49, s: "kept 49"}
+nil
+{n: 49, s: "kept 49"}
+{n: 49, s: "kept 49"}
+{n: 49, s: "kept 49"}
+{n: 49, s: "kept 49"}

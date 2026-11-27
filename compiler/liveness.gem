@@ -428,11 +428,11 @@ end
 let _transfer_stmt = nil
 let _transfer_stmts = nil
 
-_transfer_stmts = fn(stmts, live_out)
+_transfer_stmts = fn(stmts, live_out, ctx)
   let live = lset_copy(live_out)
   let i = len(stmts) - 1
   while i >= 0
-    live = _transfer_stmt(stmts[i], live)
+    live = _transfer_stmt(stmts[i], live, ctx)
     i -= 1
   end
   live
@@ -441,15 +441,14 @@ end
 # live_in of a nested while, by fixpoint
 let _fixpoint_inner_loop = nil
 _fixpoint_inner_loop = fn(while_node, live_after)
-  let live_top = {}
+  let live_top = lset_copy(live_after)
   let prev = nil
   let iter = 0
   while iter < 64
-    let live_after_body = lset_copy(live_top)
-    # the loop can exit (false cond or break) from any iteration
-    lset_union_into(live_after_body, live_after)
-    let live_in_body = _transfer_stmts(while_node.body, live_after_body)
-    let new_top = {}
+    let ctx = {brk: live_after, cont: live_top}
+    let live_in_body = _transfer_stmts(while_node.body, live_top, ctx)
+    # the condition can end the loop before the first iteration too
+    let new_top = lset_copy(live_after)
     _uses_expr(while_node.cond, new_top)
     lset_union_into(new_top, live_in_body)
     if prev != nil and lset_eq(new_top, prev)
@@ -462,7 +461,7 @@ _fixpoint_inner_loop = fn(while_node, live_after)
   live_top
 end
 
-_transfer_stmt = fn(s, live_out)
+_transfer_stmt = fn(s, live_out, ctx)
   if s == nil
     return live_out
   end
@@ -493,8 +492,8 @@ _transfer_stmt = fn(s, live_out)
     _uses_expr(value, live_in)
     return live_in
   when {tag: "if", cond: cond, then: thens, else: el}
-    let live_then = _transfer_stmts(thens, live_out)
-    let live_else = if el != nil then _transfer_stmts(el, live_out) else lset_copy(live_out) end
+    let live_then = _transfer_stmts(thens, live_out, ctx)
+    let live_else = if el != nil then _transfer_stmts(el, live_out, ctx) else lset_copy(live_out) end
     let live_in = lset_copy(live_then)
     lset_union_into(live_in, live_else)
     _uses_expr(cond, live_in)
@@ -504,7 +503,7 @@ _transfer_stmt = fn(s, live_out)
   when {tag: "match", target: target, target_var: target_var, whens: whens, else: el}
     let merged = {}
     if el != nil
-      let live_else = _transfer_stmts(el, live_out)
+      let live_else = _transfer_stmts(el, live_out, ctx)
       lset_union_into(merged, live_else)
     else
       lset_union_into(merged, live_out)
@@ -520,7 +519,7 @@ _transfer_stmt = fn(s, live_out)
       for bs in w.body
         push(arm_stmts, bs)
       end
-      let live_arm = _transfer_stmts(arm_stmts, live_out)
+      let live_arm = _transfer_stmts(arm_stmts, live_out, ctx)
       _uses_expr(w.value, live_arm)
       lset_union_into(merged, live_arm)
     end
@@ -532,7 +531,7 @@ _transfer_stmt = fn(s, live_out)
   when {tag: "receive_match", arms: arms, after_ms: after_ms, after_body: after_body}
     let merged = {}
     if after_body != nil
-      let live_after = _transfer_stmts(after_body, live_out)
+      let live_after = _transfer_stmts(after_body, live_out, ctx)
       if after_ms != nil
         _uses_expr(after_ms, live_after)
       end
@@ -552,7 +551,7 @@ _transfer_stmt = fn(s, live_out)
       for bs in arm.body
         push(arm_stmts, bs)
       end
-      let live_arm = _transfer_stmts(arm_stmts, live_out)
+      let live_arm = _transfer_stmts(arm_stmts, live_out, ctx)
       if arm.pattern.condition != nil
         _uses_expr(arm.pattern.condition, live_arm)
       end
@@ -563,7 +562,7 @@ _transfer_stmt = fn(s, live_out)
     end
     return merged
   when {tag: "block", stmts: stmts}
-    return _transfer_stmts(stmts, live_out)
+    return _transfer_stmts(stmts, live_out, ctx)
   when {tag: "return", value: value}
     let live_in = {}
     if value != nil
@@ -571,11 +570,10 @@ _transfer_stmt = fn(s, live_out)
     end
     return live_in
   when {tag: "break"}
-    # approximated by live_out; the loop's fixpoint is seeded with what's live after it
-    return lset_copy(live_out)
+    # control continues after the loop
+    return lset_copy(ctx.brk)
   when {tag: "continue"}
-    # approximated by live_out; the loop fixpoint covers the jump to the top
-    return lset_copy(live_out)
+    return lset_copy(ctx.cont)
   when {tag: "fn_def"}
     return lset_copy(live_out)
   when {tag: "call"}
@@ -600,7 +598,6 @@ fn compute_loop_live_at_backedge(while_node, live_after_loop)
   let has_break = liveness_loop_has_break(while_node)
   let post_reachable = has_break or not cond_is_true
 
-  # seeding with live_after_loop also makes `break` (live_in = live_out) right
   let live_top = {}
   lset_union_into(live_top, closure_caps)
   if post_reachable
@@ -610,8 +607,8 @@ fn compute_loop_live_at_backedge(while_node, live_after_loop)
   let prev = nil
   let iter = 0
   while iter < 64
-    let live_after_body = lset_copy(live_top)
-    let live_in_body = _transfer_stmts(while_node.body, live_after_body)
+    let ctx = {brk: live_after_loop, cont: live_top}
+    let live_in_body = _transfer_stmts(while_node.body, live_top, ctx)
     let new_top = lset_copy(live_in_body)
     _uses_expr(while_node.cond, new_top)
     lset_union_into(new_top, closure_caps)
@@ -726,11 +723,11 @@ let _attach_node = nil
 let _attach_stmts = nil
 let _scan_anons = nil
 
-_attach_stmts = fn(stmts, live_out)
+_attach_stmts = fn(stmts, live_out, ctx)
   let live = lset_copy(live_out)
   let i = len(stmts) - 1
   while i >= 0
-    live = _attach_node(stmts[i], live)
+    live = _attach_node(stmts[i], live, ctx)
     i -= 1
   end
   live
@@ -745,7 +742,7 @@ _scan_anons = fn(node)
     return nil
   end
   if node.tag == "anon_fn"
-    _attach_stmts(node.body, {})
+    _attach_stmts(node.body, {}, nil)
     if node.defaults != nil
       for d in node.defaults
         if d != nil
@@ -776,7 +773,7 @@ _scan_anons = fn(node)
   end
 end
 
-_attach_node = fn(s, live_out)
+_attach_node = fn(s, live_out, ctx)
   if s == nil
     return live_out
   end
@@ -790,30 +787,30 @@ _attach_node = fn(s, live_out)
       s.liveness_result = r
     end
     let body_live_after = if r.ok then r.live else lset_copy(live_out) end
-    _attach_stmts(s.body, body_live_after)
+    _attach_stmts(s.body, body_live_after, {brk: live_out, cont: body_live_after})
     _scan_anons(s.cond)
     if r.ok
       return lset_copy(r.live)
     end
-    return _transfer_stmt(s, live_out)
+    return _transfer_stmt(s, live_out, ctx)
   end
 
   if s.tag == "if"
     if s.then != nil
-      _attach_stmts(s.then, live_out)
+      _attach_stmts(s.then, live_out, ctx)
     end
     if s.else != nil
-      _attach_stmts(s.else, live_out)
+      _attach_stmts(s.else, live_out, ctx)
     end
     _scan_anons(s.cond)
-    return _transfer_stmt(s, live_out)
+    return _transfer_stmt(s, live_out, ctx)
   end
 
   if s.tag == "match"
     _scan_anons(s.target)
     if s.whens != nil
       for w in s.whens
-        _attach_stmts(w.body, live_out)
+        _attach_stmts(w.body, live_out, ctx)
         _scan_anons(w.value)
         if w.bindings != nil
           for b in w.bindings
@@ -823,15 +820,15 @@ _attach_node = fn(s, live_out)
       end
     end
     if s.else != nil
-      _attach_stmts(s.else, live_out)
+      _attach_stmts(s.else, live_out, ctx)
     end
-    return _transfer_stmt(s, live_out)
+    return _transfer_stmt(s, live_out, ctx)
   end
 
   if s.tag == "receive_match"
     if s.arms != nil
       for arm in s.arms
-        _attach_stmts(arm.body, live_out)
+        _attach_stmts(arm.body, live_out, ctx)
         if arm.pattern != nil
           if arm.pattern.condition != nil
             _scan_anons(arm.pattern.condition)
@@ -848,13 +845,13 @@ _attach_node = fn(s, live_out)
       _scan_anons(s.after_ms)
     end
     if s.after_body != nil
-      _attach_stmts(s.after_body, live_out)
+      _attach_stmts(s.after_body, live_out, ctx)
     end
-    return _transfer_stmt(s, live_out)
+    return _transfer_stmt(s, live_out, ctx)
   end
 
   if s.tag == "block"
-    return _attach_stmts(s.stmts, live_out)
+    return _attach_stmts(s.stmts, live_out, ctx)
   end
 
   if s.tag == "for" or s.tag == "for_kv" or s.tag == "for_range"
@@ -867,16 +864,16 @@ _attach_node = fn(s, live_out)
     if s.to != nil
       _scan_anons(s.to)
     end
-    _attach_stmts(s.body, live_out)
-    return _transfer_stmt(s, live_out)
+    _attach_stmts(s.body, live_out, nil)
+    return _transfer_stmt(s, live_out, ctx)
   end
 
   _scan_anons(s)
-  return _transfer_stmt(s, live_out)
+  return _transfer_stmt(s, live_out, ctx)
 end
 
 fn compute_live_for_pt_loops_in_stmts(stmts)
-  _attach_stmts(stmts, {})
+  _attach_stmts(stmts, {}, nil)
 end
 
 export compute_loop_live_at_backedge, compute_live_for_pt_loops_in_stmts, liveness_has_self_tail_call, liveness_loop_has_break, sorted_params_to_set, lset_eq, lset_copy, is_spawn_callee_name

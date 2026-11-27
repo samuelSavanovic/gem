@@ -1,0 +1,67 @@
+# loop resets keep what is still read after a break, a continue, or a nested loop that runs zero times
+fn after_continue()
+  let y = nil
+  let i = 0
+  while i < 4
+    print(y)
+    let j = 0
+    while j < 50
+      y = {n: j, s: "kept {j}"}
+      j += 1
+    end
+    let junk = []
+    for k = 0, 50
+      push(junk, {k: k, s: "junk {k}"})
+    end
+    i += 1
+    if i % 2 == 0
+      continue
+    end
+    y = nil
+  end
+end
+
+fn after_break()
+  let y = nil
+  let i = 0
+  while i < 4
+    let j = 0
+    while j < 50
+      y = {n: j, s: "kept {j}"}
+      j += 1
+    end
+    i += 1
+    if i == 2
+      break
+    end
+    y = nil
+  end
+  let junk = []
+  for k = 0, 50
+    push(junk, {k: k, s: "junk {k}"})
+  end
+  print(y)
+end
+
+fn zero_iterations()
+  let x = nil
+  let i = 0
+  while i < 3
+    let n = if i == 0 then 50 else 0 end
+    let j = 0
+    while j < n
+      x = {n: j, s: "kept {j}"}
+      j += 1
+    end
+    let junk = []
+    for k = 0, 50
+      push(junk, {k: k, s: "junk {k}"})
+    end
+    print(x)
+    i += 1
+  end
+end
+
+after_continue()
+after_break()
+zero_iterations()

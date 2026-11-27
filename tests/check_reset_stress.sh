@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # quick reset-stress checks for make test (make test-stress is the full run):
-#   - 117_arena_reset_pressure prints the same under GEM_RESET_STRESS=1 and =1024 as without
+#   - 117_arena_reset_pressure and 242_loop_jump_liveness print the same under GEM_RESET_STRESS=1 and
+#     =1024 as without
 #   - loops that end right after a reset with nothing outside to free what they leave (a sort
 #     comparator called from top-level code) leave no mappings behind; one per reset would run a
 #     program like 117 out of vm.max_map_count at a 1 KB threshold
@@ -13,15 +14,17 @@ T=$(mktemp -d "${TMPDIR:-/tmp}/gem_rstress.XXXXXX")
 trap 'rm -rf "$T"' EXIT
 fails=0
 
-"$GEM" examples/117_arena_reset_pressure.gem -o "$T/p117" || exit 1
-"$T/p117" > "$T/plain.out" 2>&1
-for n in 1 1024; do
-  GEM_RESET_STRESS=$n "$T/p117" > "$T/stress.out" 2>&1
-  if ! cmp -s "$T/plain.out" "$T/stress.out"; then
-    echo "FAIL: 117_arena_reset_pressure differs under GEM_RESET_STRESS=$n:"
-    diff "$T/plain.out" "$T/stress.out" | head -10
-    fails=$((fails + 1))
-  fi
+for ex in 117_arena_reset_pressure 242_loop_jump_liveness; do
+  "$GEM" "examples/$ex.gem" -o "$T/$ex" || exit 1
+  "$T/$ex" > "$T/plain.out" 2>&1
+  for n in 1 1024; do
+    GEM_RESET_STRESS=$n "$T/$ex" > "$T/stress.out" 2>&1
+    if ! cmp -s "$T/plain.out" "$T/stress.out"; then
+      echo "FAIL: $ex differs under GEM_RESET_STRESS=$n:"
+      diff "$T/plain.out" "$T/stress.out" | head -10
+      fails=$((fails + 1))
+    fi
+  done
 done
 
 cat > "$T/cmp.gem" <<'GEM'
