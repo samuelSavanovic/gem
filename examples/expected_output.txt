@@ -5041,3 +5041,15 @@ nil
 5
 5
 8
+300000
+table closure: bounded
+300000
+receive arm: bounded
+1888890
+["msg 0", "msg 50000", "msg 100000", "msg 150000"]
+server in arm: bounded
+h0 25
+h1 25
+h2 25
+h3 25
+h4 25

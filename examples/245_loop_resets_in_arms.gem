@@ -1,0 +1,100 @@
+# loops in receive arms and in closures stored in table literals reset at their back-edge like any other loop
+fn count_strings(n)
+  let i = 0
+  while i < n
+    let s = "x{i}"
+    i += 1
+  end
+  i
+end
+
+fn mem_kb()
+  runtime_stats().memory / 1024
+end
+
+fn in_table_closure()
+  let obj = {run: fn(n)
+    let i = 0
+    while i < n
+      let s = "x{i}"
+      i += 1
+    end
+    i
+  end}
+  let before = mem_kb()
+  print(obj.run(300000))
+  print(if mem_kb() - before < 10000 then "table closure: bounded" else "table closure: grew" end)
+end
+
+fn in_receive_arm()
+  send(self(), 300000)
+  let before = mem_kb()
+  receive
+  when n then
+    let i = 0
+    while i < n
+      let s = "x{i}"
+      i += 1
+    end
+    print(i)
+  end
+  print(if mem_kb() - before < 10000 then "receive arm: bounded" else "receive arm: grew" end)
+end
+
+# a server loop started inside an arm, left by a break in another arm, with state read after it
+fn server_in_arm()
+  let me = self()
+  let pid = spawn(fn()
+    receive
+    when {start: from} then
+      let total = 0
+      let seen = []
+      while true
+        receive
+        when {n: n} then
+          let s = "msg {n}"
+          total += len(s)
+          if n % 50000 == 0
+            push(seen, s)
+          end
+        when "stop" then
+          break
+        end
+      end
+      send(from, {total: total, seen: seen, mem: mem_kb()})
+    end
+  end)
+  send(pid, {start: me})
+  for i = 0, 200000
+    send(pid, {n: i})
+  end
+  send(pid, "stop")
+  receive
+  when {total: t, seen: seen, mem: m} then
+    print(t)
+    print(seen)
+    print(if m < 20000 then "server in arm: bounded" else "server in arm: grew" end)
+  end
+end
+
+# closures in a table literal in a loop keep what they capture across resets
+fn closures_in_loop()
+  let handlers = []
+  let i = 0
+  while i < 5
+    let label = "h{i}"
+    let junk = count_strings(20)
+    push(handlers, {name: fn() label end, sq: fn() i * i end})
+    i += 1
+  end
+  for h in handlers
+    print("{h.name()} {h.sq()}")
+  end
+end
+
+fn main()
+  in_table_closure()
+  in_receive_arm()
+  server_in_arm()
+  closures_in_loop()
+end

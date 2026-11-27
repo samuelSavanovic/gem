@@ -1,57 +1,19 @@
 # Loop prep for compile_while's back-edge reset: tagging loops and giving every value live there a C local.
 
 load "./liveness" (is_spawn_callee_name)
-load "./cgutil" (set_add, set_contains, set_union, is_node)
+load "./cgutil" (set_add, set_contains, set_union, is_node, each_child, any_child)
 
 # A name live at the back-edge but only let-bound inside an arm of the body has no C local the reset can
 # root (`&gem_v_X`), so it gets a `let X = nil` placeholder before the loop.
 
 fn hoist_has_let(node, name)
-  if node == nil
-    return false
-  end
-  if type(node) != "table"
-    return false
-  end
-  let nks = keys(node)
-  if len(nks) > 0 and type(nks[0]) == "int"
-    for child in node
-      if type(child) == "table"
-        if hoist_has_let(child, name)
-          return true
-        end
-      end
-    end
-    return false
-  end
-  if node.tag == nil
-    return false
-  end
-  if node.tag == "anon_fn" or node.tag == "fn_def"
+  if type(node) != "table" or node.tag == "anon_fn" or node.tag == "fn_def"
     return false
   end
   if node.tag == "let" and node.name == name
     return true
   end
-  for k, v in node
-    if k != "tag" and type(v) == "table"
-      let vks = keys(v)
-      if len(vks) > 0 and type(vks[0]) == "int"
-        for child in v
-          if type(child) == "table"
-            if hoist_has_let(child, name)
-              return true
-            end
-          end
-        end
-      else
-        if hoist_has_let(v, name)
-          return true
-        end
-      end
-    end
-  end
-  false
+  any_child(node, fn(c) hoist_has_let(c, name) end)
 end
 
 let captured_arm_lets_node = nil
@@ -208,21 +170,7 @@ captured_arm_lets_node = fn(node, scope)
     captured_arm_lets_stmts(node.stmts, scope)
     return nil
   end
-  for k, v in node
-    if k != "tag" and type(v) == "table"
-      let vks = keys(v)
-      if len(vks) > 0 and type(vks[0]) == "int"
-        for child in v
-          if type(child) == "table"
-            captured_arm_lets_node(child, scope)
-          end
-        end
-      else
-        captured_arm_lets_node(v, scope)
-      end
-    end
-  end
-  nil
+  each_child(node, fn(c) captured_arm_lets_node(c, scope) end)
 end
 
 fn lift_captured_arm_lets_in_fn(fn_node)
@@ -331,23 +279,7 @@ walk_for_tagging_node = fn(node, is_pt, source_name)
     end
     # fall through: args can hold more spawns
   end
-  for k, v in node
-    if k != "tag" and type(v) == "table"
-      let vks = keys(v)
-      if len(vks) > 0 and type(vks[0]) == "int"
-        let vi = 0
-        while vi < len(v)
-          if type(v[vi]) == "table"
-            walk_for_tagging_node(v[vi], is_pt, source_name)
-          end
-          vi += 1
-        end
-      else
-        walk_for_tagging_node(v, is_pt, source_name)
-      end
-    end
-  end
-  nil
+  each_child(node, fn(c) walk_for_tagging_node(c, is_pt, source_name) end)
 end
 
 let tag_process_tail_while_loops = nil

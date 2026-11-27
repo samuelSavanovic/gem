@@ -264,57 +264,22 @@ _collect_free_stmts = fn(stmts, defined, free)
   end
 end
 
-let _has_break_here = nil
-_has_break_here = fn(node)
-  if node == nil
-    return false
-  end
-  if type(node) != "table" or node.tag == nil
+fn _has_break_here(node)
+  if type(node) != "table"
     return false
   end
   if node.tag == "break"
     return true
   end
   # breaks in nested loops and fns aren't ours
-  if node.tag == "while"
+  if node.tag == "while" or node.tag == "anon_fn" or node.tag == "fn_def"
     return false
   end
-  if node.tag == "anon_fn"
-    return false
-  end
-  if node.tag == "fn_def"
-    return false
-  end
-  for nk, v in node
-    if nk != "tag" and type(v) == "table"
-      let vks = keys(v)
-      if len(vks) > 0 and type(vks[0]) == "int"
-        let vi = 0
-        while vi < len(v)
-          if type(v[vi]) == "table"
-            if _has_break_here(v[vi])
-              return true
-            end
-          end
-          vi += 1
-        end
-      else
-        if _has_break_here(v)
-          return true
-        end
-      end
-    end
-  end
-  false
+  any_child(node, _has_break_here)
 end
 
 fn liveness_loop_has_break(while_node)
-  for s in while_node.body
-    if _has_break_here(s)
-      return true
-    end
-  end
-  false
+  _has_break_here(while_node.body)
 end
 
 # adds the names an expression reads to `into`; a closure reads its free vars
@@ -638,16 +603,34 @@ collect_closure_captures_in_node = fn(node, defined, caps)
     end
     return nil
   end
-  for nk, v in node
-    if nk != "tag" and type(v) == "table"
-      let vks = keys(v)
-      if len(vks) > 0 and type(vks[0]) == "int"
-        # a statement list: its lets are defined for the closures after them
-        collect_closure_captures_in_stmts(v, defined, caps)
-      else
-        collect_closure_captures_in_node(v, defined, caps)
-      end
+  match node
+  when {tag: "if"}
+    collect_closure_captures_in_node(node.cond, defined, caps)
+    collect_closure_captures_in_stmts(node.then, defined, caps)
+    collect_closure_captures_in_stmts(node.else, defined, caps)
+  when {tag: "while"}
+    collect_closure_captures_in_node(node.cond, defined, caps)
+    collect_closure_captures_in_stmts(node.body, defined, caps)
+  when {tag: "block"}
+    collect_closure_captures_in_stmts(node.stmts, defined, caps)
+  when {tag: "match"}
+    collect_closure_captures_in_node(node.target, defined, caps)
+    for w in node.whens
+      collect_closure_captures_in_node(w.value, defined, caps)
+      collect_closure_captures_in_stmts(w.body, defined, caps)
+      collect_closure_captures_in_stmts(w.bindings, defined, caps)
     end
+    collect_closure_captures_in_stmts(node.else, defined, caps)
+  when {tag: "receive_match"}
+    for arm in node.arms
+      collect_closure_captures_in_node(arm.pattern.condition, defined, caps)
+      collect_closure_captures_in_stmts(arm.pattern.bindings, defined, caps)
+      collect_closure_captures_in_stmts(arm.body, defined, caps)
+    end
+    collect_closure_captures_in_node(node.after_ms, defined, caps)
+    collect_closure_captures_in_stmts(node.after_body, defined, caps)
+  else
+    each_child(node, fn(c) collect_closure_captures_in_node(c, defined, caps) end)
   end
 end
 
@@ -672,6 +655,9 @@ fn liveness_is_spawn_with_closure(node)
 end
 
 fn collect_closure_captures_in_stmts(stmts, defined, caps)
+  if stmts == nil
+    return nil
+  end
   let d = lset_copy(defined)
   for s in stmts
     collect_closure_captures_in_node(s, d, caps)
@@ -727,22 +713,7 @@ _scan_anons = fn(node)
   if node.tag == "fn_def"
     return nil
   end
-  for nk, v in node
-    if nk != "tag" and type(v) == "table"
-      let vks = keys(v)
-      if len(vks) > 0 and type(vks[0]) == "int"
-        let vi = 0
-        while vi < len(v)
-          if type(v[vi]) == "table"
-            _scan_anons(v[vi])
-          end
-          vi += 1
-        end
-      else
-        _scan_anons(v)
-      end
-    end
-  end
+  each_child(node, _scan_anons)
 end
 
 _attach_node = fn(s, live_out, ctx)
