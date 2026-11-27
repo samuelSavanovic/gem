@@ -3,6 +3,8 @@
 # Anything a closure in the body captures is live across the back-edge, except closures passed straight to
 # spawn: spawn copies their captures into the child, so they only need to live until the call.
 
+load "./cgutil" (each_child, any_child)
+
 fn is_liveness_node(node, tag)
   type(node) == "table" and node.tag == tag
 end
@@ -241,22 +243,7 @@ _collect_free_node = fn(node, defined, free)
       _collect_free_node(value, defined, free)
     end
   else
-    for nk, v in node
-      if nk != "tag" and type(v) == "table"
-        let vks = keys(v)
-        if len(vks) > 0 and type(vks[0]) == "int"
-          let vi = 0
-          while vi < len(v)
-            if type(v[vi]) == "table"
-              _collect_free_node(v[vi], defined, free)
-            end
-            vi += 1
-          end
-        else
-          _collect_free_node(v, defined, free)
-        end
-      end
-    end
+    each_child(node, fn(c) _collect_free_node(c, defined, free) end)
   end
 end
 
@@ -397,22 +384,7 @@ _uses_expr = fn(node, into)
     end
     lset_union_into(into, free)
   else
-    for nk, v in node
-      if nk != "tag" and type(v) == "table"
-        let vks = keys(v)
-        if len(vks) > 0 and type(vks[0]) == "int"
-          let vi = 0
-          while vi < len(v)
-            if type(v[vi]) == "table"
-              _uses_expr(v[vi], into)
-            end
-            vi += 1
-          end
-        else
-          _uses_expr(v, into)
-        end
-      end
-    end
+    each_child(node, fn(c) _uses_expr(c, into) end)
   end
 end
 

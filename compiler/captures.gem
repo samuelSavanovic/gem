@@ -179,24 +179,7 @@ fn collect_free_node(node, defined, free, is_global)
       collect_free_node(value, defined, free, is_global)
     end
   else
-    for nk, v in node
-      if nk != "tag"
-        if type(v) == "table"
-          let vks = keys(v)
-          if len(vks) > 0 and type(vks[0]) == "int"
-            let vi = 0
-            while vi < len(v)
-              if type(v[vi]) == "table"
-                collect_free_node(v[vi], defined, free, is_global)
-              end
-              vi += 1
-            end
-          else
-            collect_free_node(v, defined, free, is_global)
-          end
-        end
-      end
-    end
+    each_child(node, fn(c) collect_free_node(c, defined, free, is_global) end)
   end
 end
 
@@ -305,24 +288,7 @@ fn walk_captures_node(node, scope_vars, captured, is_global)
   when {tag: "assign", value: value}
     walk_captures_node(value, scope_vars, captured, is_global)
   else
-    for nk, v in node
-      if nk != "tag"
-        if type(v) == "table"
-          let vks = keys(v)
-          if len(vks) > 0 and type(vks[0]) == "int"
-            let vi = 0
-            while vi < len(v)
-              if type(v[vi]) == "table"
-                walk_captures_node(v[vi], scope_vars, captured, is_global)
-              end
-              vi += 1
-            end
-          else
-            walk_captures_node(v, scope_vars, captured, is_global)
-          end
-        end
-      end
-    end
+    each_child(node, fn(c) walk_captures_node(c, scope_vars, captured, is_global) end)
   end
 end
 
@@ -463,24 +429,7 @@ fn walk_writes_node(node, scope_vars, defined, writes, inside_anon)
       walk_writes_node(value, scope_vars, defined, writes, inside_anon)
     end
   else
-    for nk, v in node
-      if nk != "tag"
-        if type(v) == "table"
-          let vks = keys(v)
-          if len(vks) > 0 and type(vks[0]) == "int"
-            let vi = 0
-            while vi < len(v)
-              if type(v[vi]) == "table"
-                walk_writes_node(v[vi], scope_vars, defined, writes, inside_anon)
-              end
-              vi += 1
-            end
-          else
-            walk_writes_node(v, scope_vars, defined, writes, inside_anon)
-          end
-        end
-      end
-    end
+    each_child(node, fn(c) walk_writes_node(c, scope_vars, defined, writes, inside_anon) end)
   end
 end
 
