@@ -9,7 +9,7 @@
 
 set -u
 cd "$(dirname "$0")/.."
-GEM=build/gem
+GEM=${GEM:-build/gem}
 T=$(mktemp -d "${TMPDIR:-/tmp}/gem_rstress.XXXXXX")
 trap 'rm -rf "$T"' EXIT
 fails=0

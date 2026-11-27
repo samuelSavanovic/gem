@@ -16,7 +16,8 @@ on the debug runtime), and run as
 All runs must print the same and exit with the same status. A seed that
 doesn't, or whose program fails to compile, is reported and its program
 kept in --keep (default build/fuzz_failures/) for a repro. Exit status 1
-when any seed failed.
+when any seed failed. GEM= names the compiler (default build/gem); a copy
+has to live in build/ to find std/ and the runtime.
 """
 
 import argparse
@@ -28,7 +29,7 @@ import sys
 import tempfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-GEM = os.path.join(ROOT, "build", "gem")
+GEM = os.path.abspath(os.environ.get("GEM") or os.path.join(ROOT, "build", "gem"))
 GEN = os.path.join(ROOT, "tests", "fuzz", "gen_program.py")
 
 

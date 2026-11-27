@@ -4,10 +4,11 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(dirname "$SCRIPT_DIR")"
 EXPECTED="$SCRIPT_DIR/expected_output.txt"
-COMPILER="$ROOT/build/gem"
+COMPILER="${GEM:-$ROOT/build/gem}"
+case $COMPILER in /*) ;; *) COMPILER="$PWD/$COMPILER" ;; esac
 
 if [[ ! -f "$COMPILER" ]]; then
-    echo "error: build/gem not found, run 'make build' first" >&2
+    echo "error: $COMPILER not found, run 'make build' first" >&2
     exit 1
 fi
 

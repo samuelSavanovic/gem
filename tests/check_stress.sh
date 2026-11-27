@@ -8,7 +8,7 @@ set -u
 cd "$(dirname "$0")/.."
 
 export GEM_RESET_STRESS=${GEM_RESET_STRESS:-1}
-GEM=build/gem
+export GEM=${GEM:-build/gem}
 fails=0
 
 echo "== examples (GEM_RESET_STRESS=$GEM_RESET_STRESS)"
