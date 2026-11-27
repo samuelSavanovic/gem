@@ -1,0 +1,19 @@
+# constant expressions inside a for body or a destructuring let fold to what the operators compute at run time
+fn runtime(a, b)
+  [a + b, a - b, a * b, a / b, a % b, -a, a == b, a < b]
+end
+
+fn main()
+  let two = 2
+  let big = 9223372036854775807
+  for i = 0, 1
+    print([7 + 2, 7 - 2, 7 * 2, 7 / 2, 7 % 2, -7, 7 == 2, 7 < 2])
+    print(runtime(7, two))
+    print(9223372036854775807 + 1, big + 1)
+    print(-7 / 2, -7 % 2, 7.5 * 2, "a" + "b", not true)
+  end
+  let {a, b} = {a: 10 * 10, b: 1 - 2}
+  print(a, b)
+  let {c} = {c: 2 * 3 + 1}
+  print(c)
+end
