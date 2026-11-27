@@ -595,7 +595,7 @@ fn import_bindings(load_node, mod_name, mangle, exported, bad, module_bindings, 
       let pos = load_node.selective_pos[i]
       i += 1
       if is_exported[sel_name] != nil
-        let imported = make_let(sel_name, make_var(prefix + sel_name), 0)
+        let imported = make_let(sel_name, make_var(prefix + sel_name), pos.line)
         imported.selective_import = true
         push(result, imported)
       else
@@ -605,7 +605,7 @@ fn import_bindings(load_node, mod_name, mangle, exported, bad, module_bindings, 
           end
           sink.report(sources_by_file[load_node.file], load_node.file, pos.line, pos.col, len(sel_name), "module `{mod_name}` has no export `{sel_name}`", hint)
         end
-        push(result, make_let(sel_name, make_nil_node(), 0))
+        push(result, make_let(sel_name, make_nil_node(), pos.line))
       end
     end
   else
@@ -616,7 +616,7 @@ fn import_bindings(load_node, mod_name, mangle, exported, bad, module_bindings, 
     end
     let mod_tbl = make_table(entries)
     mod_tbl.frozen = true
-    push(result, make_let(binding_name, mod_tbl, 0))
+    push(result, make_let(binding_name, mod_tbl, load_node.line))
     module_bindings[binding_name] = exported
   end
   result

@@ -1359,7 +1359,7 @@ fn make_parser(tokens, source, file, sink)
         if sub_pat == nil
           bind_pattern_name(key_tok)
         end
-        let entry = make_pat_table_entry(key_name, sub_pat)
+        let entry = make_pat_table_entry(key_name, sub_pat, key_tok.line)
         if int_key != nil then set_int_key(entry, int_key) end
         push(entries, entry)
         skip_nl()
@@ -1460,7 +1460,7 @@ fn make_parser(tokens, source, file, sink)
     if t.type == "NAME"
       advance()
       bind_pattern_name(t)
-      return make_pat_name(t.value)
+      return make_pat_name(t.value, t.line)
     end
 
     # not a pattern: report, skip the token, return one that never matches
@@ -1545,7 +1545,7 @@ fn make_parser(tokens, source, file, sink)
     end
     if wval.tag == "var" and not ends_arm_head(peek().type)
       # `when x foo`: report the missing `then` once and keep `x` a binding, so its uses don't report as undeclared
-      return make_match_arm(make_pat_name(wval.name), nil, parse_arm_body())
+      return make_match_arm(make_pat_name(wval.name, wval.line), nil, parse_arm_body())
     end
     make_match_arm(nil, wval, parse_arm_body())
   end

@@ -126,8 +126,8 @@ fn make_pat_table(entries)
 end
 
 # value nil is the shorthand `{name}`
-fn make_pat_table_entry(key, value)
-  {key: key, value: value}
+fn make_pat_table_entry(key, value, line)
+  {key: key, value: value, line: line}
 end
 
 fn make_pat_array(elements)
@@ -138,8 +138,8 @@ fn make_pat_literal(literal)
   {tag: "pat_literal", literal: literal}
 end
 
-fn make_pat_name(name)
-  {tag: "pat_name", name: name}
+fn make_pat_name(name, line)
+  {tag: "pat_name", name: name, line: line}
 end
 
 # `^name`: equal to name's current value

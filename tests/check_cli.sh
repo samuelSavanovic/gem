@@ -114,6 +114,18 @@ if [ -n "$err" ] || [ "$("$tmp/c/tri")" != 'a??>b {"k??=": 1}' ]; then
   echo "  stderr: $err"
   fails=$((fails + 1))
 fi
+total=$((total + 1))
+cat > "$tmp/c/lines.gem" <<'EOF'
+load "std/string"
+load "std/string" (join)
+match {a: 1, b: [2, {c: 3}]}
+when {a: a, b: [x, {c}]} then print(a, x, c)
+end
+EOF
+if "$GEM" --emit-c "$tmp/c/lines.gem" | grep -q '^#line 0 '; then
+  echo "FAIL: pattern bindings and loads emit #line 0"
+  fails=$((fails + 1))
+fi
 check "gem: -l requires an argument
 usage: gem <file.gem> [options] [args...]   (gem --help for more)" 2 -l
 check "gem: -L requires an argument
