@@ -1,6 +1,6 @@
 # call graph over the lowered program; callers are fn_defs (`fn:<name>`), closure and spawn bodies, and `<top>`
 
-load "./cgutil" (set_add, set_contains, is_node)
+load "./cgutil" (set_add, set_contains, is_node, each_child)
 
 let spawn_callees = {}
 set_add(spawn_callees, "spawn")
@@ -113,18 +113,7 @@ fn build_call_graph(fn_defs, top_stmts, builtin_names = {}, extern_names = [])
     if node.tag == "let" and type(node.name) == "string"
       set_add(out, node.name)
     end
-    for k, v in node
-      if k != "tag" and type(v) == "table"
-        let vks = keys(v)
-        if len(vks) > 0 and type(vks[0]) == "int"
-          for item in v
-            bind_names(item, out)
-          end
-        else
-          bind_names(v, out)
-        end
-      end
-    end
+    each_child(node, fn(c) bind_names(c, out) end)
   end
   let set_bound = fn(caller_id, fn_node, parent_id)
     let out = {}

@@ -1,6 +1,6 @@
 # scope passes over the lowered AST: shadowing lets, module namespaces, and the let collectors codegen uses
 
-load "./cgutil" (set_add, set_contains, is_node)
+load "./cgutil" (set_add, set_contains, is_node, each_child)
 
 # env value for params not bound yet while walking a default (its own and later ones)
 let PENDING_PARAM = "\0pending param"
@@ -47,7 +47,6 @@ end
 let shadow_node = nil
 let shadow_stmt = nil
 let shadow_stmts = nil
-let shadow_children = nil
 
 # {line, file} for the out-of-scope hint; pattern bindings have no line, and one walk spans every module's code
 fn shadow_decl_site(let_node)
@@ -118,11 +117,7 @@ shadow_collect_lets = fn(node, out)
   if node.tag == "let" and node.name != nil and not has_key(out, node.name)
     out[node.name] = shadow_decl_site(node)
   end
-  for k, v in node
-    if k != "tag" and type(v) == "table"
-      shadow_collect_lets(v, out)
-    end
-  end
+  each_child(node, fn(c) shadow_collect_lets(c, out) end)
 end
 
 fn shadow_named_fn(node, ctx)
@@ -308,26 +303,9 @@ shadow_node = fn(node, env, mode, ctx)
     shadow_node(node.after_ms, env, mode, ctx)
     shadow_stmts(node.after_body, env, cm, ctx, "receive")
   else
-    for k, v in node
-      if k != "tag" and type(v) == "table"
-        shadow_children(v, env, mode, ctx)
-      end
-    end
+    each_child(node, fn(c) shadow_node(c, env, mode, ctx) end)
   end
   nil
-end
-
-# v is a node or a tagless container (arg list, table entries)
-shadow_children = fn(v, env, mode, ctx)
-  if v.tag != nil
-    shadow_node(v, env, mode, ctx)
-    return nil
-  end
-  for _, c in v
-    if type(c) == "table"
-      shadow_children(c, env, mode, ctx)
-    end
-  end
 end
 
 # report(node, name, kind, decl): kind is "ended", "later", "later_closure" or "param_later";

@@ -4,6 +4,7 @@
 #   match_arm + patterns     -> when_clause {value, bindings}
 #   receive arms             -> {pattern: {condition, bindings}, body}
 
+load "./cgutil" (each_child)
 load "./ast" (make_program, make_int, make_float, make_string, make_bool, make_nil_node, make_var, make_binop, make_unop, make_call, make_dot, make_index, make_anon_fn, make_table, make_table_entry, make_array, make_interp, make_let, make_assign, make_dot_assign, make_index_assign, make_fn_def, make_if, make_while, make_match, make_when, make_receive_match, make_return, make_break, make_continue, make_export, make_extern_fn, make_extern_param, make_extern_include, make_error_expr, make_error_stmt)
 
 fn lower(ast)
@@ -14,7 +15,7 @@ fn lower(ast)
   lower_node(ast, state)
 end
 
-# copies `file` onto generated nodes that lack one, as tag_source_file does, or their #line points elsewhere
+# copies `file` onto every node below that lacks one, so errors and #line point at its source
 fn tag_file(node, file)
   if file == nil
     return nil
@@ -25,22 +26,7 @@ fn tag_file(node, file)
   if node.tag != nil and node.file == nil
     node.file = file
   end
-  for k in keys(node)
-    let v = node[k]
-    if type(v) == "table"
-      if v.tag != nil
-        tag_file(v, file)
-      else
-        # untagged: an array or a record like a receive arm's pattern
-        for _, elem in v
-          if type(elem) == "table"
-            tag_file(elem, file)
-          end
-        end
-      end
-    end
-  end
-  nil
+  each_child(node, fn(c) tag_file(c, file) end)
 end
 
 fn lower_node(node, state)
@@ -503,12 +489,7 @@ fn scan_node(node, own, inner, state)
   elif tag == "for_range"
     add_count(state.declared, node.var_name)
   end
-  for _, v in node
-    if type(v) == "table"
-      scan_node(v, own, inner, state)
-    end
-  end
-  nil
+  each_child(node, fn(c) scan_node(c, own, inner, state) end)
 end
 
 fn scan(ast, state)
@@ -545,12 +526,7 @@ fn collect_assigns(node, out)
   if node.tag == "assign"
     out[node.name] = true
   end
-  for _, v in node
-    if type(v) == "table"
-      collect_assigns(v, out)
-    end
-  end
-  nil
+  each_child(node, fn(c) collect_assigns(c, out) end)
 end
 
 # is the innermost binding of `name` (lets and params only) in this body? false only moves more operands
@@ -889,4 +865,4 @@ fn pattern_to_cond(pat, target_expr, state)
   {condition: make_bool(false), bindings: []}
 end
 
-export lower
+export lower, tag_file

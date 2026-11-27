@@ -4,6 +4,8 @@
 #   - a statement with no effect, e.g. a `- 2` continued on the next line
 # plus a warning for a receive loop that calls itself in non-tail position. Pre-lower AST, clean parses only.
 
+load "./cgutil" (each_child, any_child)
+
 # one fn body (or top level): blocks outermost first, each name -> decl line; `outer` is a closure's enclosing frame
 fn new_frame(outer)
   {blocks: [{}], outer: outer}
@@ -252,9 +254,7 @@ check_node = fn(ctx, frame, node)
   let tag = node.tag
   if tag == nil
     # a tagless container: arg list, table entries
-    for _, c in node
-      check_node(ctx, frame, c)
-    end
+    each_child(node, fn(c) check_node(ctx, frame, c) end)
     return nil
   end
   if tag == "let"
@@ -302,11 +302,7 @@ check_node = fn(ctx, frame, node)
     check_node(ctx, frame, node.after_ms)
     check_body_block(ctx, frame, node.after_body, true)
   else
-    for k, v in node
-      if k != "tag" and type(v) == "table"
-        check_node(ctx, frame, v)
-      end
-    end
+    each_child(node, fn(c) check_node(ctx, frame, c) end)
   end
 end
 
@@ -322,12 +318,7 @@ has_receive = fn(node)
   if node.tag == "anon_fn" or node.tag == "fn_def"
     return false
   end
-  for k, v in node
-    if k != "tag" and type(v) == "table" and has_receive(v)
-      return true
-    end
-  end
-  false
+  any_child(node, has_receive)
 end
 
 # marks calls in tail position: the last statement, through if/match/receive branches
@@ -382,11 +373,7 @@ mark_returns = fn(node, tails)
   if node.tag == "return"
     mark_tail_expr(node.value, tails)
   end
-  for k, v in node
-    if k != "tag" and type(v) == "table"
-      mark_returns(v, tails)
-    end
-  end
+  each_child(node, fn(c) mark_returns(c, tails) end)
 end
 
 let find_self_calls = nil
@@ -400,11 +387,7 @@ find_self_calls = fn(node, name, out)
   if node.tag == "call" and type(node.func) == "table" and node.func.tag == "var" and node.func.name == name
     push(out, node)
   end
-  for k, v in node
-    if k != "tag" and type(v) == "table"
-      find_self_calls(v, name, out)
-    end
-  end
+  each_child(node, fn(c) find_self_calls(c, name, out) end)
 end
 
 fn check_receive_loop(ctx, fd)

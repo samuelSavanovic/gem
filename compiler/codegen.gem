@@ -3,7 +3,7 @@
 load "./liveness" (compute_live_for_pt_loops_in_stmts)
 load "./errors" (make_error_sink)
 load "./builtins" (BUILTIN_FNS, LEAF_BUILTINS, DIRECT_BUILTINS)
-load "./cgutil" (escape_c_string, pad_for, c_int_literal, format_float, set_add, set_contains, set_union, set_intersect, sorted_array_to_set, find_closest_export, is_node)
+load "./cgutil" (escape_c_string, pad_for, c_int_literal, format_float, set_add, set_contains, set_union, set_intersect, sorted_array_to_set, find_closest_export, is_node, each_child, any_child)
 load "./scope" (collect_top_let_names, scope_shadowing_lets, collect_module_namespaces, collect_shadow_lets_in_fn)
 load "./captures" (collect_free_vars, collect_free_node, walk_captures_node, walk_writes_node, find_captured_in_scope, find_capture_writes_in_scope, find_writes_in_closure_body, mark_non_escaping_stmts)
 load "./tco" (fn_def_is_tco, find_tail_call_sccs)
@@ -52,7 +52,7 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
     n
   end
 
-  # node.file is set by tag_source_file; entry-file and synthetic nodes have none
+  # node.file is set by tag_file; entry-file and synthetic nodes have none
   let file_of = fn(node)
     if node != nil and node.file != nil
       return node.file
@@ -408,14 +408,7 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
       # nested fn: nothing in it (defaults included) runs here
       return false
     end
-    for k, v in node
-      if type(v) == "table"
-        if node_has_calls(v)
-          return true
-        end
-      end
-    end
-    false
+    any_child(node, node_has_calls)
   end
   let fn_is_leaf = fn(node, body)
     for s in body
@@ -450,12 +443,7 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
         return true
       end
     end
-    for k, v in node
-      if type(v) == "table" and node_may_read_slots(v)
-        return true
-      end
-    end
-    false
+    any_child(node, node_may_read_slots)
   end
 
   # whole-program pass: call graph, loop tagging for back-edge resets, per-loop liveness, mutual-tail-call SCCs
@@ -605,11 +593,7 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
       if node.tag == "assign"
         set_add(assigned, node.name)
       end
-      for k, v in node
-        if type(v) == "table" and k != "liveness_result"
-          find_assigns(v)
-        end
-      end
+      each_child(node, find_assigns)
     end
     for fd in fn_defs
       find_assigns(fd)
@@ -736,11 +720,7 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
           end
         end
       end
-      for k, v in node
-        if type(v) == "table" and k != "liveness_result"
-          walk(v, params)
-        end
-      end
+      each_child(node, fn(c) walk(c, params) end)
     end
     for fd in fn_defs
       walk(fd, {})

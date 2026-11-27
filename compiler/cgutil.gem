@@ -1,4 +1,4 @@
-# helpers shared by codegen and its analyses: C literals, name sets, "did you mean" lookup
+# helpers shared by the compiler passes: AST child walks, C literals, name sets, "did you mean" lookup
 
 fn escape_c_string(s)
   let cr = chr(13)
@@ -161,8 +161,39 @@ fn find_closest_export(field, exports)
   nil
 end
 
+# f(child) for every node directly below `node`, looking through lists and untagged records (table entries,
+# receive arms and their patterns), in `for k, v in node` order
+fn each_child(node, f)
+  for k, v in node
+    if type(v) == "table" and k != "liveness_result"
+      if v.tag != nil
+        f(v)
+      else
+        each_child(v, f)
+      end
+    end
+  end
+  nil
+end
+
+# each_child that stops at the first child for which f returns true
+fn any_child(node, f)
+  for k, v in node
+    if type(v) == "table" and k != "liveness_result"
+      if v.tag != nil
+        if f(v) == true
+          return true
+        end
+      elif any_child(v, f)
+        return true
+      end
+    end
+  end
+  false
+end
+
 fn is_node(node, tag)
   type(node) == "table" and node.tag == tag
 end
 
-export escape_c_string, pad_for, c_int_literal, format_float, set_add, set_contains, set_union, set_intersect, sorted_array_to_set, find_closest_export, is_node
+export escape_c_string, pad_for, c_int_literal, format_float, set_add, set_contains, set_union, set_intersect, sorted_array_to_set, find_closest_export, is_node, each_child, any_child

@@ -1,7 +1,7 @@
 # Free variables, captures and closure writes: what a closure captures and which locals need a pinned box.
 # `is_global(name)` comes from codegen: true for a named fn or an unshadowed builtin.
 
-load "./cgutil" (set_add, set_contains, set_union, set_intersect, sorted_array_to_set, is_node)
+load "./cgutil" (set_add, set_contains, set_union, set_intersect, sorted_array_to_set, is_node, each_child, any_child)
 load "./scope" (collect_block_lets)
 
 fn collect_free_node(node, defined, free, is_global)
@@ -583,12 +583,7 @@ fn binds_name(node, name)
       end
     end
   end
-  for _, v in node
-    if type(v) == "table" and binds_name(v, name)
-      return true
-    end
-  end
-  false
+  any_child(node, fn(c) binds_name(c, name) end)
 end
 
 fn mark_non_escaping(node, shadowed)

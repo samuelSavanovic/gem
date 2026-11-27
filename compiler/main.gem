@@ -3,7 +3,8 @@
 load "std/string"
 load "./parser" (parse_source, collect_pattern_names)
 load "./codegen" (make_codegen)
-load "./lower" (lower)
+load "./lower" (lower, tag_file)
+load "./cgutil" (each_child)
 load "./fold" (fold_constants)
 load "./errors" (make_error_sink, print_all_errors)
 load "./loader" (resolve_load_path, load_target_problem, find_project_root, find_install_root, compute_stdlib_root, make_show_path, normalize_load_path)
@@ -622,41 +623,13 @@ fn import_bindings(load_node, mod_name, mangle, exported, bad, module_bindings, 
   result
 end
 
-# every node gets its file, so errors in a loaded module point there
-fn tag_source_file(node, file)
-  if type(node) != "table" then return end
-  if node.tag != nil and node.file == nil
-    node.file = file
-  end
-  for k in keys(node)
-    let v = node[k]
-    if type(v) == "table"
-      if v.tag != nil
-        tag_source_file(v, file)
-      else
-        for _, elem in v
-          if type(elem) == "table"
-            tag_source_file(elem, file)
-          end
-        end
-      end
-    end
-  end
-end
-
 # visit(child, in_fn) on every tagged node below `node`, walking through untagged tables (lists, entries)
 fn walk_ast(node, in_fn, visit)
-  for _, v in node
-    if type(v) == "table"
-      if v.tag != nil
-        let child_in_fn = in_fn or v.tag == "fn_def" or v.tag == "anon_fn"
-        visit(v, child_in_fn)
-        walk_ast(v, child_in_fn, visit)
-      else
-        walk_ast(v, in_fn, visit)
-      end
-    end
-  end
+  each_child(node, fn(v)
+    let child_in_fn = in_fn or v.tag == "fn_def" or v.tag == "anon_fn"
+    visit(v, child_in_fn)
+    walk_ast(v, child_in_fn, visit)
+  end)
 end
 
 # `let total = total + x` in a loop never changes the outer `total`. Warn when nothing in the loop assigns
@@ -1001,7 +974,7 @@ fn resolve_loads(ast, base_dir, project_root, stdlib_root, loaded, module_bindin
       let errors_before = sink.count()
       let loaded_ast = parse_source(source, full_path, sink)
       let parse_failed = sink.count() > errors_before or sink.suppressed()
-      tag_source_file(loaded_ast, full_path)
+      tag_file(loaded_ast, full_path)
       if not parse_failed
         print_file_warnings(loaded_ast, full_path, show_path, sink)
       end
@@ -1498,7 +1471,7 @@ let source = normalize_newlines(read_file(src_path))
 let sink = make_error_sink()
 
 let ast = parse_source(source, src_path, sink)
-tag_source_file(ast, src_path)
+tag_file(ast, src_path)
 let base_dir = dirname(src_path)
 let project_root = find_project_root(base_dir)
 if project_root != nil
