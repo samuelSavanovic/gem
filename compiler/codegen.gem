@@ -462,6 +462,13 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
     # sets node.liveness_result, which compile_while reads
     for fd in fn_defs
       compute_live_for_pt_loops_in_stmts(fd.body)
+      if fd.defaults != nil
+        for d in fd.defaults
+          if d != nil
+            compute_live_for_pt_loops_in_stmts([d])
+          end
+        end
+      end
     end
     compute_live_for_pt_loops_in_stmts(top_stmts)
 

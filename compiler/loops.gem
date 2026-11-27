@@ -287,6 +287,9 @@ tag_process_tail_while_loops = fn(fn_defs, top_stmts, source_name)
   # a reset only frees what the loop itself allocated, so every loop is a candidate whatever its call context
   for fd in fn_defs
     walk_for_tagging_stmts(fd.body, true, source_name)
+    if fd.defaults != nil
+      walk_for_tagging_stmts(fd.defaults, true, source_name)
+    end
   end
   walk_for_tagging_stmts(top_stmts, true, source_name)
 end

@@ -1,0 +1,33 @@
+# loops in a closure that is a parameter default reset like any other loop
+fn run(n, prefix = "p", body = fn(k)
+    let parts = []
+    let i = 0
+    while i < k
+      let s = "{prefix}{i}"
+      if i % 100000 == 0
+        push(parts, s)
+      end
+      i += 1
+    end
+    parts
+  end)
+  body(n)
+end
+
+print(run(300000))
+print(run(200000, "q"))
+
+fn count(n, body = fn(k)
+    let i = 0
+    while i < k
+      let s = "x{i}"
+      i += 1
+    end
+    i
+  end)
+  body(n)
+end
+
+let before = runtime_stats().memory / 1024
+print(count(300000))
+print(if runtime_stats().memory / 1024 - before < 10000 then "bounded" else "grew" end)
