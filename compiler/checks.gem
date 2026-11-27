@@ -172,7 +172,7 @@ check_stmts = fn(ctx, frame, stmts, value_used)
         ctx.report(line, col, 1, "{pure_kind(s)} on its own does nothing ({where})", hint)
       end
     end
-    check_node(ctx, frame, s)
+    check_node(ctx, frame, s, i == n - 1 and value_used)
   end
 end
 
@@ -209,7 +209,7 @@ fn check_arm_binds(ctx, frame, arm)
   end
 end
 
-fn check_arm(ctx, frame, arm)
+fn check_arm(ctx, frame, arm, used)
   check_arm_binds(ctx, frame, arm)
   push_block(frame)
   if arm.binds != nil
@@ -220,7 +220,7 @@ fn check_arm(ctx, frame, arm)
   if arm.expr != nil
     check_node(ctx, frame, arm.expr)
   end
-  check_stmts(ctx, frame, arm.body, true)
+  check_stmts(ctx, frame, arm.body, used)
   pop_block(frame)
 end
 
@@ -247,7 +247,8 @@ fn check_fn(ctx, outer, node)
   end
 end
 
-check_node = fn(ctx, frame, node)
+# used: an if, match or receive statement gives its branches' value to the code around it
+check_node = fn(ctx, frame, node, used = true)
   if node == nil or type(node) != "table"
     return nil
   end
@@ -269,8 +270,8 @@ check_node = fn(ctx, frame, node)
     check_fn(ctx, if tag == "anon_fn" then frame end, node)
   elif tag == "if"
     check_node(ctx, frame, node.cond)
-    check_body_block(ctx, frame, node.then, true)
-    check_body_block(ctx, frame, node.else, true)
+    check_body_block(ctx, frame, node.then, used)
+    check_body_block(ctx, frame, node.else, used)
   elif tag == "while"
     check_node(ctx, frame, node.cond)
     check_body_block(ctx, frame, node.body, false)
@@ -289,18 +290,18 @@ check_node = fn(ctx, frame, node)
     check_node(ctx, frame, node.target)
     if node.whens != nil
       for arm in node.whens
-        check_arm(ctx, frame, arm)
+        check_arm(ctx, frame, arm, used)
       end
     end
-    check_body_block(ctx, frame, node.else, true)
+    check_body_block(ctx, frame, node.else, used)
   elif tag == "receive_match"
     if node.arms != nil
       for arm in node.arms
-        check_arm(ctx, frame, arm)
+        check_arm(ctx, frame, arm, used)
       end
     end
     check_node(ctx, frame, node.after_ms)
-    check_body_block(ctx, frame, node.after_body, true)
+    check_body_block(ctx, frame, node.after_body, used)
   else
     each_child(node, fn(c) check_node(ctx, frame, c) end)
   end

@@ -1,6 +1,7 @@
 # An expression statement with no effect is a compile error: in the middle
 # of a block, or at the end of a block whose value isn't used (a loop body,
-# the top-level code). Nine errors.
+# the top-level code, a branch of an if, match or receive statement whose
+# value isn't used). Thirteen errors.
 # expect: a negation on its own does nothing
 fn total(a, b)
   let t = a
@@ -31,12 +32,31 @@ fn literals(k)
   nil
 end
 
+fn branches(c, m)
+  if c then "yes" else nil end
+  match m
+  when 1 then "one"
+  else m * 2
+  end
+  receive
+  when x then x
+  end
+  nil
+end
+
 # Not errors: a fn's or branch's value, a bare `nil`, calls, a table
 # literal with a call in it.
 fn fine(c)
-  if c then "yes" else nil end
-  print("x")
+  let label = if c then "yes" else "no" end
+  print(label)
+  if c
+    print("x")
+  end
+  match c
+  when true then nil
+  else print("z")
+  end
   {a: print("y")}
   nil
-  c
+  if c then 1 else 2 end
 end

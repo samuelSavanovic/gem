@@ -4,11 +4,11 @@
 # expect: `STATUS_OK` in this pattern binds a new variable and matches anything
 let STATUS_OK = 200
 fn classify(code, tag)
-  match code
+  let a = match code
   when STATUS_OK then "ok"
   else "error"
   end
-  match {tag: "x", code: 1}
+  let b = match {tag: "x", code: 1}
   when {tag: tag} then "tag"
   when {code} then "code"
   else nil
