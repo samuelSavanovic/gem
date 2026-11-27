@@ -1,0 +1,35 @@
+# a closure sees what a pcall block assigns to a variable they share
+fn churn(n, acc)
+  if n == 0
+    return acc
+  end
+  churn(n - 1, acc + len("s{n}")) + 0
+end
+
+fn make()
+  let count = 0
+  let get = fn() count end
+  pcall(fn()
+    count = 5
+  end)
+  let i = 0
+  while i < 3
+    pcall(fn() count += {n: i}.n end)
+    let junk = "j{i}"
+    i += 1
+  end
+  get
+end
+
+fn main()
+  let count = 0
+  let get = fn() count end
+  pcall(fn()
+    count = 5
+  end)
+  print(count)
+  print(get())
+  let g = make()
+  churn(30, 0)
+  print(g())
+end

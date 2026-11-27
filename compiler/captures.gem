@@ -334,11 +334,6 @@ fn walk_writes_node(node, scope_vars, defined, writes, inside_anon)
   when {tag: "let", value: value}
     walk_writes_node(value, scope_vars, defined, writes, inside_anon)
   when {tag: "anon_fn", params: params, rest_param: rest_param, body: body}
-    if node.non_escaping == true and not inside_anon
-      # a non-escaping closure writes the outer local in place. In an escaping one it still counts: otherwise it
-      # would assign the write-once capture box, losing the write and leaving an old box pointing into a freed region.
-      return nil
-    end
     # entering the first closure: start from the params (outer lets are tracked, not shadows); deeper, locals shadow
     let inner_def = if inside_anon
       set_union(defined, sorted_array_to_set(params))
