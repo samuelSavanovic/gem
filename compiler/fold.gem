@@ -118,6 +118,14 @@ fn try_fold_unop(node)
   node
 end
 
+fn fold_arms(arms)
+  for w in arms
+    w.value = fold(w.value)
+    fold_stmts(w.bindings)
+    fold_stmts(w.body)
+  end
+end
+
 fn fold_stmts(stmts)
   if stmts == nil then return end
   for i = 0, len(stmts)
@@ -204,18 +212,10 @@ fn fold(node)
     fold_stmts(node.body)
   when {tag: "match"}
     node.target = fold(node.target)
-    for w in node.whens
-      w.value = fold(w.value)
-      fold_stmts(w.bindings)
-      fold_stmts(w.body)
-    end
+    fold_arms(node.whens)
     if node.else != nil then fold_stmts(node.else) end
   when {tag: "receive_match"}
-    for arm in node.arms
-      arm.value = fold(arm.value)
-      fold_stmts(arm.bindings)
-      fold_stmts(arm.body)
-    end
+    fold_arms(node.arms)
     if node.after_ms != nil then node.after_ms = fold(node.after_ms) end
     if node.after_body != nil then fold_stmts(node.after_body) end
   when {tag: "return"}

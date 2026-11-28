@@ -39,6 +39,14 @@ fn collect_table_literal_keys(node)
   keys
 end
 
+fn walk_arms_for_fields(arms, target_name, acc)
+  for w in arms
+    for s in w.body
+      walk_for_fields(s, target_name, acc)
+    end
+  end
+end
+
 fn walk_for_fields(node, target_name, acc)
   if node == nil then return end
   if type(node) != "table" then return end
@@ -82,22 +90,14 @@ fn walk_for_fields(node, target_name, acc)
     end
   when {tag: "match", target: target, whens: whens}
     walk_for_fields(target, target_name, acc)
-    for w in whens
-      for s in w.body
-        walk_for_fields(s, target_name, acc)
-      end
-    end
+    walk_arms_for_fields(whens, target_name, acc)
     if node.else != nil
       for s in node.else
         walk_for_fields(s, target_name, acc)
       end
     end
   when {tag: "receive_match", arms: arms}
-    for arm in arms
-      for s in arm.body
-        walk_for_fields(s, target_name, acc)
-      end
-    end
+    walk_arms_for_fields(arms, target_name, acc)
     if node.after_body != nil
       for s in node.after_body
         walk_for_fields(s, target_name, acc)

@@ -66,6 +66,18 @@ fn walk_stmts(stmts, scope, acc)
   end
 end
 
+fn walk_arms(arms, scope, acc)
+  for w in arms
+    walk_node(w.value, scope, acc)
+    if w.bindings != nil
+      for b in w.bindings
+        record_match_binding(b, scope, acc)
+      end
+    end
+    walk_stmts(w.body, scope, acc)
+  end
+end
+
 fn walk_node(node, scope, acc)
   if node == nil then return end
   if type(node) != "table" then return end
@@ -142,29 +154,13 @@ fn walk_node(node, scope, acc)
 
   when {tag: "match", target: target, whens: whens}
     walk_node(target, scope, acc)
-    for w in whens
-      walk_node(w.value, scope, acc)
-      if w.bindings != nil
-        for b in w.bindings
-          record_match_binding(b, scope, acc)
-        end
-      end
-      walk_stmts(w.body, scope, acc)
-    end
+    walk_arms(whens, scope, acc)
     if node.else != nil
       walk_stmts(node.else, scope, acc)
     end
 
   when {tag: "receive_match", arms: arms}
-    for arm in arms
-      walk_node(arm.value, scope, acc)
-      if arm.bindings != nil
-        for b in arm.bindings
-          record_match_binding(b, scope, acc)
-        end
-      end
-      walk_stmts(arm.body, scope, acc)
-    end
+    walk_arms(arms, scope, acc)
     if node.after_ms != nil
       walk_node(node.after_ms, scope, acc)
     end

@@ -1307,6 +1307,21 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
     to_string(b)
   end
 
+  # `bindings` (arm lets) then `stmts`, inside a C block of their own: the lets they add leave fs.fn_scope_locals after
+  let compile_scoped_stmts = fn(bindings, stmts, indent, return_pos)
+    let saved = set_union(fs.fn_scope_locals, {})
+    let b = buf_new()
+    if bindings != nil
+      for binding in bindings
+        buf_push(b, compile_stmt(binding, indent))
+        buf_push(b, "\n")
+      end
+    end
+    buf_push(b, compile_stmts_tail(stmts, indent, return_pos))
+    fs.fn_scope_locals = saved
+    to_string(b)
+  end
+
   compile_stmt = fn(node, indent)
     let p = pad_for(indent)
     let line_dir = if node.line != nil
@@ -1317,7 +1332,7 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
 
     match node
     when {tag: "let", name: name, value: value}
-      # in scope until the enclosing C block closes (callers that open one save and restore fs.fn_scope_locals)
+      # in scope until the enclosing C block closes (compile_scoped_stmts drops it there)
       set_add(fs.fn_scope_locals, name)
       let r = compile_expr(value)
       if fs.in_top_level and has_key(module_bindings, name) and not (is_node(value, "table") and value.frozen == true)
@@ -1470,16 +1485,9 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
     when {tag: "block", stmts: stmts}
       let b = buf_new()
       buf_push(b, "{p}\{\n")
-      let saved_block = set_union(fs.fn_scope_locals, {})
-      for i = 0, len(stmts) - 1
-        buf_push(b, compile_stmt(stmts[i], indent + 1))
-        buf_push(b, "\n")
-      end
       if len(stmts) > 0
-        buf_push(b, compile_stmt_return(stmts[-1], indent + 1))
-        buf_push(b, "\n")
+        buf_push(b, compile_scoped_stmts(nil, stmts, indent + 1, true))
       end
-      fs.fn_scope_locals = saved_block
       buf_push(b, "{p}}")
       return to_string(b)
     when {tag: "dot_assign"}
@@ -1507,14 +1515,10 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
     let b = buf_new()
     buf_push(b, cond_r.setup)
     buf_push(b, "{p}if (gem_truthy({cond_r.expr})) \{\n")
-    let saved_then = set_union(fs.fn_scope_locals, {})
-    buf_push(b, compile_stmts_tail(node.then, indent + 1, return_pos))
-    fs.fn_scope_locals = saved_then
+    buf_push(b, compile_scoped_stmts(nil, node.then, indent + 1, return_pos))
     if node.else != nil
       buf_push(b, "{p}} else \{\n")
-      let saved_else = set_union(fs.fn_scope_locals, {})
-      buf_push(b, compile_stmts_tail(node.else, indent + 1, return_pos))
-      fs.fn_scope_locals = saved_else
+      buf_push(b, compile_scoped_stmts(nil, node.else, indent + 1, return_pos))
     elif return_pos
       buf_push(b, "{p}} else \{\n")
       buf_push(b, compile_stmts_tail([], indent + 1, true))
@@ -1648,11 +1652,9 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
       buf_push(b, cond_r.setup)
     end
     buf_push(b, "{p}    if (!gem_truthy({cond_r.expr})) break;\n")
-    let saved_while_scope = set_union(fs.fn_scope_locals, {})
     fs.c_loop_depth = fs.c_loop_depth + 1
-    buf_push(b, compile_stmts(node.body, indent + 1))
+    buf_push(b, compile_scoped_stmts(nil, node.body, indent + 1, false))
     fs.c_loop_depth = fs.c_loop_depth - 1
-    fs.fn_scope_locals = saved_while_scope
     buf_push(b, "{p}}")
 
     for name in owned
@@ -1695,21 +1697,11 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
         buf_push(b, val_r.setup)
         buf_push(b, "{p}if (gem_truthy({val_r.expr})) \{\n")
       end
-      let saved_arm = set_union(fs.fn_scope_locals, {})
-      if w.bindings != nil
-        for binding in w.bindings
-          buf_push(b, compile_stmt(binding, indent + 1))
-          buf_push(b, "\n")
-        end
-      end
-      buf_push(b, compile_stmts_tail(w.body, indent + 1, return_pos))
-      fs.fn_scope_locals = saved_arm
+      buf_push(b, compile_scoped_stmts(w.bindings, w.body, indent + 1, return_pos))
     end
     if node.else != nil
       buf_push(b, "{p}} else \{\n")
-      let saved_else = set_union(fs.fn_scope_locals, {})
-      buf_push(b, compile_stmts_tail(node.else, indent + 1, return_pos))
-      fs.fn_scope_locals = saved_else
+      buf_push(b, compile_scoped_stmts(nil, node.else, indent + 1, return_pos))
     elif return_pos
       buf_push(b, "{p}} else \{\n")
       buf_push(b, compile_stmts_tail([], indent + 1, true))
@@ -1812,15 +1804,7 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
       else
         buf_push(b, "{p}} else if ({matched_tmp} == {i}) \{\n")
       end
-      let saved_arm = set_union(fs.fn_scope_locals, {})
-      if arm.bindings != nil
-        for binding in arm.bindings
-          buf_push(b, compile_stmt(binding, indent + 1))
-          buf_push(b, "\n")
-        end
-      end
-      buf_push(b, compile_stmts_tail(arm.body, indent + 1, return_pos))
-      fs.fn_scope_locals = saved_arm
+      buf_push(b, compile_scoped_stmts(arm.bindings, arm.body, indent + 1, return_pos))
     end
 
     # the scan loop exits with an arm index or -2, so timeout is a plain `else` (and cc sees every return path)
@@ -1831,9 +1815,7 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
         buf_push(b, "{p}} else \{\n")
       end
       if after_body != nil
-        let saved_after = set_union(fs.fn_scope_locals, {})
-        buf_push(b, compile_stmts_tail(after_body, indent + 1, return_pos))
-        fs.fn_scope_locals = saved_after
+        buf_push(b, compile_scoped_stmts(nil, after_body, indent + 1, return_pos))
       elif return_pos
         buf_push(b, compile_stmts_tail([], indent + 1, true))
       end
@@ -2351,7 +2333,6 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
     if node.rest_param != nil
       set_add(scope_vars, node.rest_param)
     end
-    collect_top_let_names(body, scope_vars)
 
     # every local of the fn, arm lets included: these hide builtins and fns of the same name
     let shadowed_locals = set_union(scope_vars, {})
@@ -2499,7 +2480,6 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
     if node.rest_param != nil
       set_add(inner_scope, node.rest_param)
     end
-    collect_top_let_names(body, inner_scope)
 
     let shadowed_locals = set_union(inner_scope, {})
     collect_shadow_lets_in_fn(body, shadowed_locals)

@@ -205,6 +205,14 @@ fn check_arm_binds(ctx, frame, arm)
   end
 end
 
+fn check_arms(ctx, frame, arms, used)
+  if arms != nil
+    for arm in arms
+      check_arm(ctx, frame, arm, used)
+    end
+  end
+end
+
 fn check_arm(ctx, frame, arm, used)
   check_arm_binds(ctx, frame, arm)
   push_block(frame)
@@ -284,18 +292,10 @@ fn check_node(ctx, frame, node, used = true)
     pop_block(frame)
   elif tag == "match"
     check_node(ctx, frame, node.target)
-    if node.whens != nil
-      for arm in node.whens
-        check_arm(ctx, frame, arm, used)
-      end
-    end
+    check_arms(ctx, frame, node.whens, used)
     check_body_block(ctx, frame, node.else, used)
   elif tag == "receive_match"
-    if node.arms != nil
-      for arm in node.arms
-        check_arm(ctx, frame, arm, used)
-      end
-    end
+    check_arms(ctx, frame, node.arms, used)
     check_node(ctx, frame, node.after_ms)
     check_body_block(ctx, frame, node.after_body, used)
   else
@@ -328,19 +328,18 @@ fn mark_tail_expr(e, tails)
     mark_tails(e.then, tails)
     mark_tails(e.else, tails)
   elif e.tag == "match"
-    if e.whens != nil
-      for arm in e.whens
-        mark_tails(arm.body, tails)
-      end
-    end
+    mark_arm_tails(e.whens, tails)
     mark_tails(e.else, tails)
   elif e.tag == "receive_match"
-    if e.arms != nil
-      for arm in e.arms
-        mark_tails(arm.body, tails)
-      end
-    end
+    mark_arm_tails(e.arms, tails)
     mark_tails(e.after_body, tails)
+  end
+end
+fn mark_arm_tails(arms, tails)
+  if arms != nil
+    for arm in arms
+      mark_tails(arm.body, tails)
+    end
   end
 end
 fn mark_tails(stmts, tails)

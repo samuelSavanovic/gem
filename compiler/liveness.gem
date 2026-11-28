@@ -375,6 +375,20 @@ fn _scan_anons(node)
   each_child(node, _scan_anons)
 end
 
+fn _attach_arms(arms, live_out, ctx)
+  if arms != nil
+    for w in arms
+      _attach_stmts(w.body, live_out, ctx)
+      _scan_anons(w.value)
+      if w.bindings != nil
+        for b in w.bindings
+          _scan_anons(b)
+        end
+      end
+    end
+  end
+end
+
 fn _attach_node(s, live_out, ctx)
   if s == nil
     return live_out
@@ -410,17 +424,7 @@ fn _attach_node(s, live_out, ctx)
 
   if s.tag == "match"
     _scan_anons(s.target)
-    if s.whens != nil
-      for w in s.whens
-        _attach_stmts(w.body, live_out, ctx)
-        _scan_anons(w.value)
-        if w.bindings != nil
-          for b in w.bindings
-            _scan_anons(b)
-          end
-        end
-      end
-    end
+    _attach_arms(s.whens, live_out, ctx)
     if s.else != nil
       _attach_stmts(s.else, live_out, ctx)
     end
@@ -428,19 +432,7 @@ fn _attach_node(s, live_out, ctx)
   end
 
   if s.tag == "receive_match"
-    if s.arms != nil
-      for arm in s.arms
-        _attach_stmts(arm.body, live_out, ctx)
-        if arm.value != nil
-          _scan_anons(arm.value)
-        end
-        if arm.bindings != nil
-          for b in arm.bindings
-            _scan_anons(b)
-          end
-        end
-      end
-    end
+    _attach_arms(s.arms, live_out, ctx)
     if s.after_ms != nil
       _scan_anons(s.after_ms)
     end

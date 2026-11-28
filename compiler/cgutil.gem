@@ -239,17 +239,23 @@ fn walk_scoped(stmts, bound, v)
   let b = set_union(bound, {})
   for s in stmts
     walk_scoped_node(s, b, v)
-    if is_node(s, "let")
-      b[s.name] = true
-    elif is_node(s, "block")
-      for inner in s.stmts
-        if is_node(inner, "let")
-          b[inner.name] = true
-        end
+    add_stmt_lets(b, s)
+  end
+  nil
+end
+
+# a let binds its name for the rest of its list, and so do the lets directly in a block (a lowered `for`, a
+# destructuring let)
+fn add_stmt_lets(set, s)
+  if is_node(s, "let")
+    set[s.name] = true
+  elif is_node(s, "block")
+    for inner in s.stmts
+      if is_node(inner, "let")
+        set[inner.name] = true
       end
     end
   end
-  nil
 end
 
 fn walk_scoped_fn(node, bound, v)
@@ -319,4 +325,4 @@ fn with_name(set, name)
   out
 end
 
-export escape_c_string, pad_for, c_int_literal, format_float, set_add, set_contains, set_union, set_intersect, sorted_array_to_set, find_closest_export, is_node, each_child, any_child, arm_stmts, fn_stmts, walk_scoped, walk_scoped_fn, walk_scoped_node
+export escape_c_string, pad_for, c_int_literal, format_float, set_add, set_contains, set_union, set_intersect, sorted_array_to_set, find_closest_export, is_node, each_child, any_child, arm_stmts, fn_stmts, walk_scoped, walk_scoped_fn, walk_scoped_node, add_stmt_lets

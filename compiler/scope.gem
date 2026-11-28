@@ -1,31 +1,18 @@
 # scope passes over the lowered AST: shadowing lets, module namespaces, and the let collectors codegen uses
 
-load "./cgutil" (set_add, set_contains, is_node, each_child)
+load "./cgutil" (set_add, set_contains, is_node, each_child, add_stmt_lets)
 
 # env value for params not bound yet while walking a default (its own and later ones)
 let PENDING_PARAM = "\0pending param"
 
-fn collect_block_lets(stmt, result)
-  if is_node(stmt, "block")
-    for j = 0, len(stmt.stmts)
-      if is_node(stmt.stmts[j], "let")
-        set_add(result, stmt.stmts[j].name)
-      end
-    end
-  end
-end
-
+# the names a statement list's lets bind for the rest of it: at the top level, the module slots
 fn collect_top_let_names(stmts, result)
-  for i = 0, len(stmts)
-    let s = stmts[i]
-    if is_node(s, "let")
-      set_add(result, s.name)
-    end
-    collect_block_lets(s, result)
+  for s in stmts
+    add_stmt_lets(result, s)
   end
 end
 
-# Shadowing lets. Later passes key by name, and C rejects `GemVal gem_v_n = gem_v_n - 1` (it reads the new var).
+# Shadowing lets. Later passes key by name, and `GemVal gem_v_n = gem_v_n - 1` would read the new, unset var.
 # So a let whose name is visible already (param, outer let, module binding, fn, builtin) becomes `__sh<N>_<name>`,
 # along with the uses it scopes, and so does a param named like a fn.
 # A let at module scope or directly in a top-level block (a lowered `for`, a destructuring let) is a module slot,
@@ -225,6 +212,14 @@ fn shadow_arm(cond, bindings, body, env, mode, ctx, block_kw)
   shadow_end_scope(arm, env, ctx, block_kw)
 end
 
+fn shadow_arms(arms, env, mode, ctx, kw)
+  if arms != nil
+    for w in arms
+      shadow_arm(w.value, w.bindings, w.body, env, mode, ctx, kw)
+    end
+  end
+end
+
 fn shadow_node(node, env, mode, ctx)
   if node == nil or type(node) != "table" or node.tag == nil
     return nil
@@ -270,18 +265,10 @@ fn shadow_node(node, env, mode, ctx)
     shadow_stmts(node.body, env, cm, ctx)
   elif tag == "match"
     shadow_node(node.target, env, mode, ctx)
-    if node.whens != nil
-      for w in node.whens
-        shadow_arm(w.value, w.bindings, w.body, env, mode, ctx, "match")
-      end
-    end
+    shadow_arms(node.whens, env, mode, ctx, "match")
     shadow_stmts(node.else, env, cm, ctx, "match")
   elif tag == "receive_match"
-    if node.arms != nil
-      for a in node.arms
-        shadow_arm(a.value, a.bindings, a.body, env, mode, ctx, "receive")
-      end
-    end
+    shadow_arms(node.arms, env, mode, ctx, "receive")
     shadow_node(node.after_ms, env, mode, ctx)
     shadow_stmts(node.after_body, env, cm, ctx, "receive")
   else
@@ -409,18 +396,7 @@ fn collect_shadow_lets_in_node(node, result)
     if node.target_var != nil
       set_add(result, node.target_var)
     end
-    if node.whens != nil
-      for w in node.whens
-        if w.bindings != nil
-          for b in w.bindings
-            if type(b) == "table" and b.name != nil and (b.tag == "let" or b.tag == "var")
-              set_add(result, b.name)
-            end
-          end
-        end
-        collect_shadow_lets_in_stmts(w.body, result)
-      end
-    end
+    collect_shadow_lets_in_arms(node.whens, result)
     collect_shadow_lets_in_stmts(node.else, result)
     return nil
   end
@@ -428,24 +404,28 @@ fn collect_shadow_lets_in_node(node, result)
     if node.recv_var != nil
       set_add(result, node.recv_var)
     end
-    if node.arms != nil
-      for a in node.arms
-        if a.bindings != nil
-          for b in a.bindings
-            if type(b) == "table" and b.name != nil and (b.tag == "let" or b.tag == "var")
-              set_add(result, b.name)
-            end
-          end
-        end
-        collect_shadow_lets_in_stmts(a.body, result)
-      end
-    end
+    collect_shadow_lets_in_arms(node.arms, result)
     if node.after_body != nil
       collect_shadow_lets_in_stmts(node.after_body, result)
     end
     return nil
   end
   nil
+end
+
+fn collect_shadow_lets_in_arms(arms, result)
+  if arms != nil
+    for w in arms
+      if w.bindings != nil
+        for b in w.bindings
+          if type(b) == "table" and b.name != nil and (b.tag == "let" or b.tag == "var")
+            set_add(result, b.name)
+          end
+        end
+      end
+      collect_shadow_lets_in_stmts(w.body, result)
+    end
+  end
 end
 
 fn collect_shadow_lets_in_fn(stmts, result)

@@ -58,6 +58,14 @@ fn captured_arm_lets_stmts(stmts, scope)
   end
 end
 
+fn captured_arm_lets_arms(arms, scope)
+  if arms != nil
+    for w in arms
+      captured_arm_lets_stmts(w.body, scope)
+    end
+  end
+end
+
 fn captured_arm_lets_node(node, scope)
   if node == nil
     return nil
@@ -101,20 +109,12 @@ fn captured_arm_lets_node(node, scope)
   end
   if node.tag == "match"
     captured_arm_lets_node(node.target, scope)
-    if node.whens != nil
-      for w in node.whens
-        captured_arm_lets_stmts(w.body, scope)
-      end
-    end
+    captured_arm_lets_arms(node.whens, scope)
     captured_arm_lets_stmts(node.else, scope)
     return nil
   end
   if node.tag == "receive_match"
-    if node.arms != nil
-      for a in node.arms
-        captured_arm_lets_stmts(a.body, scope)
-      end
-    end
+    captured_arm_lets_arms(node.arms, scope)
     if node.after_body != nil
       captured_arm_lets_stmts(node.after_body, scope)
     end

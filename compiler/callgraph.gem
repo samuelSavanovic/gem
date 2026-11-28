@@ -174,6 +174,18 @@ fn build_call_graph(fn_defs, top_stmts, builtin_names = {}, extern_names = [])
   let collect_calls = nil
   let collect_calls_in_body = nil
 
+  let collect_calls_in_arms = fn(arms, is_tail_pos, caller_id)
+    for w in arms
+      collect_calls(w.value, false, caller_id)
+      if w.bindings != nil
+        for bd in w.bindings
+          collect_calls(bd, false, caller_id)
+        end
+      end
+      collect_calls_in_body(w.body, is_tail_pos, caller_id)
+    end
+  end
+
   collect_calls = fn(node, is_tail_pos, caller_id)
     if node == nil
       return nil
@@ -283,15 +295,7 @@ fn build_call_graph(fn_defs, top_stmts, builtin_names = {}, extern_names = [])
 
     if node.tag == "match"
       collect_calls(node.target, false, caller_id)
-      for w in node.whens
-        collect_calls(w.value, false, caller_id)
-        if w.bindings != nil
-          for bd in w.bindings
-            collect_calls(bd, false, caller_id)
-          end
-        end
-        collect_calls_in_body(w.body, is_tail_pos, caller_id)
-      end
+      collect_calls_in_arms(node.whens, is_tail_pos, caller_id)
       if node.else != nil
         collect_calls_in_body(node.else, is_tail_pos, caller_id)
       end
@@ -299,15 +303,7 @@ fn build_call_graph(fn_defs, top_stmts, builtin_names = {}, extern_names = [])
     end
 
     if node.tag == "receive_match"
-      for arm in node.arms
-        collect_calls(arm.value, false, caller_id)
-        if arm.bindings != nil
-          for bd in arm.bindings
-            collect_calls(bd, false, caller_id)
-          end
-        end
-        collect_calls_in_body(arm.body, is_tail_pos, caller_id)
-      end
+      collect_calls_in_arms(node.arms, is_tail_pos, caller_id)
       collect_calls(node.after_ms, false, caller_id)
       if node.after_body != nil
         collect_calls_in_body(node.after_body, is_tail_pos, caller_id)

@@ -1,7 +1,6 @@
 # tail calls: self calls that become a loop, and mutual tail-call cycles merged behind a trampoline
 
 load "./cgutil" (set_add, set_contains, sorted_array_to_set, is_node, any_child)
-load "./scope" (collect_top_let_names)
 load "./captures" (find_capture_writes_in_scope, find_captured_in_scope)
 
 fn is_self_tail_call(fn_name, node)
@@ -28,20 +27,16 @@ fn is_self_tail_call(fn_name, node)
     end
     return false
   when {tag: "match", whens: whens, else: else_body}
-    for i = 0, len(whens)
-      if has_self_tail_call(fn_name, whens[i].body)
-        return true
-      end
+    if arms_have_self_tail_call(fn_name, whens)
+      return true
     end
     if else_body != nil
       return has_self_tail_call(fn_name, else_body)
     end
     return false
   when {tag: "receive_match", arms: arms, after_body: after_body}
-    for i = 0, len(arms)
-      if has_self_tail_call(fn_name, arms[i].body)
-        return true
-      end
+    if arms_have_self_tail_call(fn_name, arms)
+      return true
     end
     if after_body != nil
       return has_self_tail_call(fn_name, after_body)
@@ -53,6 +48,15 @@ fn is_self_tail_call(fn_name, node)
     nil
   end
   return false
+end
+
+fn arms_have_self_tail_call(fn_name, arms)
+  for w in arms
+    if has_self_tail_call(fn_name, w.body)
+      return true
+    end
+  end
+  false
 end
 
 fn has_self_tail_call(fn_name, stmts)
@@ -73,13 +77,12 @@ fn has_self_return_call(fn_name, node)
   any_child(node, fn(c) has_self_return_call(fn_name, c) end)
 end
 
-# has a self tail call, and no param, rest param or top-level let shadows its name
+# has a self tail call, and no param or rest param shadows its name
 fn fn_def_is_tco(fd)
   let scope_vars = sorted_array_to_set(fd.params)
   if fd.rest_param != nil
     set_add(scope_vars, fd.rest_param)
   end
-  collect_top_let_names(fd.body, scope_vars)
   if set_contains(scope_vars, fd.name)
     return false
   end
