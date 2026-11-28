@@ -104,9 +104,9 @@ fn make_completion_item(label, kind, detail)
   {label: label, kind: kind, detail: detail}
 end
 
-# the full set every time, so never incomplete
-fn make_completion_list(items)
-  {isIncomplete: false, items: items}
+# incomplete: the client asks again as the user types instead of filtering this list
+fn make_completion_list(items, incomplete = false)
+  {isIncomplete: incomplete, items: items}
 end
 
 # LSP columns are UTF-16 code units, ours UTF-8 bytes: 1-3 byte sequences are one unit, 4-byte ones two.

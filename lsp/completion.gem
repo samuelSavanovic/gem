@@ -7,7 +7,7 @@ load "./workspace"
 load "./position"
 load "../compiler/builtins" (BUILTIN_NAMES)
 
-# cut lists still say isIncomplete: false; results are prefix-filtered, so typing more narrows them
+# a longer list is cut and sent as incomplete
 let MAX_ITEMS = 200
 
 # every top-level export statement counts, as in find_export_node
@@ -292,7 +292,8 @@ fn handle(params)
   else
     items = complete_identifiers(cache.symbols, ctx.prefix)
   end
-  if len(items) > MAX_ITEMS
+  let incomplete = len(items) > MAX_ITEMS
+  if incomplete
     let trimmed = []
     let n = 0
     for it in items
@@ -302,7 +303,7 @@ fn handle(params)
     end
     items = trimmed
   end
-  rpc.make_completion_list(items)
+  rpc.make_completion_list(items, incomplete)
 end
 
 export handle

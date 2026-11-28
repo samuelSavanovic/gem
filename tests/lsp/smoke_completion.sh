@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # completion of a module's fields (`string.`), a local table's (`local.`) and a partial name (`pri`,
-# which must offer print)
+# which must offer print); an empty prefix in a file with many names gets a cut list marked incomplete
 
 set -e
 
@@ -72,9 +72,13 @@ end
 GEM
 )
 
+# 150 lets plus the builtins: more than the server sends at once; cursor on the empty line 151
+TEXT_MANY=$(for i in $(seq 1 150); do echo "let name_$i = $i"; done; echo; echo)
+
 JSON_MOD=$(printf '%s' "$TEXT_MOD" | encode)
 JSON_LOCAL=$(printf '%s' "$TEXT_LOCAL" | encode)
 JSON_IDENT=$(printf '%s' "$TEXT_IDENT" | encode)
+JSON_MANY=$(printf '%s\n' "$TEXT_MANY" | encode)
 
 INIT='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"processId":null,"rootUri":null,"capabilities":{}}}'
 INITED='{"jsonrpc":"2.0","method":"initialized","params":{}}'
@@ -86,6 +90,9 @@ COMP_LOCAL='{"jsonrpc":"2.0","id":21,"method":"textDocument/completion","params"
 
 CHANGE_IDENT='{"jsonrpc":"2.0","method":"textDocument/didChange","params":{"textDocument":{"uri":"'"$URI"'","version":3},"contentChanges":[{"text":'"$JSON_IDENT"'}]}}'
 COMP_IDENT='{"jsonrpc":"2.0","id":22,"method":"textDocument/completion","params":{"textDocument":{"uri":"'"$URI"'"},"position":{"line":5,"character":5}}}'
+
+CHANGE_MANY='{"jsonrpc":"2.0","method":"textDocument/didChange","params":{"textDocument":{"uri":"'"$URI"'","version":4},"contentChanges":[{"text":'"$JSON_MANY"'}]}}'
+COMP_MANY='{"jsonrpc":"2.0","id":23,"method":"textDocument/completion","params":{"textDocument":{"uri":"'"$URI"'"},"position":{"line":151,"character":0}}}'
 
 SHUT='{"jsonrpc":"2.0","id":99,"method":"shutdown","params":null}'
 EXIT='{"jsonrpc":"2.0","method":"exit","params":null}'
@@ -99,6 +106,8 @@ INPUT=$(
   make_frame "$COMP_LOCAL"
   make_frame "$CHANGE_IDENT"
   make_frame "$COMP_IDENT"
+  make_frame "$CHANGE_MANY"
+  make_frame "$COMP_MANY"
   make_frame "$SHUT"
   make_frame "$EXIT"
 )
@@ -143,5 +152,8 @@ assert_contains 21 '"label":"alpha"' "local field completion (alpha)"
 assert_contains 21 '"label":"beta"' "local field completion (beta)"
 
 assert_contains 22 '"label":"print"' "identifier completion (builtin print)"
+assert_contains 22 '"isIncomplete":false' "identifier completion (whole list)"
+
+assert_contains 23 '"isIncomplete":true' "identifier completion past the cap (cut list)"
 
 echo "ok: lsp completion smoke test"

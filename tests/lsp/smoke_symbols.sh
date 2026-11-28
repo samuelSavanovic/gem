@@ -36,6 +36,22 @@ fn label(n)
   let size = if n > 10 then "big" else "small" end
   size
 end
+
+fn classify(msg)
+  match msg
+  when {tag: tag_name, items: [first_item]}
+    tag_name + first_item
+  else
+    ""
+  end
+end
+
+fn wait_one()
+  receive
+  when {reply: answer}
+    answer
+  end
+end
 GEM
 
 URI="file://$FIXTURE"
@@ -82,7 +98,8 @@ if [ -z "$SYMS_LINE" ]; then
   exit 1
 fi
 
-for needle in '"name":"shout"' '"name":"count"' '"name":"greeting"' '"name":"msg"' '"name":"items"' '"name":"n"' '"name":"string"' '"name":"size"'; do
+for needle in '"name":"shout"' '"name":"count"' '"name":"greeting"' '"name":"msg"' '"name":"items"' '"name":"n"' '"name":"string"' '"name":"size"' \
+  '"name":"tag_name"' '"name":"first_item"' '"name":"answer"'; do
   case "$SYMS_LINE" in
     *"$needle"*) ;;
     *) echo "FAIL: missing $needle in symbols response" >&2; printf '%s\n' "$SYMS_LINE" >&2; exit 1 ;;

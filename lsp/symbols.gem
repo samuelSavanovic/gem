@@ -283,12 +283,12 @@ end
 fn record_match_binding(b, scope, acc)
   if b == nil then return end
   if type(b) != "table" then return end
-  if b.tag == "var"
+  if b.tag == "let" and not is_gensym(b.name)
     push(acc.vars, {
       name: b.name,
       file: acc.file,
       line: b.line,
-      col: b.col,
+      col: 0,
       scope: scope,
       kind: "match_binding"
     })
