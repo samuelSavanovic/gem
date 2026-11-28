@@ -1811,7 +1811,7 @@ test1: main depth 20000
 test2: ok=false error=stack overflow in depth
 test2: still running, depth 1000
 test2: again ok=false error=stack overflow in depth
-test3: stack overflow in is_even
+test3: mutual recursion overflowed true
 test3: closure ok=false error=stack overflow in anonymous fn deep=true
 test4: main ok=false error=stack overflow in depth
 test5: depth 63 ok=true error=nil

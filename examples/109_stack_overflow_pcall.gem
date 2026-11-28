@@ -38,7 +38,9 @@ print(receive())
 
 spawn do
   let r = pcall is_even(100000001)
-  send(main, "test3: {r.error}")
+  # which of the two runs out of stack depends on frame sizes, so on how the program was built
+  let in_pair = r.error == "stack overflow in is_even" or r.error == "stack overflow in is_odd"
+  send(main, "test3: mutual recursion overflowed {in_pair}")
 end
 print(receive())
 let walker = {count: 0}

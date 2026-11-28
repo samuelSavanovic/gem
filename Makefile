@@ -120,6 +120,8 @@ bootstrap: $(GEM)
 
 test: $(GEM) test-rules test-reset-stress test-fuzz test-broken test-notes test-corpus test-cli test-project-root test-exe-path test-trace-source test-crlf test-io test-proc-limit test-socket-leak test-resolve test-tls test-recursion-memory test-stack-depth test-cache test-install test-lsp test-example-apps
 	@bash examples/run_all.sh
+	@echo "examples at -O0 (run mode's build):"
+	@CFLAGS=-O0 bash examples/run_all.sh
 
 test-rules:
 	@bash tests/check_rules.sh
