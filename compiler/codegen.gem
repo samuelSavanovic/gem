@@ -2760,6 +2760,7 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
     end
     buf_push(mb, "    gem_pop_frame();\n    return GEM_NIL;\n}\n\n")
     buf_push(mb, "int main(int argc, char **argv) \{\n")
+    buf_push(mb, "    gem_stack_size = GEM_PROGRAM_STACK_SIZE;\n")
     buf_push(mb, "    gem_init(argc, argv);\n")
     buf_push(mb, "    gem_globals_init_lazy({len(keys(top_level_vars))});\n")
     buf_push(mb, "    gem_scheduler_init();\n")

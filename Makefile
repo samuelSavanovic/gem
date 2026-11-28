@@ -19,7 +19,7 @@ BUILD_DIR = build
 export GEM_CACHE_DIR ?= $(CURDIR)/$(BUILD_DIR)/cache
 GEM = $(BUILD_DIR)/gem
 
-.PHONY: FORCE build install uninstall debug asan test-debug test-reset-stress fuzz-diff fuzz-frontend fuzz-parser test-fuzz test test-rules test-stress test-json test-json-suite test-broken test-notes test-corpus test-cli test-project-root test-exe-path test-trace-source test-crlf test-io test-proc-limit test-socket-leak test-tls test-tls-online test-recursion-memory test-cache test-install test-lsp test-example-apps bootstrap clean
+.PHONY: FORCE build install uninstall debug asan test-debug test-reset-stress fuzz-diff fuzz-frontend fuzz-parser test-fuzz test test-rules test-stress test-json test-json-suite test-broken test-notes test-corpus test-cli test-project-root test-exe-path test-trace-source test-crlf test-io test-proc-limit test-socket-leak test-tls test-tls-online test-recursion-memory test-stack-depth test-cache test-install test-lsp test-example-apps bootstrap clean
 
 # the compiler, from the checked-in stage0.c
 build: $(GEM)
@@ -118,7 +118,7 @@ bootstrap: $(GEM)
 	cp $(BUILD_DIR)/stage0_new.c $(STAGE0)
 	@echo "bootstrap/stage0.c regenerated and verified"
 
-test: $(GEM) test-rules test-reset-stress test-fuzz test-broken test-notes test-corpus test-cli test-project-root test-exe-path test-trace-source test-crlf test-io test-proc-limit test-socket-leak test-resolve test-tls test-recursion-memory test-cache test-install test-lsp test-example-apps
+test: $(GEM) test-rules test-reset-stress test-fuzz test-broken test-notes test-corpus test-cli test-project-root test-exe-path test-trace-source test-crlf test-io test-proc-limit test-socket-leak test-resolve test-tls test-recursion-memory test-stack-depth test-cache test-install test-lsp test-example-apps
 	@bash examples/run_all.sh
 
 test-rules:
@@ -173,6 +173,9 @@ test-tls-online: $(GEM)
 
 test-recursion-memory: $(GEM)
 	@bash tests/check_recursion_memory.sh
+
+test-stack-depth: $(GEM)
+	@bash tests/check_stack_depth.sh
 
 test-corpus: $(GEM)
 	@bash tests/check_corpus.sh

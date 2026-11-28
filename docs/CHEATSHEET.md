@@ -149,7 +149,7 @@ error("msg")                         # halt with stack trace; uncaught in main p
                                      # uncaught in a spawned process: that process dies, same report on stderr ("[Runtime Error in process <pid>]")
 let r = pcall some_fn()              # {ok: bool, value/error: ..., stack: [{name, file, line}]}, names as in traces (`anonymous fn`, `mod.fn`)
                                      # pcall(some_fn()) runs some_fn() unprotected and calls what it returns (compiler warns)
-# Stack: 8 MB per process; overflow raises "stack overflow in <fn>" (pcall-catchable, kills only that process)
+# Stack: 8 MB per process, 16 MB built without optimization (run mode); overflow raises "stack overflow in <fn>" (pcall-catchable, kills only that process)
 
 # Common builtins
 # I/O & process: print, eprint, error, pcall, len, type, to_string, to_int, to_float, exit, kill, argv, getenv, setenv, input, read_stdin, write_stdout, sleep

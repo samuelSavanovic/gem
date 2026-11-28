@@ -170,6 +170,7 @@ static int *gem_poll_pids = NULL;
 #endif
 
 uintptr_t gem_stack_limit = 0;
+size_t gem_stack_size = GEM_STACK_SCALE * 8 * 1024 * 1024;
 static int gem_running_slot = -1;   /* slot whose coroutine is running, else -1 */
 static size_t gem_page_size = 0;
 static size_t gem_guard_size = 0;
@@ -247,7 +248,7 @@ static void gem_coro_stack_free(void *ptr, size_t size, void *udata) {
         char *lo = (char *)ptr + guard_off + gem_guard_size;
         /* from the stack top, not the mapping end: minicoro's +16 adds a
            trailing page, which alone fills the kept region with 16 KB pages */
-        char *top = lo + gem_round_up(GEM_CORO_STACK_SIZE, gem_page_size);
+        char *top = lo + gem_round_up(gem_stack_size, gem_page_size);
         char *keep = top - gem_round_up(GEM_STACK_KEEP_BYTES, gem_page_size);
         if (keep > lo && !gem_stack_pages_resident(lo, keep)) keep = lo;
         if (keep > lo) {
@@ -394,7 +395,7 @@ static void gem_install_overflow_handler(void) {
     /* must match gem_coro_create's sizing */
     gem_stack_cache_guard_off = gem_round_up(GEM_CORO_HEADER_BYTES, gem_page_size);
     gem_stack_cache_block = gem_round_up(gem_stack_cache_guard_off + gem_guard_size +
-                                         gem_round_up(GEM_CORO_STACK_SIZE, gem_page_size) + 16,
+                                         gem_round_up(gem_stack_size, gem_page_size) + 16,
                                          gem_page_size);
 
     stack_t ss;
@@ -1081,7 +1082,7 @@ int gem_spawn_fn(GemFnPtr fn, void *env) {
 
     mco_coro *co;
     char *stack_lo;
-    mco_result res = gem_coro_create(&co, GEM_CORO_STACK_SIZE, ctx, &stack_lo);
+    mco_result res = gem_coro_create(&co, gem_stack_size, ctx, &stack_lo);
     if (res != MCO_SUCCESS) {
         gem_spawn_overflow_count++;
         gem_arena_destroy(&gem_proc_table[pid].arena);
@@ -1228,10 +1229,6 @@ static int64_t gem_earliest_timer_deadline(void) {
     return gem_timer_count > 0 ? gem_timers[0].deadline_ms : -1;
 }
 
-#ifndef GEM_MAIN_STACK_SIZE
-#define GEM_MAIN_STACK_SIZE (GEM_STACK_SCALE * 8 * 1024 * 1024)
-#endif
-
 void gem_run_main(GemFnPtr fn, void *env) {
     int pid = gem_proc_alloc_slot();
     if (pid < 0) {
@@ -1254,7 +1251,7 @@ void gem_run_main(GemFnPtr fn, void *env) {
 
     mco_coro *co;
     char *stack_lo;
-    mco_result res = gem_coro_create(&co, GEM_MAIN_STACK_SIZE, ctx, &stack_lo);
+    mco_result res = gem_coro_create(&co, gem_stack_size, ctx, &stack_lo);
     if (res != MCO_SUCCESS) {
         gem_arena_destroy(&gem_proc_table[pid].arena);
         gem_error("gem_run_main: coroutine creation failed");

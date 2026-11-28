@@ -938,9 +938,18 @@ void gem_pin_free_all(GemProcess *proc);
 #endif
 #endif
 
-#ifndef GEM_CORO_STACK_SIZE
-/* same as main, so recursion goes as deep in any process; mmap'd, so only touched pages cost memory */
-#define GEM_CORO_STACK_SIZE (GEM_STACK_SCALE * 8 * 1024 * 1024)
+/* every process's stack, main included; mmap'd, so only touched pages cost memory. The program's main sets
+   it to GEM_PROGRAM_STACK_SIZE before gem_scheduler_init. */
+extern size_t gem_stack_size;
+
+/* evaluated in the program's own C: a program built without optimization has larger frames and gets
+   twice the stack */
+#ifndef GEM_PROGRAM_STACK_SIZE
+#ifdef __OPTIMIZE__
+#define GEM_PROGRAM_STACK_SIZE (GEM_STACK_SCALE * 8 * 1024 * 1024)
+#else
+#define GEM_PROGRAM_STACK_SIZE (GEM_STACK_SCALE * 16 * 1024 * 1024)
+#endif
 #endif
 
 #ifndef GEM_STACK_RED_ZONE
