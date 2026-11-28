@@ -289,7 +289,13 @@ test.case("a storm makes the queue retry what was running") do
     for id = 1, 5
       jobqueue.submit(job(id, {deadline_ms: nil}))
     end
-    sleep(10)
+    let give_up = time_ms() + WAIT_MS
+    while jobqueue.status(1).status != "running"
+      if time_ms() > give_up
+        error("job 1 never started")
+      end
+      sleep(1)
+    end
     for c in dynamic_supervisor.which_children(jobqueue.pids().workers)
       kill(c.pid, "storm")
     end
