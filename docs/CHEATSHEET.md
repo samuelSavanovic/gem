@@ -220,6 +220,7 @@ end
 # std/task       async, await, await_all
 # std/gen_server start(module, {name}), call, cast, reply, stop   (name: registered before init)
 #   start returns once init has; an init that raises makes it raise
+#   callbacks return {state} ({reply, state} or {noreply} from handle_call), or {stop: reason} to end it
 # std/test       case, assert, assert_eq, assert_neq, assert_throws, run  (assert_eq is deep, takes an optional msg; run exits 1 on failure)
 
 # C interop

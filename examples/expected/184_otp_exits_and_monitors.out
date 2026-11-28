@@ -62,16 +62,16 @@ oops restarted: true
 -- 6. handle_call returning both reply and noreply
 
 [Runtime Error in process 41]: gen_server: handle_call returned a table with keys ["reply", "noreply"], expected {reply: value, state: state} or {noreply: state}, not both
-  --> std/gen_server.gem:50
+  --> std/gen_server.gem:51
     |
- 50 |   error("gen_server: {callback} returned {describe(result)}, expected {expected}")
+ 51 |   error("gen_server: {callback} returned {describe(result)}, expected {expected}")
     |
 Stack trace:
-  at gen_server.bad_result (std/gen_server.gem:50)
-  at gen_server.check_call_result (std/gen_server.gem:71)
-  at gen_server.loop (std/gen_server.gem:88)
-  at gen_server.serve (std/gen_server.gem:192)
-  at anonymous fn (std/gen_server.gem:150)
+  at gen_server.bad_result (std/gen_server.gem:51)
+  at gen_server.check_call_result (std/gen_server.gem:72)
+  at gen_server.loop (std/gen_server.gem:110)
+  at gen_server.serve (std/gen_server.gem:213)
+  at anonymous fn (std/gen_server.gem:173)
 gen_server.call: server exited: gen_server: handle_call returned a table with keys ["reply", "noreply"], expected {reply: value, state: state} or {noreply: state}, not both
 -- 7. init returning a table with a state field
 {state: "idle", count: 0}

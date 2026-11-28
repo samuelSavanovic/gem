@@ -1,5 +1,6 @@
 ## gen_server: a process that holds state and answers calls and casts.
 ## A callback that raises or returns the wrong shape kills the server.
+## Any callback but init can return `{stop: reason}` to end it (handle_call: with `reply` to answer first).
 ## A target is the `{pid}` from `start`, a pid or a name.
 
 fn target_pid(target, caller)
@@ -81,10 +82,31 @@ fn check_call_result(result)
   bad_result("handle_call", result, "\{reply: value, state: state\} or \{noreply: state\}")
 end
 
+fn exit_with(reason)
+  # a callback may have trapped exits, which would make the kill a message
+  process_flag("trap_exit", false)
+  kill(self(), reason)
+end
+
+fn stop_if_asked(callback, result, from = nil)
+  if type(result) != "table" or not has_key(result, "stop")
+    return nil
+  end
+  let reason = result.stop
+  if type(reason) != "string"
+    error("gen_server: {callback} returned a stop reason that is {describe(reason)}, expected a string")
+  end
+  if from != nil and has_key(result, "reply")
+    send(from.pid, {tag: "_gs_reply", ref: from.ref, value: result.reply})
+  end
+  exit_with(reason)
+end
+
 fn loop(module, state, pending)
   receive
   when {tag: "_gs_call", from: from, msg: msg}
     let result = module.handle_call(msg, from, state)
+    stop_if_asked("handle_call", result, from)
     check_call_result(result)
     let new_state = if has_key(result, "reply")
       send(from.pid, {tag: "_gs_reply", ref: from.ref, value: result.reply})
@@ -95,23 +117,24 @@ fn loop(module, state, pending)
     loop(module, new_state, set_timeout(pending, result.timeout))
   when {tag: "_gs_cast", msg: msg}
     let result = module.handle_cast(msg, state)
+    stop_if_asked("handle_cast", result)
     check_state_result("handle_cast", result)
     loop(module, result.state, set_timeout(pending, result.timeout))
   when {tag: "_gs_stop", reason: reason}
-    # a callback may have trapped exits, which would make the kill a message
-    process_flag("trap_exit", false)
-    kill(self(), reason)
+    exit_with(reason)
   when {tag: "_gs_timeout", ref: ref}
     if pending == nil or ref != pending.ref
       # stale: queued before a callback replaced it
       loop(module, state, pending)
     else
       let result = module.handle_info("timeout", state)
+      stop_if_asked("handle_info", result)
       check_state_result("handle_info", result)
       loop(module, result.state, set_timeout(nil, result.timeout))
     end
   when other
     let result = module.handle_info(other, state)
+    stop_if_asked("handle_info", result)
     check_state_result("handle_info", result)
     loop(module, result.state, set_timeout(pending, result.timeout))
   end
@@ -184,9 +207,7 @@ fn serve(module, caller, ref)
       eprint("  at {f.name} ({f.file}:{f.line})")
     end
     send(caller, {tag: "_gs_init_failed", ref: ref, error: res.error})
-    # init may have trapped exits
-    process_flag("trap_exit", false)
-    kill(self(), res.error)
+    exit_with(res.error)
   end
   send(caller, {tag: "_gs_started", ref: ref})
   loop(module, res.value.state, set_timeout(nil, res.value.timeout))

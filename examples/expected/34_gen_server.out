@@ -6,9 +6,9 @@
     |
 Stack trace:
   at anonymous fn (examples/34_gen_server.gem:88)
-  at gen_server.loop (std/gen_server.gem:87)
-  at gen_server.serve (std/gen_server.gem:192)
-  at anonymous fn (std/gen_server.gem:150)
+  at gen_server.loop (std/gen_server.gem:108)
+  at gen_server.serve (std/gen_server.gem:213)
+  at anonymous fn (std/gen_server.gem:173)
 test1: after incr 10 = 10
 test3: count=2 first=raw1 second=raw2
 test4: ok=false err=gen_server.call: server exited: kaboom from server

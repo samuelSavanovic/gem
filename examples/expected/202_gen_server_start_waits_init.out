@@ -1,17 +1,17 @@
 1 registered by init: true
 gen_server: init raised at:
   at anonymous fn (examples/202_gen_server_start_waits_init.gem:65)
-  at gen_server.run_init (std/gen_server.gem:174)
-  at anonymous fn (std/gen_server.gem:180)
+  at gen_server.run_init (std/gen_server.gem:197)
+  at anonymous fn (std/gen_server.gem:203)
 2 gen_server.start: init failed: two init 1 failed
 3 gen_server.start: server exited: gone
 4 after setup: ready
 gen_server: init raised at:
   at anonymous fn (examples/202_gen_server_start_waits_init.gem:65)
-  at gen_server.run_init (std/gen_server.gem:174)
-  at anonymous fn (std/gen_server.gem:180)
+  at gen_server.run_init (std/gen_server.gem:197)
+  at anonymous fn (std/gen_server.gem:203)
 supervisor: restart of child "five" failed: gen_server.start: init failed: five init 2 failed
-  at gen_server.start (std/gen_server.gem:166)
+  at gen_server.start (std/gen_server.gem:189)
   at start_flaky (examples/202_gen_server_start_waits_init.gem:76)
   at anonymous fn (examples/202_gen_server_start_waits_init.gem:153)
   at supervisor.start_child (std/supervisor.gem:48)
@@ -21,30 +21,30 @@ supervisor: restart of child "five" failed: gen_server.start: init failed: five 
 5 inits: ["five1", "five2", "five3"]
 gen_server: init raised at:
   at anonymous fn (examples/202_gen_server_start_waits_init.gem:65)
-  at gen_server.run_init (std/gen_server.gem:174)
-  at anonymous fn (std/gen_server.gem:180)
+  at gen_server.run_init (std/gen_server.gem:197)
+  at anonymous fn (std/gen_server.gem:203)
 supervisor: restart of child "six" failed: gen_server.start: init failed: six init 2 failed
-  at gen_server.start (std/gen_server.gem:166)
+  at gen_server.start (std/gen_server.gem:189)
   at start_flaky (examples/202_gen_server_start_waits_init.gem:76)
   at anonymous fn (examples/202_gen_server_start_waits_init.gem:165)
   at supervisor.start_child (std/supervisor.gem:48)
   at anonymous fn (std/supervisor.gem:187)
 gen_server: init raised at:
   at anonymous fn (examples/202_gen_server_start_waits_init.gem:65)
-  at gen_server.run_init (std/gen_server.gem:174)
-  at anonymous fn (std/gen_server.gem:180)
+  at gen_server.run_init (std/gen_server.gem:197)
+  at anonymous fn (std/gen_server.gem:203)
 supervisor: restart of child "six" failed: gen_server.start: init failed: six init 3 failed
-  at gen_server.start (std/gen_server.gem:166)
+  at gen_server.start (std/gen_server.gem:189)
   at start_flaky (examples/202_gen_server_start_waits_init.gem:76)
   at anonymous fn (examples/202_gen_server_start_waits_init.gem:165)
   at supervisor.start_child (std/supervisor.gem:48)
   at anonymous fn (std/supervisor.gem:187)
 gen_server: init raised at:
   at anonymous fn (examples/202_gen_server_start_waits_init.gem:65)
-  at gen_server.run_init (std/gen_server.gem:174)
-  at anonymous fn (std/gen_server.gem:180)
+  at gen_server.run_init (std/gen_server.gem:197)
+  at anonymous fn (std/gen_server.gem:203)
 supervisor: restart of child "six" failed: gen_server.start: init failed: six init 4 failed
-  at gen_server.start (std/gen_server.gem:166)
+  at gen_server.start (std/gen_server.gem:189)
   at start_flaky (examples/202_gen_server_start_waits_init.gem:76)
   at anonymous fn (examples/202_gen_server_start_waits_init.gem:165)
   at supervisor.start_child (std/supervisor.gem:48)
@@ -62,10 +62,10 @@ Stack trace:
 6 inits: ["six1", "six2", "six3", "six4"]
 gen_server: init raised at:
   at anonymous fn (examples/202_gen_server_start_waits_init.gem:65)
-  at gen_server.run_init (std/gen_server.gem:174)
-  at anonymous fn (std/gen_server.gem:180)
+  at gen_server.run_init (std/gen_server.gem:197)
+  at anonymous fn (std/gen_server.gem:203)
 supervisor: restart of child "b" failed: gen_server.start: init failed: b init 2 failed
-  at gen_server.start (std/gen_server.gem:166)
+  at gen_server.start (std/gen_server.gem:189)
   at start_flaky (examples/202_gen_server_start_waits_init.gem:76)
   at anonymous fn (examples/202_gen_server_start_waits_init.gem:173)
   at supervisor.start_child (std/supervisor.gem:48)
@@ -73,15 +73,15 @@ supervisor: restart of child "b" failed: gen_server.start: init failed: b init 2
 7 children: ["a:true", "b:true", "c:true"] inits: ["a2", "b2", "b3", "c2"]
 gen_server: init raised at:
   at anonymous fn (examples/202_gen_server_start_waits_init.gem:65)
-  at gen_server.run_init (std/gen_server.gem:174)
-  at anonymous fn (std/gen_server.gem:180)
+  at gen_server.run_init (std/gen_server.gem:197)
+  at anonymous fn (std/gen_server.gem:203)
 8 dynamic_supervisor.start_child: gen_server.start: init failed: eight_bad init 1 failed
 gen_server: init raised at:
   at anonymous fn (examples/202_gen_server_start_waits_init.gem:65)
-  at gen_server.run_init (std/gen_server.gem:174)
-  at anonymous fn (std/gen_server.gem:180)
+  at gen_server.run_init (std/gen_server.gem:197)
+  at anonymous fn (std/gen_server.gem:203)
 dynamic_supervisor: restart of a child failed: gen_server.start: init failed: eight init 2 failed
-  at gen_server.start (std/gen_server.gem:166)
+  at gen_server.start (std/gen_server.gem:189)
   at start_flaky (examples/202_gen_server_start_waits_init.gem:76)
   at anonymous fn (examples/202_gen_server_start_waits_init.gem:187)
   at dynamic_supervisor.start_from_template (std/dynamic_supervisor.gem:64)
@@ -91,8 +91,8 @@ dynamic_supervisor: restart of a child failed: gen_server.start: init failed: ei
 8 inits: ["eight_bad1", "eight1", "eight2", "eight3"]
 gen_server: init raised at:
   at anonymous fn (examples/202_gen_server_start_waits_init.gem:202)
-  at gen_server.run_init (std/gen_server.gem:174)
-  at anonymous fn (std/gen_server.gem:180)
+  at gen_server.run_init (std/gen_server.gem:197)
+  at anonymous fn (std/gen_server.gem:203)
 9 gen_server.start: init failed: trapped then failed
 10 still there: true
 10 down: boom child gone: nil

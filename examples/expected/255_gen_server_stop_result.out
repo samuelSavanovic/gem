@@ -1,0 +1,20 @@
+bye after 1
+normal
+gen_server.call: server exited: gave up
+gave up
+shutdown
+idle
+shutdown
+
+[Runtime Error in process 6]: gen_server: handle_call returned a stop reason that is an int, expected a string
+  --> std/gen_server.gem:97
+    |
+ 97 |     error("gen_server: {callback} returned a stop reason that is {describe(reason)}, expected a string")
+    |
+Stack trace:
+  at gen_server.stop_if_asked (std/gen_server.gem:97)
+  at gen_server.loop (std/gen_server.gem:109)
+  at gen_server.serve (std/gen_server.gem:213)
+  at anonymous fn (std/gen_server.gem:173)
+gen_server.call: server exited: gen_server: handle_call returned a stop reason that is an int, expected a string
+gen_server: handle_call returned a stop reason that is an int, expected a string

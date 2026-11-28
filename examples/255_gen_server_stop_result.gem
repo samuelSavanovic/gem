@@ -1,0 +1,64 @@
+# a gen_server callback returning {stop: reason}, with a reply from handle_call
+
+load "std/gen_server"
+
+let SERVER = {
+  init: fn() {state: 0} end,
+  handle_call: fn(msg, from, n)
+    match msg
+    when "bye" then {stop: "normal", reply: "bye after {n}"}
+    when "crash" then {stop: "gave up"}
+    when "bad" then {stop: 42}
+    else {reply: n, state: n + 1}
+    end
+  end,
+  handle_cast: fn(msg, n)
+    if msg == "quit" then {stop: "shutdown"} else {state: n} end
+  end,
+  handle_info: fn(msg, n)
+    if msg == "timeout" then {stop: "idle"} else {state: n} end
+  end
+}
+
+fn start_watched(module)
+  let s = gen_server.start(module)
+  monitor(s.pid)
+  s
+end
+
+fn down_reason(s)
+  let pid = s.pid
+  receive
+  when {tag: "DOWN", pid: ^pid, reason: r} then r
+  after 1000 then "still running"
+  end
+end
+
+let a = start_watched(SERVER)
+gen_server.call(a, "x")
+print(gen_server.call(a, "bye"))
+print(down_reason(a))
+
+let b = start_watched(SERVER)
+print((pcall gen_server.call(b, "crash")).error)
+print(down_reason(b))
+
+let c = start_watched(SERVER)
+gen_server.cast(c, "quit")
+print(down_reason(c))
+
+let idle = {init: fn() {state: 0, timeout: 5} end, handle_call: SERVER.handle_call, handle_cast: SERVER.handle_cast, handle_info: SERVER.handle_info}
+print(down_reason(start_watched(idle)))
+
+let trapping = {init: fn()
+  process_flag("trap_exit", true)
+  {state: 0}
+end, handle_call: SERVER.handle_call, handle_cast: SERVER.handle_cast, handle_info: SERVER.handle_info}
+let d = start_watched(trapping)
+gen_server.cast(d, "quit")
+print(down_reason(d))
+
+# a stop reason must be a string
+let e = start_watched(SERVER)
+print((pcall gen_server.call(e, "bad")).error)
+print(down_reason(e))
