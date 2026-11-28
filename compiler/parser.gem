@@ -7,7 +7,7 @@ load "./errors" (make_error_sink)
 
 # the parser recurses several frames per nesting level; a few hundred levels can overflow the compiler's stack
 let MAX_NEST = 200
-# nesting plus operator/postfix chain links; later passes and cc recurse per level (clang dies under 2000)
+# nesting plus operator/postfix chain links; later passes recurse per level
 let MAX_DEPTH = 1000
 
 # not allowed as an extern fn's name (the C symbol): C keywords that aren't Gem's, and the types our prototypes use
@@ -172,7 +172,7 @@ fn make_parser(tokens, source, file, sink)
   let closure_kind = nil
   # pos of the current top-level statement: module-scope or nested?
   let top_stmt_pos = -1
-  # module-scope names -> {kind, line}; only a `let` may repeat (it rebinds)
+  # module-scope names -> {kind, line}; only a `let` or a `load` may repeat
   let top_names = {}
 
   let peek = fn()
@@ -1162,11 +1162,11 @@ fn make_parser(tokens, source, file, sink)
   parse_unary = fn()
     if peek().type == "-"
       # `-9223372036854775808` is INT64_MIN, the one literal that only fits negated. Not with a postfix after it
-      # (`-N.x` is `-(N.x)`): then the literal reports out of range.
+      # (`-N[i]` is `-(N[i])`): then the literal reports out of range.
       let nt = peek_at(1)
       if nt.type == "NUMBER" and not contains_dot(nt.value) and int_literal_range(nt.value) == "min"
         let follow = peek_at(2).type
-        if follow != "(" and follow != "." and follow != "["
+        if follow != "(" and follow != "["
           advance()
           advance()
           return make_int(int64_min())

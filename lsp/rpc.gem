@@ -91,7 +91,7 @@ fn make_location(uri, range)
   {uri: uri, range: range}
 end
 
-# CompletionItemKind values we use
+# CompletionItemKind values
 let CIK_TEXT = 1
 let CIK_METHOD = 2
 let CIK_FUNCTION = 3

@@ -1,4 +1,4 @@
-# Gem builtin name -> runtime C symbol, read by codegen, shadow_entry_builtins and LSP completion
+# Gem builtin name -> runtime C symbol
 
 let BUILTIN_FNS = {
   print: "gem_print",
@@ -149,7 +149,7 @@ let DIRECT_BUILTINS = {
   "__table_val_at/2": "gem_table_val_at_2"
 }
 
-# sorted names for completion, without the `__` aliases lower() emits (so a user `len` can't capture them)
+# sorted names for completion, without the internal `__` ones
 fn user_builtin_names()
   let out = []
   for k, _ in BUILTIN_FNS

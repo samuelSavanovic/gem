@@ -1,6 +1,6 @@
 # Error sink entries -> publishDiagnostics payloads, one per file.
 # An entry's `source` is the text of the file it was raised against, so errors in other files get the right line.
-# Warnings only codegen produces never show up: the LSP doesn't run codegen.
+# Warnings from codegen and the driver (compiler/warnings.gem) never show up: the LSP runs neither.
 
 load "./rpc"
 load "../compiler/errors" (get_source_line)

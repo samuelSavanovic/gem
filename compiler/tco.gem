@@ -197,13 +197,13 @@ fn find_tail_call_sccs(fn_defs, caller_records, name_to_fn)
       if not viable
         break
       end
-      # GEM_MAX_TAIL_ARGS in gem.h; keep the two in sync
+      # GEM_MAX_TAIL_ARGS in gem.h; tail_call_jump in codegen.gem has the same 16
       if len(fd.params) > 16
         viable = false
         why = "{name} has more than 16 parameters"
         break
       end
-      # boxed params (captured by an escaping closure and assigned by some closure) aren't handled by the trampoline
+      # boxed params (captured by an escaping closure and assigned anywhere) aren't handled by the trampoline
       let scope_vars = sorted_array_to_set(fd.params)
       let cap_writes = find_capture_writes_in_scope(fd.body, scope_vars)
       let captured = find_captured_in_scope(fd.body, scope_vars, fn(n) false end)

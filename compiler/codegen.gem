@@ -1,4 +1,4 @@
-# AST -> C. make_codegen() returns a table of closures sharing the state below.
+# AST -> C. make_codegen() returns {compile}, a closure over the state below.
 
 load "./liveness" (compute_live_for_pt_loops_in_stmts)
 load "./errors" (make_error_sink)
@@ -52,7 +52,7 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
     n
   end
 
-  # node.file is set by tag_file; entry-file and synthetic nodes have none
+  # node.file is set by tag_file and on the nodes lower makes; a node made after lowering may have none
   let file_of = fn(node)
     if node != nil and node.file != nil
       return node.file
@@ -1343,7 +1343,7 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
         return "{line_dir}{r.setup}{p}gem_global_set({gindex(name)}, {r.expr});"
       end
       if set_contains(fs.boxed_vars, name)
-        # captured and assigned by a closure: a pinned box, which survives resets while something reaches it
+        # captured by a closure and assigned anywhere: a pinned box, which survives resets while something reaches it
         return "{line_dir}{r.setup}{p}GemVal *{mname} = gem_box_alloc();\n{p}*{mname} = {r.expr};"
       end
       return "{line_dir}{r.setup}{p}GemVal {mname} = {r.expr};"
@@ -1610,7 +1610,7 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
       if expr_has_var(node.cond, name)
         delete(eligible, name)
       end
-      # a slot reader must see a string, not the buffer: slots append in place only in top-level code calling nothing
+      # a slot reader must see a string, not the buffer: slots append in place only in top-level code that can't read slots
       if set_contains(fs.boxed_vars, name) or (is_global_ref(name) and not (fs.in_top_level and not node_may_read_slots(node)))
         delete(eligible, name)
       end
@@ -2334,14 +2334,14 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
       set_add(scope_vars, node.rest_param)
     end
 
-    # every local of the fn, arm lets included: these hide builtins and fns of the same name
+    # every local of the fn, arm lets included
     let shadowed_locals = set_union(scope_vars, {})
     collect_shadow_lets_in_fn(body, shadowed_locals)
 
     let outer_fs = fs
     fs = new_fn_state()
     fs.local_names = shadowed_locals
-    # grows as compile_stmt reaches each let, so a read before a same-named let still hits the module slot
+    # grows as compile_stmt reaches each let
     fs.fn_scope_locals = sorted_array_to_set(params)
     if node.rest_param != nil
       set_add(fs.fn_scope_locals, node.rest_param)
@@ -2350,7 +2350,7 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
 
     let captured = find_captured_in_scope(fn_stmts(node), scope_vars, is_global_name)
 
-    # Box only captures some closure assigns; read-only ones are snapshotted into the env. A closure that assigns
+    # Box only captures that are assigned somewhere; the others are snapshotted into the env. A closure that assigns
     # must share the outer box, since arena capture boxes are write-once as far as resets are concerned.
     let cap_writes = find_capture_writes_in_scope(fn_stmts(node), shadowed_locals)
     fs.boxed_vars = set_intersect(captured, cap_writes)
@@ -2772,7 +2772,7 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
     emit_extern_includes(ob, extern_includes, c_file)
     buf_push(ob, "#include \"gem.h\"\n")
 
-    # extern fn prototypes unless an extern include declares them; with c_file each gets a #line for cc's clash errors
+    # extern fn prototypes unless there is an extern include; with c_file each gets a #line for cc's clash errors
     if len(extern_includes) == 0
       for d in extern_c_decls
         if c_file != nil

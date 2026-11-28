@@ -1,4 +1,4 @@
-# locals a loop only extends with `name = name + ...` and never reads; compile_while keeps them in a buffer
+# variables a loop only extends with `name = name + ...` and never reads; compile_while keeps them in a buffer
 
 load "./cgutil" (is_node, set_add)
 

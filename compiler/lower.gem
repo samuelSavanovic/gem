@@ -306,7 +306,7 @@ end
 #   if c then __val_2 = a else __val_2 = b end
 #   print(__val_1, __val_2)
 # Operands to its left go into temps too, for left-to-right order, unless stays_in_place shows the moved code
-# can't change them (this also keeps `let n = if n == nil ...` reading the outer `n`).
+# can't change them.
 # In and/or's right operand the block goes into an `if` on the left value.
 # A while condition becomes `while true` with the test and a break at the top of the body.
 # `return <block>` returns from each branch, so tail calls stay tail calls.

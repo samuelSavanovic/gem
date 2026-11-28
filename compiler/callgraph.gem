@@ -44,17 +44,9 @@ fn build_call_graph(fn_defs, top_stmts, builtin_names = {}, extern_names = [])
         let mod_map = {}
         let any = false
         for e in s.value.entries
-          if e.value != nil and is_node(e.value, "var") and name_to_fn[e.value.name] != nil
-            # key is a raw string when modules.gem built the table, a string node when parsed
-            let key_str = if type(e.key) == "string"
-              e.key
-            elif e.key != nil and is_node(e.key, "string")
-              e.key.value
-            end
-            if key_str != nil
-              mod_map[key_str] = e.value.name
-              any = true
-            end
+          if e.value != nil and is_node(e.value, "var") and name_to_fn[e.value.name] != nil and type(e.key) == "string"
+            mod_map[e.key] = e.value.name
+            any = true
           end
         end
         if any

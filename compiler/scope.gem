@@ -20,7 +20,7 @@ end
 #
 # Scope is strict: shadow_check_use reports a use after the block or before the let (codegen's locals are fn-wide).
 # `env` maps visible names to what they compile to; `mode` is "module", "block" (nested top-level) or "fn".
-# ctx.ended/later/outer_later are per body: one per named fn, one shared by all top-level code.
+# ctx.ended is per named fn, plus one shared by all top-level code; a closure gets its own later and outer_later.
 
 fn copy_scope_env(env)
   let r = {}
@@ -30,7 +30,7 @@ fn copy_scope_env(env)
   r
 end
 
-# {line, file} for the out-of-scope hint; pattern bindings have no line, and one walk spans every module's code
+# {line, file} for the out-of-scope hint (line 0 is unknown); one walk spans every module's code
 fn shadow_decl_site(let_node)
   let line = let_node.line
   if line == 0

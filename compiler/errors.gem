@@ -1,4 +1,4 @@
-# compile_error prints one error and exits; everything else reports into a sink so a run shows them all
+# errors report into a sink so a run shows them all
 
 fn get_source_line(source, line_num)
   let current = 1
@@ -72,11 +72,6 @@ fn print_one_error(source, file, line, col, span_len, msg, hint)
   eprint(out)
 end
 
-fn compile_error(source, file, line, col, span_len, msg, hint)
-  print_one_error(source, file, line, col, span_len, msg, hint)
-  exit(1)
-end
-
 # records carry their own source so errors in loaded modules show the right line; past 20 it's cascade noise
 
 let ERROR_CAP = 20
@@ -143,5 +138,5 @@ fn print_all_errors(sink, show_path = nil)
   end
 end
 
-export compile_error, print_one_error, make_error_sink, print_all_errors,
+export print_one_error, make_error_sink, print_all_errors,
        get_source_line

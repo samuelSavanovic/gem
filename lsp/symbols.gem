@@ -212,7 +212,7 @@ fn walk_node(node, scope, acc)
     walk_stmts(stmts, scope, acc)
 
   when {tag: "load", path: path}
-    # resolve_load_path can throw (no stdlib root, say): go on with resolved = nil. A resolved path may not exist.
+    # resolve_load_path raises without a stdlib root: go on with resolved = nil. A resolved path may not exist.
     let resolved = nil
     let res = pcall(fn()
       resolved = resolve_load_path(path, acc.base_dir, acc.project_root, acc.stdlib_root)
