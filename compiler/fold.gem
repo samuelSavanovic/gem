@@ -118,17 +118,14 @@ fn try_fold_unop(node)
   node
 end
 
-let fold = nil
-let fold_stmts = nil
-
-fold_stmts = fn(stmts)
+fn fold_stmts(stmts)
   if stmts == nil then return end
   for i = 0, len(stmts)
     stmts[i] = fold(stmts[i])
   end
 end
 
-fold = fn(node)
+fn fold(node)
   if node == nil then return nil end
   if type(node) != "table" then return node end
   if node.tag == nil then return node end

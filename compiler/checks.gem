@@ -89,8 +89,7 @@ fn pop_block(frame)
   pop(frame.blocks)
 end
 
-let pure_expr = nil
-pure_expr = fn(e)
+fn pure_expr(e)
   if e == nil or type(e) != "table"
     return true
   end
@@ -147,11 +146,8 @@ fn pure_kind(e)
   "a value"
 end
 
-let check_stmts = nil
-let check_node = nil
-
 # value_used: the last statement is the block's value (fn body, branch), unlike loop bodies and top level
-check_stmts = fn(ctx, frame, stmts, value_used)
+fn check_stmts(ctx, frame, stmts, value_used)
   if stmts == nil
     return nil
   end
@@ -248,7 +244,7 @@ fn check_fn(ctx, outer, node)
 end
 
 # used: an if, match or receive statement gives its branches' value to the code around it
-check_node = fn(ctx, frame, node, used = true)
+fn check_node(ctx, frame, node, used = true)
   if node == nil or type(node) != "table"
     return nil
   end
@@ -308,8 +304,7 @@ check_node = fn(ctx, frame, node, used = true)
 end
 
 # receive outside nested fns?
-let has_receive = nil
-has_receive = fn(node)
+fn has_receive(node)
   if node == nil or type(node) != "table"
     return false
   end
@@ -323,9 +318,7 @@ has_receive = fn(node)
 end
 
 # marks calls in tail position: the last statement, through if/match/receive branches
-let mark_tails = nil
-let mark_tail_expr = nil
-mark_tail_expr = fn(e, tails)
+fn mark_tail_expr(e, tails)
   if e == nil or type(e) != "table"
     return nil
   end
@@ -350,7 +343,7 @@ mark_tail_expr = fn(e, tails)
     mark_tails(e.after_body, tails)
   end
 end
-mark_tails = fn(stmts, tails)
+fn mark_tails(stmts, tails)
   if stmts == nil or len(stmts) == 0
     return nil
   end
@@ -363,8 +356,7 @@ mark_tails = fn(stmts, tails)
 end
 
 # `return <call>` is a tail call anywhere
-let mark_returns = nil
-mark_returns = fn(node, tails)
+fn mark_returns(node, tails)
   if node == nil or type(node) != "table"
     return nil
   end
@@ -377,8 +369,7 @@ mark_returns = fn(node, tails)
   each_child(node, fn(c) mark_returns(c, tails) end)
 end
 
-let find_self_calls = nil
-find_self_calls = fn(node, name, out)
+fn find_self_calls(node, name, out)
   if node == nil or type(node) != "table"
     return nil
   end

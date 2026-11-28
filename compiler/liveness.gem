@@ -3,28 +3,12 @@
 # Anything a closure in the body captures is live across the back-edge, except closures passed straight to
 # spawn: spawn copies their captures into the child, so they only need to live until the call.
 
-load "./cgutil" (each_child, any_child, arm_stmts, walk_scoped, walk_scoped_fn, walk_scoped_node)
-
-fn is_liveness_node(node, tag)
-  type(node) == "table" and node.tag == tag
-end
-
-fn lset_add(s, val)
-  s[val] = true
-end
+load "./cgutil" (is_node, set_union, each_child, any_child, arm_stmts, walk_scoped, walk_scoped_fn, walk_scoped_node)
 
 fn lset_remove(s, val)
   if s[val] == true
     delete(s, val)
   end
-end
-
-fn lset_copy(s)
-  let r = {}
-  for k, _ in s
-    r[k] = true
-  end
-  r
 end
 
 fn lset_union_into(dst, src)
@@ -45,12 +29,6 @@ fn lset_eq(a, b)
     end
   end
   true
-end
-
-fn lset_add_array(s, arr)
-  for x in arr
-    s[x] = true
-  end
 end
 
 # names a fn literal reads or assigns that neither it nor `defined` binds
@@ -85,8 +63,7 @@ end
 
 # adds the names an expression reads to `into`; a closure reads its free vars
 
-let _uses_expr = nil
-_uses_expr = fn(node, into)
+fn _uses_expr(node, into)
   if node == nil
     return nil
   end
@@ -141,12 +118,8 @@ _uses_expr = fn(node, into)
   end
 end
 
-
-let _transfer_stmt = nil
-let _transfer_stmts = nil
-
-_transfer_stmts = fn(stmts, live_out, ctx)
-  let live = lset_copy(live_out)
+fn _transfer_stmts(stmts, live_out, ctx)
+  let live = set_union(live_out, {})
   let i = len(stmts) - 1
   while i >= 0
     live = _transfer_stmt(stmts[i], live, ctx)
@@ -156,29 +129,28 @@ _transfer_stmts = fn(stmts, live_out, ctx)
 end
 
 # live_in of a nested while, by fixpoint
-let _fixpoint_inner_loop = nil
-_fixpoint_inner_loop = fn(while_node, live_after)
-  let live_top = lset_copy(live_after)
+fn _fixpoint_inner_loop(while_node, live_after)
+  let live_top = set_union(live_after, {})
   let prev = nil
   let iter = 0
   while iter < 64
     let ctx = {brk: live_after, cont: live_top}
     let live_in_body = _transfer_stmts(while_node.body, live_top, ctx)
     # the condition can end the loop before the first iteration too
-    let new_top = lset_copy(live_after)
+    let new_top = set_union(live_after, {})
     _uses_expr(while_node.cond, new_top)
     lset_union_into(new_top, live_in_body)
     if prev != nil and lset_eq(new_top, prev)
       return new_top
     end
-    prev = lset_copy(new_top)
+    prev = set_union(new_top, {})
     live_top = new_top
     iter += 1
   end
   live_top
 end
 
-_transfer_stmt = fn(s, live_out, ctx)
+fn _transfer_stmt(s, live_out, ctx)
   if s == nil
     return live_out
   end
@@ -188,30 +160,30 @@ _transfer_stmt = fn(s, live_out, ctx)
 
   match s
   when {tag: "let", name: name, value: value}
-    let live_in = lset_copy(live_out)
+    let live_in = set_union(live_out, {})
     lset_remove(live_in, name)
     _uses_expr(value, live_in)
     return live_in
   when {tag: "assign", name: name, value: value}
-    let live_in = lset_copy(live_out)
+    let live_in = set_union(live_out, {})
     lset_remove(live_in, name)
     _uses_expr(value, live_in)
     return live_in
   when {tag: "dot_assign", object: object, value: value}
-    let live_in = lset_copy(live_out)
+    let live_in = set_union(live_out, {})
     _uses_expr(object, live_in)
     _uses_expr(value, live_in)
     return live_in
   when {tag: "index_assign", object: object, key: key, value: value}
-    let live_in = lset_copy(live_out)
+    let live_in = set_union(live_out, {})
     _uses_expr(object, live_in)
     _uses_expr(key, live_in)
     _uses_expr(value, live_in)
     return live_in
   when {tag: "if", cond: cond, then: thens, else: el}
     let live_then = _transfer_stmts(thens, live_out, ctx)
-    let live_else = if el != nil then _transfer_stmts(el, live_out, ctx) else lset_copy(live_out) end
-    let live_in = lset_copy(live_then)
+    let live_else = if el != nil then _transfer_stmts(el, live_out, ctx) else set_union(live_out, {}) end
+    let live_in = set_union(live_then, {})
     lset_union_into(live_in, live_else)
     _uses_expr(cond, live_in)
     return live_in
@@ -269,17 +241,17 @@ _transfer_stmt = fn(s, live_out, ctx)
     return live_in
   when {tag: "break"}
     # control continues after the loop
-    return lset_copy(ctx.brk)
+    return set_union(ctx.brk, {})
   when {tag: "continue"}
-    return lset_copy(ctx.cont)
+    return set_union(ctx.cont, {})
   when {tag: "fn_def"}
-    return lset_copy(live_out)
+    return set_union(live_out, {})
   when {tag: "call"}
-    let live_in = lset_copy(live_out)
+    let live_in = set_union(live_out, {})
     _uses_expr(s, live_in)
     return live_in
   else
-    let live_in = lset_copy(live_out)
+    let live_in = set_union(live_out, {})
     _uses_expr(s, live_in)
     return live_in
   end
@@ -292,7 +264,7 @@ fn compute_loop_live_at_backedge(while_node, live_after_loop)
   let closure_caps = {}
   collect_closure_captures_in_stmts(while_node.body, body_defined, closure_caps)
 
-  let cond_is_true = is_liveness_node(while_node.cond, "bool") and while_node.cond.value == true
+  let cond_is_true = is_node(while_node.cond, "bool") and while_node.cond.value == true
   let has_break = liveness_loop_has_break(while_node)
   let post_reachable = has_break or not cond_is_true
 
@@ -307,7 +279,7 @@ fn compute_loop_live_at_backedge(while_node, live_after_loop)
   while iter < 64
     let ctx = {brk: live_after_loop, cont: live_top}
     let live_in_body = _transfer_stmts(while_node.body, live_top, ctx)
-    let new_top = lset_copy(live_in_body)
+    let new_top = set_union(live_in_body, {})
     _uses_expr(while_node.cond, new_top)
     lset_union_into(new_top, closure_caps)
     if post_reachable
@@ -316,7 +288,7 @@ fn compute_loop_live_at_backedge(while_node, live_after_loop)
     if prev != nil and lset_eq(new_top, prev)
       return {ok: true, live: new_top}
     end
-    prev = lset_copy(new_top)
+    prev = set_union(new_top, {})
     live_top = new_top
     iter += 1
   end
@@ -349,10 +321,10 @@ fn is_spawn_callee_name(name)
 end
 
 fn liveness_is_spawn_with_closure(node)
-  if not is_liveness_node(node, "call")
+  if not is_node(node, "call")
     return false
   end
-  if not is_liveness_node(node.func, "var")
+  if not is_node(node.func, "var")
     return false
   end
   if not is_spawn_callee_name(node.func.name)
@@ -361,19 +333,15 @@ fn liveness_is_spawn_with_closure(node)
   if node.args == nil or len(node.args) == 0
     return false
   end
-  is_liveness_node(node.args[0], "anon_fn")
+  is_node(node.args[0], "anon_fn")
 end
 
 # Walks a fn body or the top level backward and sets `liveness_result` on every `process_tail` while,
 # for compile_while. A loop gets the live set after it, so reads after the loop are rooted; arms get the
 # enclosing statement's live_out, a loop body the back-edge set, a closure body the empty set.
 
-let _attach_node = nil
-let _attach_stmts = nil
-let _scan_anons = nil
-
-_attach_stmts = fn(stmts, live_out, ctx)
-  let live = lset_copy(live_out)
+fn _attach_stmts(stmts, live_out, ctx)
+  let live = set_union(live_out, {})
   let i = len(stmts) - 1
   while i >= 0
     live = _attach_node(stmts[i], live, ctx)
@@ -383,7 +351,7 @@ _attach_stmts = fn(stmts, live_out, ctx)
 end
 
 # every closure body in an expression, each as its own scope (statements: _attach_node; fn_defs: codegen)
-_scan_anons = fn(node)
+fn _scan_anons(node)
   if node == nil
     return nil
   end
@@ -407,7 +375,7 @@ _scan_anons = fn(node)
   each_child(node, _scan_anons)
 end
 
-_attach_node = fn(s, live_out, ctx)
+fn _attach_node(s, live_out, ctx)
   if s == nil
     return live_out
   end
@@ -420,11 +388,11 @@ _attach_node = fn(s, live_out, ctx)
     if s.process_tail == true
       s.liveness_result = r
     end
-    let body_live_after = if r.ok then r.live else lset_copy(live_out) end
+    let body_live_after = if r.ok then r.live else set_union(live_out, {}) end
     _attach_stmts(s.body, body_live_after, {brk: live_out, cont: body_live_after})
     _scan_anons(s.cond)
     if r.ok
-      return lset_copy(r.live)
+      return set_union(r.live, {})
     end
     return _transfer_stmt(s, live_out, ctx)
   end

@@ -16,11 +16,8 @@ fn hoist_has_let(node, name)
   any_child(node, fn(c) hoist_has_let(c, name) end)
 end
 
-let captured_arm_lets_node = nil
-let captured_arm_lets_stmts = nil
-
 # `scope`: names already addressable above (params, enclosing blocks' lets); a placeholder would shadow them
-captured_arm_lets_stmts = fn(stmts, scope)
+fn captured_arm_lets_stmts(stmts, scope)
   if stmts == nil
     return nil
   end
@@ -61,7 +58,7 @@ captured_arm_lets_stmts = fn(stmts, scope)
   end
 end
 
-captured_arm_lets_node = fn(node, scope)
+fn captured_arm_lets_node(node, scope)
   if node == nil
     return nil
   end
@@ -174,10 +171,7 @@ end
 # Tags every `while` (lowered `for`s too) in fn bodies, closures and top level with process_tail = true;
 # compile_while gives a tagged loop a mark and back-edge reset when liveness can root its live set.
 
-let walk_for_tagging_node = nil
-let walk_for_tagging_stmts = nil
-
-walk_for_tagging_stmts = fn(stmts, is_pt, source_name)
+fn walk_for_tagging_stmts(stmts, is_pt, source_name)
   if stmts == nil
     return nil
   end
@@ -186,7 +180,7 @@ walk_for_tagging_stmts = fn(stmts, is_pt, source_name)
   end
 end
 
-walk_for_tagging_node = fn(node, is_pt, source_name)
+fn walk_for_tagging_node(node, is_pt, source_name)
   if node == nil
     return nil
   end
@@ -239,8 +233,7 @@ walk_for_tagging_node = fn(node, is_pt, source_name)
   each_child(node, fn(c) walk_for_tagging_node(c, is_pt, source_name) end)
 end
 
-let tag_process_tail_while_loops = nil
-tag_process_tail_while_loops = fn(fn_defs, top_stmts, source_name)
+fn tag_process_tail_while_loops(fn_defs, top_stmts, source_name)
   # a reset only frees what the loop itself allocated, so every loop is a candidate whatever its call context
   for fd in fn_defs
     walk_for_tagging_stmts(fd.body, true, source_name)

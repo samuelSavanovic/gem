@@ -5,7 +5,6 @@ load "./cgutil" (set_add, set_contains, is_node, each_child)
 # env value for params not bound yet while walking a default (its own and later ones)
 let PENDING_PARAM = "\0pending param"
 
-
 fn collect_block_lets(stmt, result)
   if is_node(stmt, "block")
     for j = 0, len(stmt.stmts)
@@ -43,10 +42,6 @@ fn copy_scope_env(env)
   end
   r
 end
-
-let shadow_node = nil
-let shadow_stmt = nil
-let shadow_stmts = nil
 
 # {line, file} for the out-of-scope hint; pattern bindings have no line, and one walk spans every module's code
 fn shadow_decl_site(let_node)
@@ -106,8 +101,7 @@ fn shadow_check_use(node, name, env, ctx)
 end
 
 # name -> decl site for every let under node, not descending into fns
-let shadow_collect_lets = nil
-shadow_collect_lets = fn(node, out)
+fn shadow_collect_lets(node, out)
   if node == nil or type(node) != "table"
     return nil
   end
@@ -189,7 +183,7 @@ fn shadow_fn(node, env, ctx)
   shadow_stmts(node.body, inner, "fn", ctx)
 end
 
-shadow_stmts = fn(stmts, env, mode, ctx, block_kw = nil)
+fn shadow_stmts(stmts, env, mode, ctx, block_kw = nil)
   if stmts == nil
     return nil
   end
@@ -201,7 +195,7 @@ shadow_stmts = fn(stmts, env, mode, ctx, block_kw = nil)
 end
 
 # lets bind into env. A `block` is transparent: its lets belong to the enclosing list.
-shadow_stmt = fn(s, env, mode, ctx)
+fn shadow_stmt(s, env, mode, ctx)
   if is_node(s, "let")
     shadow_node(s.value, env, mode, ctx)
     shadow_bind(s, env, mode, ctx)
@@ -231,7 +225,7 @@ fn shadow_arm(cond, bindings, body, env, mode, ctx, block_kw)
   shadow_end_scope(arm, env, ctx, block_kw)
 end
 
-shadow_node = fn(node, env, mode, ctx)
+fn shadow_node(node, env, mode, ctx)
   if node == nil or type(node) != "table" or node.tag == nil
     return nil
   end
@@ -371,10 +365,8 @@ fn collect_module_namespaces(top_stmts, assigned, out)
 end
 
 # every name bound anywhere in a fn body (not nested fns): over-approximates locals hiding a module slot
-let collect_shadow_lets_in_node = nil
-let collect_shadow_lets_in_stmts = nil
 
-collect_shadow_lets_in_stmts = fn(stmts, result)
+fn collect_shadow_lets_in_stmts(stmts, result)
   if stmts == nil
     return nil
   end
@@ -383,7 +375,7 @@ collect_shadow_lets_in_stmts = fn(stmts, result)
   end
 end
 
-collect_shadow_lets_in_node = fn(node, result)
+fn collect_shadow_lets_in_node(node, result)
   if node == nil
     return nil
   end
@@ -456,8 +448,7 @@ collect_shadow_lets_in_node = fn(node, result)
   nil
 end
 
-let collect_shadow_lets_in_fn = nil
-collect_shadow_lets_in_fn = fn(stmts, result)
+fn collect_shadow_lets_in_fn(stmts, result)
   collect_shadow_lets_in_stmts(stmts, result)
 end
 
