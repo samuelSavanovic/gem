@@ -108,33 +108,11 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
     end
     display_name(user_var_name(name))
   end
-  let boxed_vars = {}
   let top_level_vars = {}
   # module binding -> {export: `__mod_<mangle>_<export>`} for bindings never rebound, so `m.x` compiles to the slot
   let module_ns = {}
   # reverse of module_ns: export -> [{binding, field}] holding its value
   let ns_targets = {}
-  let in_top_level = false
-  let local_names = {}
-  # locals with a C variable in scope here; an arm's lets drop out when its C block closes (filter_live_for_rescue)
-  let fn_scope_locals = {}
-  # captures of the closure body being compiled: `_cls->gem_v_<name>`, a `GemVal *` to the storage (the reset root)
-  let closure_captures = {}
-  # Captures a non-escaping closure assigns. Its env points at the creator's unboxed C locals, in a frame older
-  # than this body's loop marks, so every loop here roots them regardless of liveness (an error can unwind to
-  # the creator, which reads them).
-  let stack_env_writes = {}
-  let current_closure_struct_name = nil
-  let current_closure_captures = nil
-  let tco_fn_name = nil
-  let tco_params = nil
-  let tco_boxed = nil
-  # TCO fn with default/rest params: a self tail call fills `_tco_argv` and jumps to the rebind block
-  let tco_rebind = false
-  let tco_argv_max = 0
-  # Gem `while` loops around the code being compiled: a self tail call in one can't use C `continue`
-  let c_loop_depth = 0
-  let tco_top_used = false
   # call graph from mark_process_tail, for note_spawn_global_writes
   let pt_caller_records = {}
   let pt_anon_parent = {}
@@ -143,14 +121,44 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
   # mutual tail calls (find_tail_call_sccs): fn name -> SCC id, and per SCC how many TLB slots its wrapper copies
   let scc_member_to_id = {}
   let scc_id_max_params = {}
-  # SCC of the member being compiled, so a tail call to a sibling goes through the trampoline
-  let current_scc_id = nil
-  # name -> C flag for in-place `name = name + x` appends, set while the var holds the buffer (compile_while)
-  let append_buf_vars = {}
-  # leaf fns skip push/pop_frame and just set gem_leaf_site/gem_leaf_line: they call no Gem code, so they're innermost
-  let in_leaf_fn = false
-  # C expr of this fn's return point (GemArenaPoint), or nil
-  let ret_point = nil
+
+  # State of the body being compiled (a named fn, a closure or the top level): each starts from a fresh one
+  # and puts the enclosing one back when it ends.
+  let new_fn_state = fn()
+    {
+      boxed_vars: {},
+      in_top_level: false,
+      local_names: {},
+      # locals with a C variable in scope here; an arm's lets drop out when its C block closes (filter_live_for_rescue)
+      fn_scope_locals: {},
+      # captures of the closure body being compiled: `_cls->gem_v_<name>`, a `GemVal *` to the storage (the reset root)
+      closure_captures: {},
+      # Captures a non-escaping closure assigns. Its env points at the creator's unboxed C locals, in a frame older
+      # than this body's loop marks, so every loop here roots them regardless of liveness (an error can unwind to
+      # the creator, which reads them).
+      stack_env_writes: {},
+      current_closure_struct_name: nil,
+      current_closure_captures: nil,
+      tco_fn_name: nil,
+      tco_params: nil,
+      tco_boxed: nil,
+      # TCO fn with default/rest params: a self tail call fills `_tco_argv` and jumps to the rebind block
+      tco_rebind: false,
+      tco_argv_max: 0,
+      # Gem `while` loops around the code being compiled: a self tail call in one can't use C `continue`
+      c_loop_depth: 0,
+      tco_top_used: false,
+      # SCC of the member being compiled, so a tail call to a sibling goes through the trampoline
+      current_scc_id: nil,
+      # name -> C flag for in-place `name = name + x` appends, set while the var holds the buffer (compile_while)
+      append_buf_vars: {},
+      # leaf fns skip push/pop_frame and just set gem_leaf_site/gem_leaf_line: they call no Gem code, so they're innermost
+      in_leaf_fn: false,
+      # C expr of this fn's return point (GemArenaPoint), or nil
+      ret_point: nil
+    }
+  end
+  let fs = new_fn_state()
 
   let tmp = fn()
     tmp_counter += 1
@@ -195,10 +203,10 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
     if not set_contains(top_level_vars, name)
       return false
     end
-    if in_top_level
+    if fs.in_top_level
       return true
     end
-    not set_contains(fn_scope_locals, name) and not set_contains(closure_captures, name)
+    not set_contains(fs.fn_scope_locals, name) and not set_contains(fs.closure_captures, name)
   end
 
   let gmangle = fn(name)
@@ -256,7 +264,7 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
     if is_global_ref(name)
       return "(*gem_global_ref({gindex(name)}))"
     end
-    if set_contains(boxed_vars, name)
+    if set_contains(fs.boxed_vars, name)
       return "(*{mangle(name)})"
     end
     mangle(name)
@@ -271,7 +279,7 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
 
   # every pop_frame / set_line goes through these so leaf fns use the leaf slot
   let pop_str = fn(p)
-    if in_leaf_fn
+    if fs.in_leaf_fn
       "{p}gem_leaf_site = NULL;\n"
     else
       "{p}gem_pop_frame();\n"
@@ -280,23 +288,23 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
   # Every fn-body return goes through return_str / return_nil_str: with a return point it resets first,
   # keeping only the return value. emit_scc_tail_call's return is the exception (SCC bodies have no point).
   let return_str = fn(p, t)
-    let reset = if ret_point != nil
-      "{p}if (gem_ret_reset_due(&{ret_point})) gem_arena_reset_return(&{ret_point}, &{t}, 1);\n"
+    let reset = if fs.ret_point != nil
+      "{p}if (gem_ret_reset_due(&{fs.ret_point})) gem_arena_reset_return(&{fs.ret_point}, &{t}, 1);\n"
     else
       ""
     end
     "{reset}{pop_str(p)}{p}return {t};"
   end
   let return_nil_str = fn(p)
-    let reset = if ret_point != nil
-      "{p}if (gem_ret_reset_due(&{ret_point})) gem_arena_reset_return(&{ret_point}, NULL, 1);\n"
+    let reset = if fs.ret_point != nil
+      "{p}if (gem_ret_reset_due(&{fs.ret_point})) gem_arena_reset_return(&{fs.ret_point}, NULL, 1);\n"
     else
       ""
     end
     "{reset}{pop_str(p)}{p}return GEM_NIL;"
   end
   let setline_str = fn(line, p)
-    if in_leaf_fn
+    if fs.in_leaf_fn
       "{p}gem_leaf_line = {line};\n"
     else
       "{p}gem_set_line({line});\n"
@@ -315,7 +323,7 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
 
   # names the capture walk skips: named fns, and unshadowed builtins
   let is_global_name = fn(name)
-    (set_contains(builtins, name) and not set_contains(local_names, name)) or set_contains(defined_fns, name)
+    (set_contains(builtins, name) and not set_contains(fs.local_names, name)) or set_contains(defined_fns, name)
   end
 
   let compile_expr = nil
@@ -380,7 +388,7 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
   # (and the inline DIRECT_BUILTINS paths can't raise or fault).
   let leaf_safe_call = fn(node)
     let func = node.func
-    if type(func) != "table" or func.tag != "var" or set_contains(local_names, func.name)
+    if type(func) != "table" or func.tag != "var" or set_contains(fs.local_names, func.name)
       return false
     end
     LEAF_BUILTINS[func.name] == true
@@ -443,7 +451,7 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
     end
     if tag == "call"
       let callee = node.func
-      if not is_node(callee, "var") or set_contains(local_names, callee.name) or not has_key(builtin_fns, callee.name) or has_key(slot_reader_builtins, callee.name)
+      if not is_node(callee, "var") or set_contains(fs.local_names, callee.name) or not has_key(builtin_fns, callee.name) or has_key(slot_reader_builtins, callee.name)
         return true
       end
     end
@@ -764,10 +772,10 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
     end
     buf_push(b, emit_region_reset(p, "_tco_mk", tco_roots, []))
 
-    if tco_rebind
+    if fs.tco_rebind
       # the rebind block builds defaults and the rest table, after the reset
-      if len(arg_temps) > tco_argv_max
-        tco_argv_max = len(arg_temps)
+      if len(arg_temps) > fs.tco_argv_max
+        fs.tco_argv_max = len(arg_temps)
       end
       for i = 0, len(arg_temps)
         buf_push(b, "{p}_tco_argv[{i}] = {arg_temps[i]};\n")
@@ -778,18 +786,18 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
       return to_string(b)
     end
 
-    for i = 0, len(tco_params)
-      let mp = mangle(tco_params[i])
+    for i = 0, len(fs.tco_params)
+      let mp = mangle(fs.tco_params[i])
       let val = if i < len(arg_temps) then arg_temps[i] else "GEM_NIL" end
-      if set_contains(tco_boxed, tco_params[i])
+      if set_contains(fs.tco_boxed, fs.tco_params[i])
         buf_push(b, "{p}{mp} = gem_box_alloc();\n")
         buf_push(b, "{p}*{mp} = {val};\n")
       else
         buf_push(b, "{p}{mp} = {val};\n")
       end
     end
-    if c_loop_depth > 0
-      tco_top_used = true
+    if fs.c_loop_depth > 0
+      fs.tco_top_used = true
       buf_push(b, "{p}goto _tco_top;")
     else
       buf_push(b, "{p}continue;")
@@ -870,7 +878,7 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
 
   let suggest_name = fn(name)
     let cands = []
-    for src in [local_names, top_level_vars, defined_fns, builtin_fns]
+    for src in [fs.local_names, top_level_vars, defined_fns, builtin_fns]
       for k, _ in src
         if type(k) == "string" and k != name and not (len(k) >= 2 and substr(k, 0, 2) == "__")
           push(cands, k)
@@ -883,7 +891,7 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
 
   # `a = 3` with no `let a` would otherwise end in a cc error about gem_v_a
   let check_assign_target = fn(name, node)
-    if set_contains(local_names, name) or set_contains(top_level_vars, name) or set_contains(boxed_vars, name)
+    if set_contains(fs.local_names, name) or set_contains(top_level_vars, name) or set_contains(fs.boxed_vars, name)
       return nil
     end
     if has_key(builtin_fns, name) or set_contains(defined_fns, name)
@@ -932,7 +940,7 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
     when {tag: "nil"}
       return {expr: "GEM_NIL", setup: ""}
     when {tag: "var", name: name}
-      if not set_contains(local_names, name)
+      if not set_contains(fs.local_names, name)
         if has_key(builtin_fns, name)
           return {expr: "gem_make_fn({builtin_fns[name]}, NULL)", setup: ""}
         elif set_contains(defined_fns, name)
@@ -973,7 +981,7 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
           return compile_expr({tag: "var", name: target, line: node.line, col: node.col, file: node.file})
         end
       end
-      if is_node(object, "var") and has_key(module_bindings, object.name) and (in_top_level or not set_contains(local_names, object.name))
+      if is_node(object, "var") and has_key(module_bindings, object.name) and (fs.in_top_level or not set_contains(fs.local_names, object.name))
         let exports = module_bindings[object.name]
         let found = false
         for ename in exports
@@ -1047,7 +1055,7 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
     # module slots are never captured; a free name nothing binds is left out so the body reports it undeclared
     let captures = []
     for cap in sort(keys(free))
-      if not is_global_ref(cap) and set_contains(local_names, cap)
+      if not is_global_ref(cap) and set_contains(fs.local_names, cap)
         push(captures, cap)
       end
     end
@@ -1067,7 +1075,7 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
       buf_push(b, "    {env_tmp}._num_captures = {len(captures)};\n")
       for cap in captures
         let mc = mangle(cap)
-        let outer_is_box = set_contains(boxed_vars, cap)
+        let outer_is_box = set_contains(fs.boxed_vars, cap)
         # env fields are `GemVal *`: share the outer box, or point straight at the outer local
         if outer_is_box
           buf_push(b, "    {env_tmp}.{mc} = {mc};\n")
@@ -1081,7 +1089,7 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
     buf_push(b, "    {env_tmp}->_num_captures = {len(captures)};\n")
     for cap in captures
       let mc = mangle(cap)
-      let outer_is_box = set_contains(boxed_vars, cap)
+      let outer_is_box = set_contains(fs.boxed_vars, cap)
       # share the outer box, or snapshot an unboxed (never mutated) local into a fresh box,
       # since the closure may outlive the frame
       if outer_is_box
@@ -1134,7 +1142,7 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
     if func.tag == "var"
       let name = func.name
 
-      if name == "error" and not set_contains(local_names, name)
+      if name == "error" and not set_contains(fs.local_names, name)
         let line = node.line
         if line == nil
           line = 0
@@ -1145,7 +1153,7 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
           return {expr: "gem_error_at_fn(\"{escaped_file}\", {line}, NULL, 0)", setup: ca.setup}
         end
         return {expr: "gem_error_at_fn(\"{escaped_file}\", {line}, {ca.arr_name}, {ca.argc})", setup: ca.setup}
-      elif has_key(builtin_fns, name) and not set_contains(local_names, name)
+      elif has_key(builtin_fns, name) and not set_contains(fs.local_names, name)
         let direct = DIRECT_BUILTINS["{name}/{len(args)}"]
         if direct != nil
           let results = []
@@ -1156,7 +1164,7 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
           return {expr: "{direct}({join_c(ordered.exprs)})", setup: ordered.setup}
         end
         return emit_direct_call(builtin_fns[name], "NULL", compile_args(args))
-      elif set_contains(defined_fns, name) and not set_contains(local_names, name)
+      elif set_contains(defined_fns, name) and not set_contains(fs.local_names, name)
         return emit_direct_call("gem_fn_{name}", "NULL", compile_args(args))
       end
     end
@@ -1308,28 +1316,28 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
 
     match node
     when {tag: "let", name: name, value: value}
-      # in scope until the enclosing C block closes (callers that open one save and restore fn_scope_locals)
-      set_add(fn_scope_locals, name)
+      # in scope until the enclosing C block closes (callers that open one save and restore fs.fn_scope_locals)
+      set_add(fs.fn_scope_locals, name)
       let r = compile_expr(value)
-      if in_top_level and has_key(module_bindings, name) and not (is_node(value, "table") and value.frozen == true)
+      if fs.in_top_level and has_key(module_bindings, name) and not (is_node(value, "table") and value.frozen == true)
         delete(module_bindings, name)
       end
       let mname = mangle(name)
-      if in_top_level and set_contains(top_level_vars, name)
+      if fs.in_top_level and set_contains(top_level_vars, name)
         return "{line_dir}{r.setup}{p}gem_global_set({gindex(name)}, {r.expr});"
       end
-      if set_contains(boxed_vars, name)
+      if set_contains(fs.boxed_vars, name)
         # captured and assigned by a closure: a pinned box, which survives resets while something reaches it
         return "{line_dir}{r.setup}{p}GemVal *{mname} = gem_box_alloc();\n{p}*{mname} = {r.expr};"
       end
       return "{line_dir}{r.setup}{p}GemVal {mname} = {r.expr};"
     when {tag: "assign", name: name, value: value}
       check_assign_target(name, node)
-      if has_key(append_buf_vars, name)
+      if has_key(fs.append_buf_vars, name)
         let parts = decompose_concat(name, value)
         if parts != nil
           let mname = var_lvalue(name)
-          let flag = append_buf_vars[name]
+          let flag = fs.append_buf_vars[name]
           let b = buf_new()
           buf_push(b, line_dir)
           for part in parts
@@ -1398,15 +1406,15 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
 
   # a self tail call jumps to the TCO loop, one to an SCC sibling goes through the trampoline; nil for other calls
   tail_call_jump = fn(call_node, indent)
-    if not is_node(call_node, "call") or not is_node(call_node.func, "var") or set_contains(local_names, call_node.func.name)
+    if not is_node(call_node, "call") or not is_node(call_node.func, "var") or set_contains(fs.local_names, call_node.func.name)
       return nil
     end
     let name = call_node.func.name
-    if name == tco_fn_name
+    if name == fs.tco_fn_name
       return emit_tco_continue(call_node, indent)
     end
     # more args than the TLB holds (GEM_MAX_TAIL_ARGS) stays a plain call; extra args still get evaluated
-    if current_scc_id != nil and scc_member_to_id[name] == current_scc_id and len(call_node.args) <= 16
+    if fs.current_scc_id != nil and scc_member_to_id[name] == fs.current_scc_id and len(call_node.args) <= 16
       return emit_scc_tail_call(call_node, name, indent)
     end
     nil
@@ -1427,13 +1435,13 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
 
     match node
     when {tag: "let", name: name, value: value}
-      set_add(fn_scope_locals, name)
+      set_add(fs.fn_scope_locals, name)
       let r = compile_expr(value)
       let mname = mangle(name)
-      if in_top_level and set_contains(top_level_vars, name)
+      if fs.in_top_level and set_contains(top_level_vars, name)
         return "{line_dir}{r.setup}{p}gem_global_set({gindex(name)}, {r.expr});\n{return_nil_str(p)}"
       end
-      if set_contains(boxed_vars, name)
+      if set_contains(fs.boxed_vars, name)
         return "{line_dir}{r.setup}{p}GemVal *{mname} = gem_box_alloc();\n{p}*{mname} = {r.expr};\n{return_nil_str(p)}"
       end
       return "{line_dir}{r.setup}{p}GemVal {mname} = {r.expr};\n{return_nil_str(p)}"
@@ -1461,7 +1469,7 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
     when {tag: "block", stmts: stmts}
       let b = buf_new()
       buf_push(b, "{p}\{\n")
-      let saved_block = set_union(fn_scope_locals, {})
+      let saved_block = set_union(fs.fn_scope_locals, {})
       for i = 0, len(stmts) - 1
         buf_push(b, compile_stmt(stmts[i], indent + 1))
         buf_push(b, "\n")
@@ -1470,7 +1478,7 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
         buf_push(b, compile_stmt_return(stmts[-1], indent + 1))
         buf_push(b, "\n")
       end
-      fn_scope_locals = saved_block
+      fs.fn_scope_locals = saved_block
       buf_push(b, "{p}}")
       return to_string(b)
     when {tag: "dot_assign"}
@@ -1498,14 +1506,14 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
     let b = buf_new()
     buf_push(b, cond_r.setup)
     buf_push(b, "{p}if (gem_truthy({cond_r.expr})) \{\n")
-    let saved_then = set_union(fn_scope_locals, {})
+    let saved_then = set_union(fs.fn_scope_locals, {})
     buf_push(b, compile_stmts_tail(node.then, indent + 1, return_pos))
-    fn_scope_locals = saved_then
+    fs.fn_scope_locals = saved_then
     if node.else != nil
       buf_push(b, "{p}} else \{\n")
-      let saved_else = set_union(fn_scope_locals, {})
+      let saved_else = set_union(fs.fn_scope_locals, {})
       buf_push(b, compile_stmts_tail(node.else, indent + 1, return_pos))
-      fn_scope_locals = saved_else
+      fs.fn_scope_locals = saved_else
     elif return_pos
       buf_push(b, "{p}} else \{\n")
       buf_push(b, compile_stmts_tail([], indent + 1, true))
@@ -1524,12 +1532,12 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
     for name in lk
       if is_global_ref(name)
         # runtime roots module slots
-      elif set_contains(local_names, name)
-        if set_contains(closure_captures, name)
+      elif set_contains(fs.local_names, name)
+        if set_contains(fs.closure_captures, name)
           push(roots, mangle(name))
-        elif not set_contains(fn_scope_locals, name)
+        elif not set_contains(fs.fn_scope_locals, name)
           return {ok: false, reason: "live var `{name}` has no C local at this loop's back-edge (declared in a nested if/match arm?)"}
-        elif set_contains(boxed_vars, name)
+        elif set_contains(fs.boxed_vars, name)
           push(pinned_roots, mangle(name))
         else
           push(roots, "&{mangle(name)}")
@@ -1553,8 +1561,8 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
     let lr = node.liveness_result
     if lr.ok
       let live = lr.live
-      if len(stack_env_writes) > 0
-        live = set_union(live, stack_env_writes)
+      if len(fs.stack_env_writes) > 0
+        live = set_union(live, fs.stack_env_writes)
       end
       let fr = filter_live_for_rescue(live)
       if fr.ok
@@ -1598,28 +1606,28 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
         delete(eligible, name)
       end
       # a slot reader must see a string, not the buffer: slots append in place only in top-level code calling nothing
-      if set_contains(boxed_vars, name) or (is_global_ref(name) and not (in_top_level and not node_may_read_slots(node)))
+      if set_contains(fs.boxed_vars, name) or (is_global_ref(name) and not (fs.in_top_level and not node_may_read_slots(node)))
         delete(eligible, name)
       end
     end
 
     let saved_append = {}
-    for k, v in append_buf_vars
+    for k, v in fs.append_buf_vars
       saved_append[k] = v
     end
     # an outer loop already appending to it keeps ownership
     let owned = []
     for name, _ in eligible
-      if not has_key(append_buf_vars, name)
+      if not has_key(fs.append_buf_vars, name)
         let flag = tmp()
-        append_buf_vars[name] = flag
+        fs.append_buf_vars[name] = flag
         push(owned, name)
       end
     end
 
     let b = buf_new()
     for name in owned
-      buf_push(b, "{p}int {append_buf_vars[name]} = 0;\n")
+      buf_push(b, "{p}int {fs.append_buf_vars[name]} = 0;\n")
     end
     let mark = nil
     if do_rescue
@@ -1639,23 +1647,23 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
       buf_push(b, cond_r.setup)
     end
     buf_push(b, "{p}    if (!gem_truthy({cond_r.expr})) break;\n")
-    let saved_while_scope = set_union(fn_scope_locals, {})
-    c_loop_depth += 1
+    let saved_while_scope = set_union(fs.fn_scope_locals, {})
+    fs.c_loop_depth = fs.c_loop_depth + 1
     buf_push(b, compile_stmts(node.body, indent + 1))
-    c_loop_depth -= 1
-    fn_scope_locals = saved_while_scope
+    fs.c_loop_depth = fs.c_loop_depth - 1
+    fs.fn_scope_locals = saved_while_scope
     buf_push(b, "{p}}")
 
     for name in owned
       let mname = var_lvalue(name)
-      buf_push(b, "\n{p}if ({append_buf_vars[name]}) {mname} = gem_string_finish({mname});")
+      buf_push(b, "\n{p}if ({fs.append_buf_vars[name]}) {mname} = gem_string_finish({mname});")
       let refresh = ns_refresh(name, p)
       if refresh != ""
         buf_push(b, "\n" + substr(refresh, 0, len(refresh) - 1))
       end
     end
 
-    append_buf_vars = saved_append
+    fs.append_buf_vars = saved_append
     to_string(b)
   end
 
@@ -1686,7 +1694,7 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
         buf_push(b, val_r.setup)
         buf_push(b, "{p}if (gem_truthy({val_r.expr})) \{\n")
       end
-      let saved_arm = set_union(fn_scope_locals, {})
+      let saved_arm = set_union(fs.fn_scope_locals, {})
       if w.bindings != nil
         for binding in w.bindings
           buf_push(b, compile_stmt(binding, indent + 1))
@@ -1694,13 +1702,13 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
         end
       end
       buf_push(b, compile_stmts_tail(w.body, indent + 1, return_pos))
-      fn_scope_locals = saved_arm
+      fs.fn_scope_locals = saved_arm
     end
     if node.else != nil
       buf_push(b, "{p}} else \{\n")
-      let saved_else = set_union(fn_scope_locals, {})
+      let saved_else = set_union(fs.fn_scope_locals, {})
       buf_push(b, compile_stmts_tail(node.else, indent + 1, return_pos))
-      fn_scope_locals = saved_else
+      fs.fn_scope_locals = saved_else
     elif return_pos
       buf_push(b, "{p}} else \{\n")
       buf_push(b, compile_stmts_tail([], indent + 1, true))
@@ -1803,7 +1811,7 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
       else
         buf_push(b, "{p}} else if ({matched_tmp} == {i}) \{\n")
       end
-      let saved_arm = set_union(fn_scope_locals, {})
+      let saved_arm = set_union(fs.fn_scope_locals, {})
       if arm.bindings != nil
         for binding in arm.bindings
           buf_push(b, compile_stmt(binding, indent + 1))
@@ -1811,7 +1819,7 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
         end
       end
       buf_push(b, compile_stmts_tail(arm.body, indent + 1, return_pos))
-      fn_scope_locals = saved_arm
+      fs.fn_scope_locals = saved_arm
     end
 
     # the scan loop exits with an arm index or -2, so timeout is a plain `else` (and cc sees every return path)
@@ -1822,9 +1830,9 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
         buf_push(b, "{p}} else \{\n")
       end
       if after_body != nil
-        let saved_after = set_union(fn_scope_locals, {})
+        let saved_after = set_union(fs.fn_scope_locals, {})
         buf_push(b, compile_stmts_tail(after_body, indent + 1, return_pos))
-        fn_scope_locals = saved_after
+        fs.fn_scope_locals = saved_after
       elif return_pos
         buf_push(b, compile_stmts_tail([], indent + 1, true))
       end
@@ -2258,12 +2266,12 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
       decl_val = ""
     end
     # defaults only see params and captures, not the body's lets
-    let saved_local_names = local_names
-    let entry_scope = set_union(sorted_array_to_set(params), closure_captures)
+    let saved_local_names = fs.local_names
+    let entry_scope = set_union(sorted_array_to_set(params), fs.closure_captures)
     if node.rest_param != nil
       set_add(entry_scope, node.rest_param)
     end
-    local_names = set_intersect(local_names, entry_scope)
+    fs.local_names = set_intersect(fs.local_names, entry_scope)
     for i = 0, len(params)
       let mp = mangle(params[i])
       let has_def = i < len(defaults) and defaults[i] != nil
@@ -2312,7 +2320,7 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
         buf_push(b, "    for (int _ri = {N}; _ri < argc; _ri++) gem_table_set({mp_rest}, gem_int(_ri - {N}), args[_ri]);\n")
       end
     end
-    local_names = saved_local_names
+    fs.local_names = saved_local_names
     to_string(b)
   end
 
@@ -2348,29 +2356,22 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
     let shadowed_locals = set_union(scope_vars, {})
     collect_shadow_lets_in_fn(body, shadowed_locals)
 
-    let saved_boxed = boxed_vars
-    let saved_top = in_top_level
-    let saved_local = local_names
-    let saved_fn_scope = fn_scope_locals
-    let saved_in_leaf = in_leaf_fn
-    let saved_ret_point = ret_point
-    local_names = shadowed_locals
+    let outer_fs = fs
+    fs = new_fn_state()
+    fs.local_names = shadowed_locals
     # grows as compile_stmt reaches each let, so a read before a same-named let still hits the module slot
-    fn_scope_locals = sorted_array_to_set(params)
+    fs.fn_scope_locals = sorted_array_to_set(params)
     if node.rest_param != nil
-      set_add(fn_scope_locals, node.rest_param)
+      set_add(fs.fn_scope_locals, node.rest_param)
     end
-    let saved_fn_closure_captures = closure_captures
-    closure_captures = {}
-    in_leaf_fn = fn_is_leaf(node, body)
+    fs.in_leaf_fn = fn_is_leaf(node, body)
 
     let captured = find_captured_in_scope(fn_stmts(node), scope_vars, is_global_name)
 
     # Box only captures some closure assigns; read-only ones are snapshotted into the env. A closure that assigns
     # must share the outer box, since arena capture boxes are write-once as far as resets are concerned.
     let cap_writes = find_capture_writes_in_scope(fn_stmts(node), shadowed_locals)
-    boxed_vars = set_intersect(captured, cap_writes)
-    in_top_level = false
+    fs.boxed_vars = set_intersect(captured, cap_writes)
 
     let has_defs = false
     if node.defaults != nil
@@ -2383,19 +2384,17 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
     end
     let use_tco = fn_def_is_tco(node)
     if use_tco
-      tco_fn_name = name
-      tco_params = params
-      tco_boxed = boxed_vars
-      tco_rebind = has_defs or node.rest_param != nil
-      tco_argv_max = 0
+      fs.tco_fn_name = name
+      fs.tco_params = params
+      fs.tco_boxed = fs.boxed_vars
+      fs.tco_rebind = has_defs or node.rest_param != nil
     end
 
     # SCC member: the body is gem_sccbody_<name> and gem_fn_<name> the trampoline; self tail calls still use the TCO loop
     let scc_id = scc_member_to_id[name]
-    let saved_scc = current_scc_id
     let body_fn_name = "gem_fn_{name}"
     if scc_id != nil
-      current_scc_id = scc_id
+      fs.current_scc_id = scc_id
       body_fn_name = "gem_sccbody_{name}"
     end
 
@@ -2408,28 +2407,27 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
 
     let fn_line = if node.line != nil then node.line else 0 end
     # frame first, so an error in a param default shows this fn
-    if in_leaf_fn
+    if fs.in_leaf_fn
       buf_push(b, leaf_entry_str(frame_name(name), rel_path(file_of(node)), fn_line, body))
     else
       buf_push(b, "    gem_push_frame(\"{escape_c_string(frame_name(name))}\", \"{escape_c_string(rel_path(file_of(node)))}\", {fn_line});\n")
     end
-    buf_push(b, emit_param_bindings(node, params, boxed_vars))
+    buf_push(b, emit_param_bindings(node, params, fs.boxed_vars))
     # Return point after the param bindings, so the args are older than it; only fns that may recurse pay for one.
     # A TCO fn reuses its loop mark. SCC bodies get none: the trampoline resets, and a TLB return carries the next args.
-    ret_point = nil
-    if not in_leaf_fn and scc_id == nil
+    if not fs.in_leaf_fn and scc_id == nil
       if use_tco
-        ret_point = "_tco_mk.base"
+        fs.ret_point = "_tco_mk.base"
       elif node.may_recurse == true
-        ret_point = "_ret_pt"
+        fs.ret_point = "_ret_pt"
         buf_push(b, "    GemArenaPoint _ret_pt;\n")
         buf_push(b, "    gem_arena_point(&_ret_pt);\n")
       end
     end
 
-    if use_tco and tco_rebind
+    if use_tco and fs.tco_rebind
       # body in its own C block, out of scope at _tco_rebind; the rebind code is compiled first, against the entry scope
-      let rebind_c = emit_param_bindings_impl(node, params, boxed_vars, true)
+      let rebind_c = emit_param_bindings_impl(node, params, fs.boxed_vars, true)
       let bb = buf_new()
       if len(body) > 0
         for i = 0, len(body) - 1
@@ -2441,7 +2439,7 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
       else
         buf_push(bb, return_nil_str("            ") + "\n")
       end
-      let argv_n = tco_argv_max
+      let argv_n = fs.tco_argv_max
       if argv_n < 1
         argv_n = 1
       end
@@ -2457,7 +2455,6 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
       buf_push(b, rebind_c)
       buf_push(b, "    \}\n")
     elif use_tco
-      tco_top_used = false
       let bb = buf_new()
       if len(body) > 0
         for i = 0, len(body) - 1
@@ -2471,7 +2468,7 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
       end
       buf_push(b, "    GemArenaMark _tco_mk;\n")
       buf_push(b, "    gem_arena_mark(&_tco_mk);\n")
-      if tco_top_used
+      if fs.tco_top_used
         buf_push(b, "    _tco_top:\n")
       end
       buf_push(b, "    while(1) \{\n")
@@ -2484,27 +2481,12 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
 
     buf_push(b, "}")
 
-    if use_tco
-      tco_fn_name = nil
-      tco_params = nil
-      tco_boxed = nil
-      tco_rebind = false
-      tco_argv_max = 0
-    end
-
     if scc_id != nil
       buf_push(b, "\n\n")
       buf_push(b, scc_wrapper_for(node, scc_id))
-      current_scc_id = saved_scc
     end
 
-    boxed_vars = saved_boxed
-    in_top_level = saved_top
-    local_names = saved_local
-    fn_scope_locals = saved_fn_scope
-    closure_captures = saved_fn_closure_captures
-    in_leaf_fn = saved_in_leaf
-    ret_point = saved_ret_point
+    fs = outer_fs
     to_string(b)
   end
 
@@ -2521,28 +2503,15 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
     let shadowed_locals = set_union(inner_scope, {})
     collect_shadow_lets_in_fn(body, shadowed_locals)
 
-    let saved_boxed = boxed_vars
-    let saved_top = in_top_level
-    let saved_local = local_names
-    let saved_fn_scope = fn_scope_locals
-    let saved_closure_captures = closure_captures
-    let saved_current_closure_struct_name = current_closure_struct_name
-    let saved_current_closure_captures = current_closure_captures
-    let saved_stack_env_writes = stack_env_writes
-    let saved_in_leaf = in_leaf_fn
-    let saved_ret_point = ret_point
-    ret_point = nil
-    # a tail call in here belongs to the closure, not the enclosing TCO loop or SCC (wrong C fn for continue/goto)
-    let saved_tco_fn_name = tco_fn_name
-    let saved_scc_id = current_scc_id
-    tco_fn_name = nil
-    current_scc_id = nil
-    local_names = set_union(shadowed_locals, sorted_array_to_set(captures))
-    fn_scope_locals = sorted_array_to_set(params)
+    # a fresh state: a tail call in here belongs to the closure, not the enclosing TCO loop or SCC
+    let outer_fs = fs
+    fs = new_fn_state()
+    fs.local_names = set_union(shadowed_locals, sorted_array_to_set(captures))
+    fs.fn_scope_locals = sorted_array_to_set(params)
     if node.rest_param != nil
-      set_add(fn_scope_locals, node.rest_param)
+      set_add(fs.fn_scope_locals, node.rest_param)
     end
-    in_leaf_fn = fn_is_leaf(node, body)
+    fs.in_leaf_fn = fn_is_leaf(node, body)
 
     let inner_captured = find_captured_in_scope(fn_stmts(node), inner_scope, is_global_name)
 
@@ -2551,8 +2520,7 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
     let inner_boxed = set_intersect(inner_captured, inner_writes)
 
     # env fields are all `GemVal *` (the runtime walks envs as [n][GemVal * x n]), so every capture is boxed here
-    boxed_vars = set_union(inner_boxed, sorted_array_to_set(captures))
-    in_top_level = false
+    fs.boxed_vars = set_union(inner_boxed, sorted_array_to_set(captures))
 
     let struct_name = "_closure_{name}"
     let sb = buf_new()
@@ -2574,47 +2542,35 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
       end
     end
 
-    closure_captures = sorted_array_to_set(captures)
-    current_closure_struct_name = struct_name
-    current_closure_captures = captures
-    stack_env_writes = {}
+    fs.closure_captures = sorted_array_to_set(captures)
+    fs.current_closure_struct_name = struct_name
+    fs.current_closure_captures = captures
     if node.non_escaping == true and len(captures) > 0
       let own = sorted_array_to_set(params)
       if node.rest_param != nil
         set_add(own, node.rest_param)
       end
-      stack_env_writes = find_writes_in_closure_body(body, closure_captures, own)
+      fs.stack_env_writes = find_writes_in_closure_body(body, fs.closure_captures, own)
     end
 
     let anon_line = if node.line != nil then node.line else 0 end
     # frame first, as in compile_fn
-    if in_leaf_fn
+    if fs.in_leaf_fn
       buf_push(fb, leaf_entry_str("anonymous fn", rel_path(file_of(node)), anon_line, body))
     else
       buf_push(fb, "    gem_push_frame(\"anonymous fn\", \"{escape_c_string(rel_path(file_of(node)))}\", {anon_line});\n")
     end
     buf_push(fb, emit_param_bindings(node, params, inner_boxed))
     # no return point for a non-escaping closure: it may write the creator's unboxed locals, which a reset wouldn't root
-    if not in_leaf_fn and node.non_escaping != true and node.may_recurse == true
-      ret_point = "_ret_pt"
+    if not fs.in_leaf_fn and node.non_escaping != true and node.may_recurse == true
+      fs.ret_point = "_ret_pt"
       buf_push(fb, "    GemArenaPoint _ret_pt;\n")
       buf_push(fb, "    gem_arena_point(&_ret_pt);\n")
     end
     buf_push(fb, emit_fn_body(body))
     buf_push(fb, "}")
 
-    boxed_vars = saved_boxed
-    in_top_level = saved_top
-    local_names = saved_local
-    fn_scope_locals = saved_fn_scope
-    closure_captures = saved_closure_captures
-    current_closure_struct_name = saved_current_closure_struct_name
-    current_closure_captures = saved_current_closure_captures
-    stack_env_writes = saved_stack_env_writes
-    in_leaf_fn = saved_in_leaf
-    ret_point = saved_ret_point
-    tco_fn_name = saved_tco_fn_name
-    current_scc_id = saved_scc_id
+    fs = outer_fs
 
     push(functions, struct_def + to_string(fb))
 
@@ -2789,25 +2745,20 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
       push(functions, compile_fn(fd))
     end
 
-    let saved_boxed = boxed_vars
-    let saved_local = local_names
-    let saved_fn_scope = fn_scope_locals
-    boxed_vars = main_boxed
-    in_top_level = true
-    local_names = {}
+    fs = new_fn_state()
+    fs.boxed_vars = main_boxed
+    fs.in_top_level = true
+    fs.local_names = {}
     for k, _ in top_level_vars
-      set_add(local_names, k)
+      set_add(fs.local_names, k)
     end
-    collect_shadow_lets_in_fn(top_stmts, local_names)
-    fn_scope_locals = {}
+    collect_shadow_lets_in_fn(top_stmts, fs.local_names)
+    fs.fn_scope_locals = {}
     for k, _ in top_level_vars
-      set_add(fn_scope_locals, k)
+      set_add(fs.fn_scope_locals, k)
     end
     let main_body = compile_stmts(top_stmts, 1)
-    in_top_level = false
-    boxed_vars = saved_boxed
-    local_names = saved_local
-    fn_scope_locals = saved_fn_scope
+    fs = new_fn_state()
 
     let has_main = false
     for fd in fn_defs
