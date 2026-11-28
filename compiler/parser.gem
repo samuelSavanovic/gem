@@ -72,6 +72,11 @@ fn int64_min()
   0 - 9223372036854775807 - 1
 end
 
+# a name, a string or a keyword (a keyword token's type is the keyword) before the `:` of a table entry
+fn is_key_token(t)
+  t.type == "NAME" or t.type == "STRING" or (len(t.type) > 0 and t.type[0] >= "a" and t.type[0] <= "z")
+end
+
 fn contains_dot(s)
   for i = 0, len(s)
     if s[i] == "."
@@ -287,6 +292,12 @@ fn make_parser(tokens, source, file, sink)
 
   # an int key (`3: v`) in a table literal or pattern: consumes the number, not the `:`, and returns it.
   # Negative, float and out-of-range keys are reported and read as 0; nil, consuming nothing, if it isn't one.
+  let check_key_token = fn(t)
+    if not is_key_token(t)
+      report(t.line, t.col, len(t.value), "`{t.value}` can't be a table key", "a key is a name, a keyword, a string or an int")
+    end
+  end
+
   let parse_int_key = fn()
     let negative = peek().type == "-"
     let off = if negative then 1 else 0 end
@@ -855,6 +866,7 @@ fn make_parser(tokens, source, file, sink)
           if key_tok.type == "NAME"
             advance()
           elif not at_end() and peek_at(1).type == ":"
+            check_key_token(key_tok)
             advance()
           else
             report(key_tok.line, key_tok.col, len(key_tok.value), "expected '}' or table key but got '{key_tok.type}'", nil)
@@ -1343,6 +1355,7 @@ fn make_parser(tokens, source, file, sink)
           if key_tok.type == "NAME"
             advance()
           elif peek_at(1).type == ":"
+            check_key_token(key_tok)
             advance()
           else
             report(key_tok.line, key_tok.col, len(key_tok.value), "expected key name in table pattern", nil)

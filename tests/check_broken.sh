@@ -17,6 +17,7 @@ expected=(
   "bad_extern_type:5:5"
   "bad_pattern:2:4"
   "bad_pin:3:3"
+  "bad_table_key:3:3"
   "break_in_do:4:4"
   "break_outside_loop:5:5"
   "brace_block_recovery:2:2"

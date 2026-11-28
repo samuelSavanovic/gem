@@ -1,0 +1,9 @@
+# a table key is a name, a keyword, a string or an int: one error per other key, in literals and patterns
+let ok = {name: 1, "two words": 2, if: 3, 7: 4}
+let bad = {+: 1, (: 2}
+match ok
+when {+: x}
+  print(x)
+else
+  nil
+end
