@@ -293,14 +293,14 @@ fn make_scanner(input)
       return to_int(text)
     end
     if not is_float
-      let r = pcall to_int(text)
-      if r.ok
-        return r.value
+      let n = to_int(text, nil)
+      if n != nil
+        return n
       end
     end
-    let f = pcall to_float(text)
-    if f.ok
-      return f.value
+    let f = to_float(text, nil)
+    if f != nil
+      return f
     end
     # to_float refuses only out-of-range results: underflow reads as zero, overflow is an error
     if magnitude_below_one(text)

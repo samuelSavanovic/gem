@@ -18,12 +18,11 @@ fn read_message()
     end
     if string.starts_with(line, "Content-Length:")
       let value_str = string.trim(substr(line, 15, len(line) - 15))
-      let parsed = pcall to_int(value_str)
-      if not parsed.ok or parsed.value < 0
+      length = to_int(value_str, -1)
+      if length < 0
         eprint("gem lsp: bad Content-Length header: {line}")
         return nil
       end
-      length = parsed.value
     end
   end
   if length == nil

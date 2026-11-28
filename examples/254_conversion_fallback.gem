@@ -1,0 +1,23 @@
+# to_int and to_float return a fallback instead of raising when given one
+
+load "std/string"
+
+print(to_int("42", nil))
+print(to_int("4x", nil))
+print(to_int("", 0))
+print(to_int(nil, -1))
+print(to_int(" 7", nil))
+print(to_int("7\n", nil))
+print(to_int("12\0x", nil))
+print(to_int(2.9, nil))
+print(to_int(to_float("1e300"), "too big"))
+print(to_int("99999999999999999999", "too big"))
+print(to_float("2.5", nil))
+print(to_float("abc", 0.0))
+print(to_float({}, "no"))
+print(to_float("1.5\0x", nil))
+print((pcall to_int("4x")).error)
+print((pcall to_int("12\0x")).error)
+print((pcall to_int("7\n")).error)
+print(len((pcall to_int(string.repeat("9", 300))).error))
+print((pcall to_float("x")).error)

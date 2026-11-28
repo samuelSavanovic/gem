@@ -255,11 +255,11 @@ fn parse_number(s)
     skip_digits(s)
   end
   let text = s.since(start)
-  let r = if is_float then pcall to_float(text) else pcall to_int(text) end
-  if not r.ok
+  let n = if is_float then to_float(text, nil) else to_int(text, nil) end
+  if n == nil
     s.fail("number out of range")
   end
-  r.value
+  n
 end
 
 fn skip_digits(s)

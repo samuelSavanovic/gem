@@ -82,9 +82,7 @@ fn define_natives(args)
     if i < 0 or i >= len(args)
       return nil
     end
-    let r = pcall to_float(args[i])
-    if r.ok then return r.value end
-    args[i]
+    to_float(args[i], args[i])
   end
 end
 

@@ -317,35 +317,58 @@ GemVal gem_to_string_fn(void *_env, GemVal *args, int argc) {
     return GEM_STR_LIT("", 0);
 }
 
+/* a failed conversion returns args[1] when there is one, else raises msg */
+static GemVal conv_fail(GemVal *args, int argc, const char *msg) {
+    if (argc >= 2) return args[1];
+    gem_error(msg);
+    return GEM_NIL;
+}
+
+static GemVal conv_fail_string(GemVal *args, int argc, const char *who, const char *to) {
+    if (argc >= 2) return args[1];
+    GemVal v = args[0];
+    GemBuffer b; b.cap = 64; b.len = 0; b.data = (char *)gem_alloc(b.cap);
+    fmt_buf_append(&b, who);
+    fmt_buf_append(&b, ": cannot convert ");
+    fmt_quoted_string(&b, v.sval, v.slen < 200 ? v.slen : 200);
+    if (v.slen > 200) fmt_buf_append(&b, "...");
+    fmt_buf_append(&b, " to ");
+    fmt_buf_append(&b, to);
+    fmt_buf_appendn(&b, "", 1);
+    gem_error(b.data);
+    return GEM_NIL;
+}
+
 GemVal gem_to_int_fn(void *_env, GemVal *args, int argc) {
     (void)_env;
     if (argc < 1) { gem_error("to_int: expected 1 argument"); }
     GemVal v = args[0];
+    char buf[128];
     if (v.type == VAL_INT) return v;
-    if (v.type == VAL_FLOAT) return gem_float_to_int(v.fval, "to_int");
+    if (v.type == VAL_FLOAT) {
+        if (argc >= 2 && !(v.fval >= -9223372036854775808.0 && v.fval < 9223372036854775808.0)) return args[1];
+        return gem_float_to_int(v.fval, "to_int");
+    }
     if (v.type == VAL_BOOL) return gem_int(v.bval ? 1 : 0);
     if (v.type == VAL_STRING) {
         const char *s = v.sval;
         char *end;
         errno = 0;
         long long val = strtoll(s, &end, 10);
-        if (end == s || *end != '\0' || errno == ERANGE) {
-            char buf[256];
-            snprintf(buf, sizeof(buf), "to_int: cannot convert \"%s\" to int", s);
-            gem_error(buf);
+        if (end == s || end != s + v.slen || errno == ERANGE) {
+            return conv_fail_string(args, argc, "to_int", "int");
         }
         return gem_int((int64_t)val);
     }
-    char buf[128];
     snprintf(buf, sizeof(buf), "to_int: cannot convert %s to int", gem_type_str(v));
-    gem_error(buf);
-    return GEM_NIL;
+    return conv_fail(args, argc, buf);
 }
 
 GemVal gem_to_float_fn(void *_env, GemVal *args, int argc) {
     (void)_env;
     if (argc < 1) { gem_error("to_float: expected 1 argument"); }
     GemVal v = args[0];
+    char buf[128];
     if (v.type == VAL_FLOAT) return v;
     if (v.type == VAL_INT) return gem_float((double)v.ival);
     if (v.type == VAL_BOOL) return gem_float(v.bval ? 1.0 : 0.0);
@@ -356,17 +379,13 @@ GemVal gem_to_float_fn(void *_env, GemVal *args, int argc) {
         double val = strtod(s, &end);
         /* ERANGE with a finite nonzero result is a subnormal: keep it, since to_string of one has to read back */
         int range_err = errno == ERANGE && (val == 0.0 || isinf(val));
-        if (end == s || *end != '\0' || range_err) {
-            char buf[256];
-            snprintf(buf, sizeof(buf), "to_float: cannot convert \"%s\" to float", s);
-            gem_error(buf);
+        if (end == s || end != s + v.slen || range_err) {
+            return conv_fail_string(args, argc, "to_float", "float");
         }
         return gem_float(val);
     }
-    char buf[128];
     snprintf(buf, sizeof(buf), "to_float: cannot convert %s to float", gem_type_str(v));
-    gem_error(buf);
-    return GEM_NIL;
+    return conv_fail(args, argc, buf);
 }
 
 GemVal gem_pcall_fn(void *_env, GemVal *args, int argc) {

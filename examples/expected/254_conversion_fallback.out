@@ -1,0 +1,19 @@
+42
+nil
+0
+-1
+7
+nil
+nil
+2
+too big
+too big
+2.5
+0.0
+no
+nil
+to_int: cannot convert "4x" to int
+to_int: cannot convert "12\0x" to int
+to_int: cannot convert "7\n" to int
+235
+to_float: cannot convert "x" to float

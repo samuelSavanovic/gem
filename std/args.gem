@@ -172,17 +172,15 @@ end
 fn convert(o, v, shown)
   let val = v
   if o.type == "int"
-    let r = pcall to_int(v)
-    if not r.ok
+    val = to_int(v, nil)
+    if val == nil
       return {error: "{shown} expects an integer, got '{v}'"}
     end
-    val = r.value
   elif o.type == "float"
-    let r = pcall to_float(v)
-    if not r.ok
+    val = to_float(v, nil)
+    if val == nil
       return {error: "{shown} expects a number, got '{v}'"}
     end
-    val = r.value
   end
   if o.choices != nil and not table_has(o.choices, val)
     let near = if type(val) == "string" then string.closest(val, o.choices) end

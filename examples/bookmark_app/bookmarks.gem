@@ -111,11 +111,7 @@ end
 
 # nil for a non-numeric id, so it's a 404 rather than a 500
 fn route_id(req)
-  let r = pcall to_int(req.params.id)
-  if not r.ok
-    return nil
-  end
-  r.value
+  to_int(req.params.id, nil)
 end
 
 fn extract_title(page)
