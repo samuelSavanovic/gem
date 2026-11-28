@@ -1,0 +1,10 @@
+4.0
+false sqrt: arg 0 expected Float, got int
+1.5
+2.0
+4.0
+false floor: arg 0 expected Float, got int
+5
+3
+3.0
+false ceil: arg 0 expected Float, got int

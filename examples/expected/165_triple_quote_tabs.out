@@ -1,0 +1,7 @@
+tabs: [hello\n\tnested]
+mixed: [one\n  two]
+mismatch: [    spaces\ntab-only\nfull]
+blank: [x\n\ny]
+interp: [hi gem\n  inner done]
+single: [{literal}\n\tdeeper]
+spaces: [plain\n  indented]

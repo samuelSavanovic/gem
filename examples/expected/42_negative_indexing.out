@@ -1,0 +1,15 @@
+last: 50
+second-to-last: 40
+first via neg: 10
+first via neg len: 10
+set last: 99
+set middle: 77
+str last: o
+str first: h
+str second: e
+oob neg get: true
+oob neg set: true
+oob str neg: true
+single -1: 42
+empty neg: true
+NEGATIVE INDEXING DONE

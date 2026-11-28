@@ -1,0 +1,75 @@
+{"name":"gem","tags":["a","b"],"empty":{},"list":[],"nested":{"x":[1,{"y":null}]}}
+{
+  "name": "gem",
+  "tags": [
+    "a",
+    "b"
+  ],
+  "empty": {},
+  "list": [],
+  "nested": {
+    "x": [
+      1,
+      {
+        "y": null
+      }
+    ]
+  }
+}
+[
+	1,
+	2
+]
+{} [] 3
+[
+1
+]
+1
+json.encode: indent must be 0 to 16 spaces, got -1 json.encode: indent must be an int or a string, got bool json.encode: unknown option "indnt" (did you mean "indent"?)
+text/javascript; charset=utf-8
+audio/wav
+text/markdown; charset=utf-8
+application/yaml; charset=utf-8
+application/json; charset=utf-8
+audio/ogg
+application/octet-stream
+.js .js .ogg .yaml .yaml nil
+[2026-04-28T14:30:00.123Z] 1777386600123 2026-04-28T14:30:00.123Z
+[2026-04-28T16:30:00+02:00] 1777386600000 2026-04-28T14:30:00.000Z
+[2026-04-28T09:30:00-0500] 1777386600000 2026-04-28T14:30:00.000Z
+[2026-04-28T14:30Z] 1777386600000 2026-04-28T14:30:00.000Z
+[2026-04-28 14:30:00] 1777386600000 2026-04-28T14:30:00.000Z
+[2026-04-28] 1777334400000 2026-04-28T00:00:00.000Z
+[1970-01-01T00:00:00Z] 0 1970-01-01T00:00:00.000Z
+[1969-12-31T23:59:59.999Z] -1 1969-12-31T23:59:59.999Z
+[2000-02-29] 951782400000 2000-02-29T00:00:00.000Z
+[2026-02-29] nil 
+[2026-02-30] nil 
+[2026-13-01] nil 
+[2026-04-28T24:00:00Z] nil 
+[2026-04-28T14:30:00.1Z] 1777386600100 2026-04-28T14:30:00.100Z
+[2026-04-28T14:30:00.123456Z] 1777386600123 2026-04-28T14:30:00.123Z
+[2026-04-28x] nil 
+[2026-04-28T14:30:00+0] nil 
+[Tue, 28 Apr 2026 14:30:00 GMT] 1777386600000 2026-04-28T14:30:00.000Z
+[Sunday, 06-Nov-94 08:49:37 GMT] 784111777000 1994-11-06T08:49:37.000Z
+[Sun Nov  6 08:49:37 1994] 784111777000 1994-11-06T08:49:37.000Z
+[Sun, 06 Nov 1994 08:49:37 GMT] 784111777000 1994-11-06T08:49:37.000Z
+[  2026-04-28  ] 1777334400000 2026-04-28T00:00:00.000Z
+[] nil 
+[garbage] nil 
+[Tue, 28 Foo 2026 14:30:00 GMT] nil 
+[0001-01-01] -62135596800000 0001-01-01T00:00:00.000Z
+[9999-12-31T23:59:59Z] 253402300799000 9999-12-31T23:59:59.000Z
+14:30:00.123 %L 999
+time.parse: s must be a string, got int
+1 true true
+gen_server.start: the name "counter" is already registered
+gen_server.start: name must be a string, got int
+gen_server.start: unknown option "nme" (did you mean "name"?)
+nil
+gen_server: init raised at:
+  at anonymous fn (examples/237_json_indent_time_parse.gem:44)
+  at gen_server.run_init (std/gen_server.gem:174)
+  at anonymous fn (std/gen_server.gem:180)
+false nil

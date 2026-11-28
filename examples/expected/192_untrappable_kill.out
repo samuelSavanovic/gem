@@ -1,0 +1,61 @@
+-- kill --
+alive after shutdown and killed: true
+kill returns: true
+DOWN: killed
+kill of a dead pid: nil
+self kill: killed
+pool wait: killed true
+-- links --
+mid DOWN: killed
+trapper EXIT: killed
+trapper alive: true
+trapper DOWN: killed
+-- one_for_all --
+
+[Runtime Error in process 9]: boom
+  --> examples/192_untrappable_kill.gem:45
+    |
+ 45 |     when {tag: "crash"} then error("boom")
+    |
+Stack trace:
+  at anonymous fn (examples/192_untrappable_kill.gem:45)
+restarted both: true true
+old stubborn child gone: true
+stopped; new stubborn child gone: true
+-- shutdown budgets --
+cleaned: a shutdown
+b: killed
+took 150..1000 ms: true
+handle budget under 1000 ms: true
+supervisor handle: true nil
+-- nil budgets --
+cleaned: ["nested", "spec nil", "template nil"]
+spec nil child: normal
+nested supervisor: shutdown
+template nil child: normal
+-- transient --
+killed transient restarted: true
+-- dynamic_supervisor --
+terminate_child: true
+p1: killed
+children left: 1
+terminate again: false
+dynamic_supervisor.terminate_child: timeout
+p2 gone: true 0
+stop killed p3: true
+object handle supervised: true
+object handle stopped: true
+dynamic object handle: true 1
+dynamic object handle stopped: true
+-- checks --
+supervisor.start: shutdown of child "x" must be an int (milliseconds) or nil, got string
+dynamic_supervisor.start: the child template's shutdown must be an int (milliseconds) or nil, got float
+-- main --
+
+[Runtime Error]: main process killed by process 39: killed
+  --> examples/192_untrappable_kill.gem:274
+     |
+ 274 | receive
+     |
+Stack trace:
+  at main (examples/192_untrappable_kill.gem:274)

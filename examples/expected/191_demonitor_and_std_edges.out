@@ -1,0 +1,59 @@
+-- 1. monitor and demonitor
+true false true false
+DOWNs after demonitor: 0
+dead: false true noproc
+request pattern leaves: 0
+demonitor: expected pid (int) argument
+-- 2. gen_server.call leaves no monitor or DOWN behind
+after 20 restarts: mailbox_len 0
+monitors after a call: 0 0
+own: true 0 1
+own monitor: bye extra: 0
+gen_server.call: server exited: died
+own monitor: died extra: 0
+gen_server.call: server exited: noproc left: 0
+-- 3. init must return {state}
+gen_server: init raised at:
+  at gen_server.bad_result (std/gen_server.gem:50)
+  at gen_server.check_state_result (std/gen_server.gem:62)
+  at gen_server.run_init (std/gen_server.gem:175)
+  at anonymous fn (std/gen_server.gem:180)
+gen_server.start: init failed: gen_server: init returned an int, expected {state: state}
+got timeout
+-- 4. http: Host and bare LF
+Host: HTTP/1.1 200 OK
+no Host: HTTP/1.1 400 Bad Request
+two Hosts: HTTP/1.1 400 Bad Request
+HTTP/1.0 without Host: HTTP/1.1 200 OK
+bare LF head: HTTP/1.1 400 Bad Request fast: true
+bare LF, split: HTTP/1.1 400 Bad Request fast: true
+CRLF, split: HTTP/1.1 200 OK fast: true
+-- 5. request: Transfer-Encoding, trailers, Set-Cookie
+xchunked: 200 transfer-encoding=[xchunked] body=[3|abc|0||]
+gzip, chunked: 200 transfer-encoding=[gzip, Chunked] body=[abc]
+chunked, gzip: 200 transfer-encoding=[chunked, gzip] body=[3|abc|0||]
+trailers: 200 transfer-encoding=[chunked] x-a=[1] body=[abc]
+set-cookie: 200 content-length=[0] set-cookie=[a=1; Expires=Wed, 21 Oct 2026 07:28:00 GMT\nb=2] x-b=[1, 2] body=[]
+-- 6. format_time
++0000 UTC 0 %z %s
+1969-12-31T23:59:58+0000 -2
+1700000000
+format_time: output is over 256 KB
+131072 0
+-- 7. sqlite params bind by key
+[{a: "first", b: "second"}]
+[{b: 20, a: 10}]
+sqlite_query: parameter 1 is positional (?); bind it with a params array, or name it (:name)
+sqlite_query: params must be an array (keys 0..1), got key 5
+sqlite_query: statement has 1 parameter(s), got 0
+-- 8. nil means no timeout
+tcp_read 0 / negative: nil nil fast: true
+tcp_read nil: x waited: true
+tcp_read: timeout_ms must be an int (milliseconds) or nil, got string
+no limits: HTTP/1.1 200 OK
+http.stop nil: nil
+http.start: idle_timeout_ms must be an int > 0 (milliseconds) or nil, got 0
+http.start: request_timeout_ms must be an int > 0 (milliseconds) or nil, got string
+-- 9. main's slot is not reused after main ends
+main ends
+1200 processes exited after main ended

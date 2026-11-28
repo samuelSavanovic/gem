@@ -1,0 +1,4 @@
+http: GET /error: intentional error
+Stack trace:
+  at anonymous fn (examples/51_http_server_test.gem:39)
+Results: 12 passed, 0 failed

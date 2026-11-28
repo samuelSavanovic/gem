@@ -1,0 +1,14 @@
+10 20 30
+100 200 300
+val=1 counter=1
+1 nil nil
+gem nil
+1 2
+v=0
+v=10
+v=20
+empty ok
+42 99
+ok=true value=42 calls=1
+inner=yes
+10 20 30

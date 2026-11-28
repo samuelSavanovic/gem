@@ -1,0 +1,17 @@
+fill 20000 row0 row19999
+index 2 40000 1554 true false
+buffer 208890 chunk0;chunk1;ch
+boxes ["value-29999", 30000]
+pcall [true, "acc-29999", "acc-29999"]
+nested cur-29999
+globals entry-29900 entry-29999 t29999 100
+chain 2000
+sort 0 1 3000
+build_string 108890 0,1,2,3,4,
+mailbox 126640
+mutual ["before", false, true, "after"] kept
+default [40100, "state-0", "d1000", "d"]
+rest [40100, 2, "m1"]
+destructured [40100, "bag1"]
+boxed [40100, 100001]
+state intact 40100 state-0 d1000

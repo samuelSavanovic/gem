@@ -1,0 +1,27 @@
+sqlite_query: expected a database handle, got int
+sqlite_exec: expected a database handle, got int
+sqlite_last_insert_id: expected a database handle, got int
+sqlite_changes: expected a database handle, got int
+sqlite_close: expected a database handle, got int
+sqlite_query: expected a database handle, got string
+sqlite_close: expected a database handle, got nil
+sqlite_changes: expected a database handle, got table
+sqlite_exec: expected a database handle, got float
+sqlite
+1
+1
+child saw 2 rows, last 8
+2
+nil
+sqlite_query: not an open database handle
+sqlite_exec: not an open database handle
+sqlite_last_insert_id: not an open database handle
+sqlite_changes: not an open database handle
+nil
+nil
+true
+42
+child closed db2
+sqlite_query: not an open database handle
+both closes returned: true
+sqlite_query: not an open database handle

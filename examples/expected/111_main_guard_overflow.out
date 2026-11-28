@@ -1,0 +1,9 @@
+shallow 5
+
+[Runtime Error]: stack overflow in native code called from main
+  --> examples/111_main_guard_overflow.gem:9
+   |
+ 9 | gem_example_native_recurse(100000000)
+   |
+Stack trace:
+  at main (examples/111_main_guard_overflow.gem:9)

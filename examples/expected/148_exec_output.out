@@ -1,0 +1,8 @@
+main before
+hi from main
+main status 0
+main status 3
+child before
+hi from child
+child status 2
+read back: captured

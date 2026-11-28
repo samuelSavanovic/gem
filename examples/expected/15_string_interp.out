@@ -1,0 +1,14 @@
+hello world
+1 + 2 = 3
+count: 42
+flag: true
+nothing: nil
+length: 5
+gem
+12
+literal {brace}
+val: 10
+pi: 3.14
+mid!
+!mid
+result: 14

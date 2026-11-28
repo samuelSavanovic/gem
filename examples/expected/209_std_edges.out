@@ -1,0 +1,32 @@
+== errors name the function
+http.html_escape: s must be a string, got int
+http.parse_form: body must be a string, got nil
+time.date: ms must be an int, got nil
+time.format: fmt must be a string, got nil
+sqlite.last_id: expected a database handle, got int
+request.post: opts must be a table, got string
+math.min: expected numbers or strings, got table and nil
+math.clamp: expected numbers or strings, got string and int
+http.start: opts must be a table, got nil
+http.start: port must be an int from 0 to 65535, got 70000
+test.assert_throws: body must be a fn, got int
+sqlite.query: UNIQUE constraint failed: t.name
+== arrays
+a,b
+string.join: arr must be an array, got a table with keys other than 0 .. n-1
+table.sort: arr must be an array, got a table with keys other than 0 .. n-1
+["a", "b"]
+== json
+json.encode: cannot encode inf: JSON has no infinite or NaN numbers
+json.encode: cannot encode nan: JSON has no infinite or NaN numbers
+[1.5,-0.0]
+== responses
+http.set_cookie: cookie value must be a string or a number, got nil
+http: GET /nil: invalid response: header X-Nil must be a string, number, bool or array of them, got nil
+http: GET /table: invalid response: header X-T must be a string, number, bool or array of them, got a table with keys other than 0 .. n-1
+500 500
+a, 2
+200 spaced
+404
+== an early answer
+413

@@ -1,0 +1,24 @@
+int
+float
+string
+bool
+nil
+table
+fn
+fn
+1 is truthy
+0 is truthy
+ is truthy
+x is truthy
+true is truthy
+false is falsy
+nil is falsy
+true
+false
+true
+false
+false
+true
+true
+nil
+42

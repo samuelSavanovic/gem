@@ -1,0 +1,11 @@
+
+[Runtime Error]: boom
+  --> examples/79_stack_trace.gem:2
+   |
+ 2 |   error("boom")
+   |
+Stack trace:
+  at c (examples/79_stack_trace.gem:2)
+  at b (examples/79_stack_trace.gem:6)
+  at a (examples/79_stack_trace.gem:10)
+  at main (examples/79_stack_trace.gem:13)

@@ -1,0 +1,16 @@
+
+[Runtime Error in process 1]: opener crashed
+  --> examples/220_sqlite_ownership.gem:34
+    |
+ 34 | print("crash:", check(opened_by(fn(db) error("opener crashed") end)))
+    |
+Stack trace:
+  at anonymous fn (examples/220_sqlite_ownership.gem:34)
+  at anonymous fn (examples/220_sqlite_ownership.gem:20)
+crash: sqlite_query: not an open database handle
+normal return: open
+claimed, normal return: sqlite_query: not an open database handle
+killed: sqlite_query: not an open database handle
+claimed by the borrower: sqlite_query: not an open database handle
+only used by it: open
+1

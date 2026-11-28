@@ -1,0 +1,32 @@
+delete all len: 0
+delete twice: nil
+pop empty err: true
+pop preserve: 10 20
+sort sorted: 1 2 3 4 5
+sort reverse: 1 2 3 4 5
+sort dups: 1 1 2 3 3
+sort 100: true
+floor 0.0: 0
+ceil 0.0: 0
+round 0.0: 0
+abs min int: 1
+pow neg exp: 0.5
+sqrt 1: 1.0
+sqrt neg: true
+random 1: true
+random 0: true
+random neg: true
+insert empty: first
+insert empty len: 1
+remove_at to empty: 0
+insert neg idx: true
+insert past end: true
+remove_at empty: true
+remove_at oob: true
+getenv non-str: true
+append_file bad: true
+exit type: fn
+values empty: 0
+delete consistency: true
+delete access: true
+ALL EDGE CASES PASSED

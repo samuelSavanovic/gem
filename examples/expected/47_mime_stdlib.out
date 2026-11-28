@@ -1,0 +1,44 @@
+=== mime lookup ===
+text/html; charset=utf-8
+text/css; charset=utf-8
+text/javascript; charset=utf-8
+application/json; charset=utf-8
+image/png
+image/jpeg
+image/svg+xml
+font/woff2
+application/pdf
+video/mp4
+=== bare extensions ===
+text/html; charset=utf-8
+text/css; charset=utf-8
+text/javascript; charset=utf-8
+=== case insensitive ===
+text/html; charset=utf-8
+text/css; charset=utf-8
+=== unknown extension ===
+application/octet-stream
+application/x-tar
+=== charset ===
+text/html; charset=utf-8
+application/json; charset=utf-8
+text/javascript; charset=utf-8
+application/xml; charset=utf-8
+text/plain; charset=utf-8
+image/png
+=== ext reverse ===
+.html
+.css
+.json
+.png
+.pdf
+=== ext with charset ===
+.html
+=== ext unknown ===
+nil
+=== edge cases ===
+application/gzip
+application/octet-stream
+text/css; charset=utf-8
+application/wasm
+=== all mime tests passed ===

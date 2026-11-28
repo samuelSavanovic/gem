@@ -1,0 +1,28 @@
+normal link ok
+
+[Runtime Error in process 2]: trapped crash
+  --> examples/143_main_link_exit.gem:10
+    |
+ 10 |   error("trapped crash")
+    |
+Stack trace:
+  at anonymous fn (examples/143_main_link_exit.gem:10)
+main trapped: trapped crash
+main trapped link: noproc
+child DOWN: noproc
+
+[Runtime Error in process 5]: deep crash
+  --> examples/143_main_link_exit.gem:36
+    |
+ 36 |     error("deep crash")
+    |
+Stack trace:
+  at anonymous fn (examples/143_main_link_exit.gem:36)
+
+[Runtime Error]: main process killed by linked process 4: deep crash
+  --> examples/143_main_link_exit.gem:40
+    |
+ 40 | sleep(100)
+    |
+Stack trace:
+  at main (examples/143_main_link_exit.gem:40)

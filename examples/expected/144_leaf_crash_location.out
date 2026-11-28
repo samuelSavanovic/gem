@@ -1,0 +1,42 @@
+
+[Runtime Error in process 1]: type error in +: got int and string
+  --> examples/144_leaf_crash_location.gem:3
+   |
+ 3 | spawn(fn() 1 + "a" end)
+   |
+Stack trace:
+  at anonymous fn (examples/144_leaf_crash_location.gem:3)
+
+[Runtime Error in process 2]: type error in +: got string and int
+  --> examples/144_leaf_crash_location.gem:8
+   |
+ 8 |   y + 1
+   |
+Stack trace:
+  at add_one (examples/144_leaf_crash_location.gem:8)
+  at caller (examples/144_leaf_crash_location.gem:12)
+  at anonymous fn (examples/144_leaf_crash_location.gem:15)
+false type error in +: got nil and int
+add_one 8
+1
+1 31
+4999950001
+
+[Runtime Error in process 4]: type error in +: got int and string
+  --> examples/144_leaf_crash_location.gem:42
+    |
+ 42 |   s + extra
+    |
+Stack trace:
+  at spin (examples/144_leaf_crash_location.gem:42)
+  at anonymous fn (examples/144_leaf_crash_location.gem:49)
+
+[Runtime Error]: type error in +: got table and int
+  --> examples/144_leaf_crash_location.gem:8
+   |
+ 8 |   y + 1
+   |
+Stack trace:
+  at add_one (examples/144_leaf_crash_location.gem:8)
+  at caller (examples/144_leaf_crash_location.gem:12)
+  at main (examples/144_leaf_crash_location.gem:54)

@@ -1,0 +1,35 @@
+fn literal: boom
+  anonymous fn (examples/140_stack_frame_names.gem:20)
+  anonymous fn (examples/140_stack_frame_names.gem:21)
+module fn: not an int: a
+  stack_name_mod.check (examples/modules/stack_name_mod.gem:5)
+  stack_name_mod.fail_outer (examples/modules/stack_name_mod.gem:11)
+  anonymous fn (examples/140_stack_frame_names.gem:22)
+closure from a module: not an int: nil
+  stack_name_mod.check (examples/modules/stack_name_mod.gem:5)
+  stack_name_mod.fail_outer (examples/modules/stack_name_mod.gem:11)
+  anonymous fn (examples/modules/stack_name_mod.gem:16)
+  anonymous fn (examples/140_stack_frame_names.gem:24)
+builtin-named fn: not an int: b
+  stack_name_mod.check (examples/modules/stack_name_mod.gem:5)
+  stack_name_mod.fail_outer (examples/modules/stack_name_mod.gem:11)
+  len (examples/140_stack_frame_names.gem:9)
+  anonymous fn (examples/140_stack_frame_names.gem:25)
+nested fn literals: not an int: 2.5
+  stack_name_mod.check (examples/modules/stack_name_mod.gem:5)
+  stack_name_mod.fail_outer (examples/modules/stack_name_mod.gem:11)
+  len (examples/140_stack_frame_names.gem:9)
+  anonymous fn (examples/140_stack_frame_names.gem:28)
+  anonymous fn (examples/140_stack_frame_names.gem:29)
+  anonymous fn (examples/140_stack_frame_names.gem:31)
+
+[Runtime Error]: not an int: c
+  --> examples/modules/stack_name_mod.gem:5
+   |
+ 5 |     error("not an int: {x}")
+   |
+Stack trace:
+  at stack_name_mod.check (examples/modules/stack_name_mod.gem:5)
+  at stack_name_mod.fail_outer (examples/modules/stack_name_mod.gem:11)
+  at len (examples/140_stack_frame_names.gem:9)
+  at main (examples/140_stack_frame_names.gem:33)

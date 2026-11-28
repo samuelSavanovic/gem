@@ -1,0 +1,10 @@
+
+[Runtime Error]: main failed
+  --> examples/101_process_stack_traces.gem:11
+    |
+ 11 |   error("main failed")
+    |
+Stack trace:
+  at fail_after_yield (examples/101_process_stack_traces.gem:11)
+  at main_entry (examples/101_process_stack_traces.gem:14)
+  at main (examples/101_process_stack_traces.gem:20)

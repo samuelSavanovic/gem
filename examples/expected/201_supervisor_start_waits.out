@@ -1,0 +1,29 @@
+1 call by name: 1
+2 second saw first: true
+3 nested child: 1
+3 nested child gone: nil
+4 children: 0
+supervisor: exiting on an error raised at:
+  at boom (examples/201_supervisor_start_waits.gem:29)
+  at supervisor.start_child (std/supervisor.gem:48)
+  at anonymous fn (std/supervisor.gem:291)
+5 supervisor.start: child "bad" failed to start: boom
+5 name free: nil
+5 restarted under the same name: true
+supervisor: exiting on an error raised at:
+  at supervisor.target_pid (std/supervisor.gem:24)
+  at supervisor.start_child (std/supervisor.gem:49)
+  at anonymous fn (std/supervisor.gem:291)
+6 supervisor.start: child "ghost" failed to start: supervisor: start of child "ghost": no process registered as "nobody201"
+supervisor: exiting on an error raised at:
+  at boom (examples/201_supervisor_start_waits.gem:29)
+  at supervisor.start_child (std/supervisor.gem:48)
+  at anonymous fn (std/supervisor.gem:291)
+supervisor: exiting on an error raised at:
+  at supervisor.start (std/supervisor.gem:419)
+  at anonymous fn (examples/201_supervisor_start_waits.gem:98)
+  at supervisor.start_child (std/supervisor.gem:48)
+  at anonymous fn (std/supervisor.gem:291)
+7 supervisor.start: child "inner" failed to start: supervisor.start: child "bad" failed to start: boom
+8 supervisor.start: supervisor exited: killed
+9 leftovers: {}

@@ -1,0 +1,15 @@
+test1: started alpha beta
+test2: count 2
+
+[Runtime Error in process 2]: boom
+  --> examples/95_dynamic_supervisor.gem:14
+    |
+ 14 |           error("boom")
+    |
+Stack trace:
+  at anonymous fn (examples/95_dynamic_supervisor.gem:14)
+test3: restarted id alpha
+test3: count after crash 2
+test4: terminate_child ok true
+test4: count after terminate 1
+test5: bogus terminate ok false

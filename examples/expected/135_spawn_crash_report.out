@@ -1,0 +1,79 @@
+
+[Runtime Error in process 1]: boom 1
+  --> examples/135_spawn_crash_report.gem:8
+   |
+ 8 |   error("boom {x}")
+   |
+Stack trace:
+  at inner (examples/135_spawn_crash_report.gem:8)
+  at worker (examples/135_spawn_crash_report.gem:12)
+  at anonymous fn (examples/135_spawn_crash_report.gem:21)
+test1: DOWN boom 1
+
+[Runtime Error in process 2]: type error in +: got nil and int
+  --> examples/135_spawn_crash_report.gem:28
+    |
+ 28 |   print(x + 1)
+    |
+Stack trace:
+  at anonymous fn (examples/135_spawn_crash_report.gem:28)
+test2: type error in +: got nil and int
+
+[Runtime Error in process 3]: field access on non-table: got nil (reading .field)
+  --> examples/135_spawn_crash_report.gem:34
+    |
+ 34 |   print(t.field)
+    |
+Stack trace:
+  at anonymous fn (examples/135_spawn_crash_report.gem:34)
+test2: field access on non-table: got nil (reading .field)
+
+[Runtime Error in process 4 "logger"]: boom 3
+  --> examples/135_spawn_crash_report.gem:8
+   |
+ 8 |   error("boom {x}")
+   |
+Stack trace:
+  at inner (examples/135_spawn_crash_report.gem:8)
+  at worker (examples/135_spawn_crash_report.gem:12)
+  at anonymous fn (examples/135_spawn_crash_report.gem:41)
+test3: boom 3
+test4: caught boom 4
+test4: killed shutdown
+test4: normal normal
+test4: self-kill done
+
+[Runtime Error in process 10]: boom 5
+  --> examples/135_spawn_crash_report.gem:8
+   |
+ 8 |   error("boom {x}")
+   |
+Stack trace:
+  at inner (examples/135_spawn_crash_report.gem:8)
+  at worker (examples/135_spawn_crash_report.gem:12)
+  at anonymous fn (examples/135_spawn_crash_report.gem:66)
+test5: linked boom 5
+
+[Runtime Error in process 12]: boom 6
+  --> examples/135_spawn_crash_report.gem:8
+   |
+ 8 |   error("boom {x}")
+   |
+Stack trace:
+  at inner (examples/135_spawn_crash_report.gem:8)
+  at worker (examples/135_spawn_crash_report.gem:12)
+  at anonymous fn (examples/135_spawn_crash_report.gem:73)
+test5: trapped EXIT boom 6
+
+[Runtime Error in process 13]: stack overflow in depth
+  --> examples/135_spawn_crash_report.gem:17
+    |
+ 17 |   1 + depth(n - 1)
+    |
+Stack trace:
+  ... (deeper frames not recorded)
+  at depth (examples/135_spawn_crash_report.gem:17)
+  ... same frame repeated 254 more times
+  at anonymous fn (examples/135_spawn_crash_report.gem:79)
+test6: stack overflow in depth
+done

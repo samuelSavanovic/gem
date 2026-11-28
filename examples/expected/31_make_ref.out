@@ -1,0 +1,5 @@
+test1: equal_self=true different=true
+test2: type=ref
+test3: r1=first r2=second
+test4: ref_equal=true
+test5: unique=true count=100

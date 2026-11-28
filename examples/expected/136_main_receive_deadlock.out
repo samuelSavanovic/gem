@@ -1,0 +1,24 @@
+from sleeper
+from timer
+receive timed out
+child timed out
+exec finished
+
+[Runtime Error in process 4]: crashed
+  --> examples/136_main_receive_deadlock.gem:52
+    |
+ 52 |   error("crashed")
+    |
+Stack trace:
+  at anonymous fn (examples/136_main_receive_deadlock.gem:52)
+got DOWN
+child exits without sending
+
+[Runtime Error]: deadlock: main process is waiting in receive and no other process can send to it
+  --> examples/136_main_receive_deadlock.gem:69
+    |
+ 69 |   receive
+    |
+Stack trace:
+  at wait_for_reply (examples/136_main_receive_deadlock.gem:69)
+  at main (examples/136_main_receive_deadlock.gem:74)

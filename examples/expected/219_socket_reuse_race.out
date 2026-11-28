@@ -1,0 +1,7 @@
+["s2 took s1's fd number", true, "but is another socket", true]
+["reader of s1 got", false, nil, "tcp_read: socket is closed"]
+new socket on the same number: true
+still open
+file on the same number: true
+file still open: true
+done

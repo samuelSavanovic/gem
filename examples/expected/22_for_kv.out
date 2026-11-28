@@ -1,0 +1,11 @@
+a=1
+b=2
+c=3
+empty ok
+call_count=1
+total=6
+found_key is b: true
+2
+4
+hello:1
+world:2

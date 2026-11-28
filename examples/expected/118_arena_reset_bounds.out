@@ -1,0 +1,9 @@
+tail spawn 800000
+non-tail spawn 800000 cleanup
+pcall depth 3 true [800000]
+zero-arg row-400000
+sink done
+store 14890 2000 true
+backlog drained 13107200
+top-level builds 20000 3000000 3000000 true
+peak memory bounded true

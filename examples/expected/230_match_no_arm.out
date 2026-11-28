@@ -1,0 +1,29 @@
+ok missing
+false no match for 500
+false no match for "x"
+false no match for nil
+false no match for [1, "two"]
+false no match for {tag: "t"}
+false no match for 1.5
+kind 5
+216 ...
+pair 1 2 tagged a
+{ok: false, error: "no match for 3", stack: [{name: "shape", file: "examples/230_match_no_arm.gem", line: 30}, {name: "anonymous fn", file: "examples/230_match_no_arm.gem", line: 37}]}
+one nil
+got want
+left: other
+
+[Runtime Error in process 1]: no match for 418
+  --> examples/230_match_no_arm.gem:5
+   |
+ 5 |   match code
+   |
+Stack trace:
+  at kind (examples/230_match_no_arm.gem:5)
+  at anonymous fn (examples/230_match_no_arm.gem:60)
+DOWN no match for 418
+a {2: "c", 1: "b"} nil true
+a ["b", "c"]
+nil ["b", "c"]
+1 {b: 2}
+true 0

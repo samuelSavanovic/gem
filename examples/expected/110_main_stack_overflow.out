@@ -1,0 +1,13 @@
+before
+
+[Runtime Error]: stack overflow in depth
+  --> examples/110_main_stack_overflow.gem:5
+   |
+ 5 |   1 + depth(n - 1)
+   |
+Stack trace:
+  ... (deeper frames not recorded)
+  at depth (examples/110_main_stack_overflow.gem:5)
+  ... same frame repeated 253 more times
+  at start (examples/110_main_stack_overflow.gem:9)
+  at main (examples/110_main_stack_overflow.gem:13)

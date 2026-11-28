@@ -1,0 +1,56 @@
+=== url encode ===
+hello
+test-value_2.0~ok
+=== encode special ===
+hello%20world
+a%3D1%26b%3D2
+%2Fpath%2Fto%2Ffile
+caf%C3%A9
+=== url decode ===
+hello
+hello world
+hello world
+a=1&b=2
+/path/to/file
+=== decode mixed case ===
+hello/world
+hello/world
+=== parse_query ===
+1
+hello world
+/
+=== parse_query empty ===
+0
+=== parse_query single ===
+value
+=== parse_query duplicate ===
+3
+=== build_query ===
+a=1&b=hello world
+=== url parse ===
+/users/123
+q=foo&page=2
+foo
+2
+=== parse no query ===
+/about
+
+0
+=== parse empty query ===
+/search
+
+=== roundtrip ===
+hello world & goodbye=true
+=== edge cases ===
+
+
+%25
+%
+abc%2
+abc%
+
+1
+2
+/search
+a?b
+=== all url tests passed ===

@@ -1,0 +1,6 @@
+main built [400000, 79999800000]
+walker got [400000, 79999800000]
+walker got via timer [400000, 79999800000]
+timer cancelled true
+["child extra 1988890", "walked [400000, 79999800000]"]
+captured [200000, 19999900000]

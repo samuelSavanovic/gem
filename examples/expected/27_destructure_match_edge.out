@@ -1,0 +1,15 @@
+1: missing key falls through
+2: partial match works
+3: empty array matched
+4: non-empty rejected by empty pattern
+5: nested=first
+6: circle(10)
+6: pair(3,4)
+6: other
+7: 404 matched
+8: inner
+8b: outer
+9: zero count
+10: nil fell through
+11: negative int matched, f=2.5
+11: negative float matched

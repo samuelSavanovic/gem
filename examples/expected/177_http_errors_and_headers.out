@@ -1,0 +1,31 @@
+start returns pid: int
+escape: &lt;a href=&#x27;x&#x27;&gt;&amp;&quot;&lt;/a&gt;
+-- default bodies
+HTTP/1.1 404 Not Found [Not Found]
+http: GET /boom: kaboom
+Stack trace:
+  at anonymous fn (examples/177_http_errors_and_headers.gem:10)
+HTTP/1.1 500 Internal Server Error [Internal Server Error]
+http: GET /nil: handler returned nil, not a response table
+HTTP/1.1 500 Internal Server Error [Internal Server Error]
+-- headers
+HTTP/1.1 200 OK [connection=close|host=t|host2=no-space|x-dup=1, 2|x-mixed-case=padded]
+HTTP/1.1 200 OK [a=1 b=2 c=3]
+-- malformed
+HTTP/1.1 400 Bad Request [Bad Request]
+HTTP/1.1 400 Bad Request [Bad Request]
+HTTP/1.1 400 Bad Request [Bad Request]
+HTTP/1.1 431 Request Header Fields Too Large [Request Header Fields Too Large]
+-- head split across writes, then a pipelined pair
+HTTP/1.1 200 OK [hello]
+HTTP/1.1 200 OK [got oneHTTP/1.1 200 OK
+Content-Length: 7
+Connection: close
+Content-Type: text/plain; charset=utf-8
+
+got two]
+-- serve
+HTTP/1.1 200 OK [hello]
+serve after kill shutdown: ok=true value=nil error=nil
+HTTP/1.1 200 OK [hello]
+serve after kill boom: ok=false value=nil error=http.serve: server died: boom

@@ -1,0 +1,13 @@
+[{id: 1}]
+[{text: "there"}]
+[{text: "none"}]
+3
+[{text: "there"}]
+sqlite.query: parameter 2 is positional (?); bind it with a params array, or name it (:name)
+sqlite.query: parameter 1 is positional (?); bind it with a params array, or name it (:name)
+sqlite.query: params key "b" matches no parameter of the statement
+sqlite.query: no value for parameter :b (params has no key "b")
+sqlite.query: parameter :a is a table; expected nil, bool, int, float or string
+sqlite.query: params must be an array or a record of names, not both
+sqlite.query: params must be an array, got a float key
+sqlite.query: params key "a" matches no parameter of the statement

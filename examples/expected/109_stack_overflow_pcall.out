@@ -1,0 +1,16 @@
+test1: spawned depth 20000
+test1: main depth 20000
+test2: ok=false error=stack overflow in depth
+test2: still running, depth 1000
+test2: again ok=false error=stack overflow in depth
+test3: mutual recursion overflowed true
+test3: closure ok=false error=stack overflow in anonymous fn deep=true
+test4: main ok=false error=stack overflow in depth
+test5: depth 63 ok=true error=nil
+test5: depth 1000 ok=true error=nil
+test5: depth 1001 ok=false error=json.parse: nesting deeper than 1000 levels at byte 1000
+test6: 200 10
+test6: 500 stack overflow in depth
+test6: 200 20
+test6: 500 stack overflow in depth
+test6: 200 30

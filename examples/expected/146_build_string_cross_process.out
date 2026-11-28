@@ -1,0 +1,8 @@
+spawn: false build_string: `add` can only be called by the process that created it
+s1 = ab
+message: false build_string: `add` can only be called by the process that created it
+s2 = ok
+s3 = c
+module slot: false build_string: `add` can only be called by the process that created it
+owner call ok
+total 108890

@@ -1,0 +1,9 @@
+["accept", false, "tcp_accept: socket is closed"]
+fd reused: true same socket: false
+["accept on reused fd", false, "tcp_accept: socket is closed"]
+new listener still accepts: socket
+["read", false, "tcp_read: socket is closed"]
+["read with timeout", false, "tcp_read: socket is closed"]
+["write", false, "tcp_write: socket is closed"]
+["accept, closed from C", false, "tcp_accept: accept failed: Bad file descriptor"]
+done

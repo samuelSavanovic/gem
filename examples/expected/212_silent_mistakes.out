@@ -1,0 +1,24 @@
+-- for with one variable needs an array or a string
+for: one loop variable needs an array or a string, got a table with the key "a"; use two (`for k, v in ...`) for its entries, or iterate `values(...)`
+for: one loop variable needs an array or a string, got a table with the key 5; use two (`for k, v in ...`) for its entries, or iterate `values(...)`
+for: one loop variable needs an array or a string, got a table with the key "name"; use two (`for k, v in ...`) for its entries, or iterate `values(...)`
+a
+b
+c
+-- sort comparators return numbers
+sort: the comparator must return a number (negative, zero or positive), got bool
+sort: the comparator must return a number (negative, zero or positive), got nil
+[1, 2, 3]
+-- error with a non-string value
+{code: 1}
+42
+error
+-- tcp_listen resolves host names
+socket
+-- json: {} stays an object
+{} [] {} {"a":{},"b":[]}
+{} []
+-- int, float and ref keys are indexed
+10000 0 zero 10 ref false
+-- a captured let assigned inside an if in a loop, after another loop
+[true, false]

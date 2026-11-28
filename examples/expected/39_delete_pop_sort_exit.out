@@ -1,0 +1,26 @@
+delete removed: 2
+delete len: 2
+delete has_key b: false
+delete has_key a: true
+delete has_key c: true
+delete missing: nil
+delete int key: 20
+delete int len: 2
+pop: 5
+pop len: 4
+pop2: 4
+pop single: 42
+pop empty len: 0
+values len: 3
+values arr: 10 20 30
+this goes to stderr
+stderr multi: 42 true nil
+sort nums: 1 2 3 4 5
+sort strings: apple banana cherry
+sort desc: 5 4 3 2 1
+sort empty: 0
+sort single: 42
+sort returns same: 1 1
+sort mixed: 1 2 2.5 3.0
+argv type: table
+argv len >= 1: true

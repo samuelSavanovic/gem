@@ -1,0 +1,14 @@
+4 ["a", "bb", "", "ccc"] true nil ["a", "bb", "", "ccc"]
+0 {} true nil {}
+1 [""] true nil [""]
+1 ["no newline"] true nil ["no newline"]
+30002 358894 100000
+row 0 row 1
+false true
+io.lines: path must be a string, got int
+[65535, 1]
+[200000] 200000
+30000 450015000
+one two nil
+abc
+true

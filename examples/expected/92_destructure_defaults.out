@@ -1,0 +1,26 @@
+let-table: strategy=one_for_all max_restarts=3 name=nil
+let-nil: x=nil y=42
+let-fwd: a=5 b=10
+let-extra: p=10
+let-array: first=1 second=2 third=100
+let-array-nil: u=10 v=nil
+let-array-short: w=10 z=6
+fn-req: 0 5 8
+0.0.0.0:8080/nil
+0.0.0.0:8080/nil
+0.0.0.0:8080/nil
+0.0.0.0:9000/nil
+server: unknown option "x"
+server: unknown option "prot" (did you mean "port"?)
+2 {color: "red"} 1 {}
+3 1
+0.0.0.0:nil/nil
+sid=abc;Path=/;Secure=false
+sid=abc;Path=/;Secure=false
+sid=abc;Path=/;Secure=true
+anon: 3 30
+block: i=0 doubled=0
+block: i=1 doubled=2
+block: i=2 doubled=4
+closure: 10 15 20
+mut: 1 101

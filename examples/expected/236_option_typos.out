@@ -1,0 +1,20 @@
+0.0.0.0:1 1000
+serve: unknown option "prot" (did you mean "port"?)
+serve: unknown option "timeout" (did you mean "timeout_ms"?)
+serve: unknown option "verbose"
+serve: unknown option "0"
+anonymous fn: unknown option "y" (did you mean "x"?)
+3 {color: "red"}
+ping nil
+supervisor.start: unknown option "stratgy" (did you mean "strategy"?)
+supervisor.start: unknown strategy "one_for_al" (did you mean "one_for_all"?)
+supervisor.start: unknown key "restrat" in child "a" (did you mean "restart"?)
+supervisor.start: unknown restart "permanant" for child "a" (did you mean "permanent"?)
+dynamic_supervisor.start: unknown option "max_restart" (did you mean "max_restarts"?)
+dynamic_supervisor.start: unknown key "shutdwn" in the child template (did you mean "shutdown"?)
+dynamic_supervisor.start: unknown restart "transiant" (did you mean "transient"?)
+http.start: unknown option "prot" (did you mean "port"?)
+request.get: unknown option "timeout" (did you mean "timeout_ms"?)
+log.set_level: unknown level wrn (did you mean "warn"?); use "debug", "info", "warn" or "error"
+process_flag: unknown flag "trap_exits" (the one flag is "trap_exit")
+length nil

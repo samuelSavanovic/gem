@@ -1,0 +1,46 @@
+
+[Runtime Error in process 15]: crash1
+  --> examples/32_links.gem:4
+   |
+ 4 |       error("crash1")
+   |
+Stack trace:
+  at anonymous fn (examples/32_links.gem:4)
+
+[Runtime Error in process 16]: crash2
+  --> examples/32_links.gem:21
+    |
+ 21 |         error("crash2")
+    |
+Stack trace:
+  at anonymous fn (examples/32_links.gem:21)
+
+[Runtime Error in process 19]: ignored-crash
+  --> examples/32_links.gem:77
+    |
+ 77 |         error("ignored-crash")
+    |
+Stack trace:
+  at anonymous fn (examples/32_links.gem:77)
+
+[Runtime Error in process 20]: already-gone
+  --> examples/32_links.gem:101
+     |
+ 101 |       error("already-gone")
+     |
+Stack trace:
+  at anonymous fn (examples/32_links.gem:101)
+
+[Runtime Error in process 22]: chain-boom
+  --> examples/32_links.gem:58
+    |
+ 58 |         error("chain-boom")
+    |
+Stack trace:
+  at anonymous fn (examples/32_links.gem:58)
+test1: parent died: crash1
+test2: parent died: crash2
+test4: A died: chain-boom
+test3: parent died: normal
+test5: parent died: normal
+test6: parent died: noproc

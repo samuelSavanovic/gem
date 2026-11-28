@@ -1,0 +1,6 @@
+PASS equality on primitives
+PASS inequality
+PASS plain assert
+PASS assert_throws catches errors
+FAIL intentional failure: test.assert_eq: expected 2, got 1
+4 passed / 1 failed

@@ -1,0 +1,9 @@
+{1: "b"} 1
+{2: "z", 1: "y"} 2 z true false
+{0: 10, 1: 20, 2: 30, 5: 70, 3: 40} 5 nil false true
+{2: 3, 1: 2, 3: "y"}
+["zero", "one"] one
+sort: expected an array (keys 0 .. n-1), got a table with other keys
+[1, 2, 3, 9]
+[1, 5]
+200000 200000 199999 nil false true

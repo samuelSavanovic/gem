@@ -9,7 +9,7 @@ make build       # build/gem from bootstrap/stage0.c
 make test        # everything below, plus the numbered examples
 ```
 
-`make test` runs the numbered programs in `examples/` against `examples/expected_output.txt`, the larger example apps' own tests, the LSP smoke tests and the scripts in `tests/`. `tests/check_rules.sh` is one of them: it checks that every builtin appears in `docs/CHEATSHEET.md` and in both editor grammars.
+`make test` runs the numbered programs in `examples/` twice, built at `-O2` and at `-O0` (as run mode builds them), and compares each one's output with its file in `examples/expected/`. It also runs the larger example apps' own tests, the LSP smoke tests and the scripts in `tests/`. `tests/check_rules.sh` is one of them: it checks that every builtin appears in `docs/CHEATSHEET.md` and in both editor grammars.
 
 ## Bootstrap
 
@@ -49,7 +49,7 @@ A std module:
 2. Add it to `docs/CHEATSHEET.md`.
 3. Add a numbered example that tests it.
 
-A numbered example is the next free `examples/<number>_<name>.gem`, with its output appended to `examples/expected_output.txt`. A program that should fail to compile goes in `tests/broken/` and gets a line in `tests/check_broken.sh`.
+A numbered example is the next free `examples/<number>_<name>.gem`. `bash examples/run_all.sh --update <number>` writes its output to `examples/expected/<number>_<name>.out`, and `bash examples/run_all.sh <number>` runs just that example (a pattern like `'2*'` picks several). A program that should fail to compile goes in `tests/broken/` and gets a line in `tests/check_broken.sh`.
 
 ## Commit messages
 

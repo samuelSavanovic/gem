@@ -1,0 +1,7 @@
+slot reused, new pid differs: true
+stale process_info: nil
+stale kill: nil
+bystander alive: true
+bystander mailbox: 0
+stale monitor: DOWN noproc for the stale pid: true
+heir got no DOWN

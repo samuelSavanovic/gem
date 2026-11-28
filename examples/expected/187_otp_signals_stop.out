@@ -1,0 +1,67 @@
+-- kill(sup, reason) from a child
+supervisor alive: false, children alive: false false
+signal then exit: supervisor alive: false
+normal signal ignored: true true
+restarted after crash: true true
+dynamic: supervisor alive: false, children alive: false false
+-- terminate_child of a child that traps exits
+graceful: true alive after: false
+dynamic_supervisor.terminate_child: timeout
+killed after its budget: true, listed: 0
+again (unknown now): false alive after: false
+unknown: false
+children left: 0
+plain child: true alive after: false
+-- transient child gone before it is monitored
+job ran 1 time(s), pid -1
+dynamic job ran 1 time(s), children 0
+-- stop
+nil
+stopped: false false nil
+name free again: true
+nil
+stop a stopped supervisor: nil
+nil
+nil
+stopped: false false nil
+supervisor.stop: timeout must be an int (milliseconds) or nil, got string
+dynamic_supervisor.stop: no process registered as "nobody187"
+supervisor.stop: expected a pid, a {pid} handle or a registered name, got float
+-- argument checks
+supervisor.start: name must be a string, got int
+dynamic_supervisor.start: name must be a string, got int
+supervisor.start: start of child "x" must be a fn, got nil
+supervisor.start: start of child "x" must be a fn, got int
+supervisor.start: a child spec has no id
+supervisor.start: duplicate child id "x"
+supervisor.start: a child spec must be a table, got string
+supervisor.start: children must be an array of child specs, got string
+supervisor.start: max_restarts must be an int, got string
+supervisor.start: period_ms must be an int, got float
+dynamic_supervisor.start: max_restarts must be an int, got float
+dynamic_supervisor.start: period_ms must be an int, got string
+task.await: timeout must be an int (milliseconds) or nil, got string
+task.await: timeout must be an int (milliseconds) or nil, got float
+still awaitable: 1
+task.await_all: timeout must be an int (milliseconds) or nil, got string
+[2]
+0
+
+[Runtime Error in process 31]: gen_server: handle_call returned a timeout that is a string, expected an int (milliseconds) or nil
+  --> std/gen_server.gem:56
+    |
+ 56 |     error("gen_server: {callback} returned a timeout that is {describe(t)}, expected an int (milliseconds) or nil")
+    |
+Stack trace:
+  at gen_server.check_result_timeout (std/gen_server.gem:56)
+  at gen_server.check_call_result (std/gen_server.gem:77)
+  at gen_server.loop (std/gen_server.gem:88)
+  at gen_server.serve (std/gen_server.gem:192)
+  at anonymous fn (std/gen_server.gem:150)
+gen_server.call: server exited: gen_server: handle_call returned a timeout that is a string, expected an int (milliseconds) or nil
+gen_server: init raised at:
+  at gen_server.check_result_timeout (std/gen_server.gem:56)
+  at gen_server.check_state_result (std/gen_server.gem:64)
+  at gen_server.run_init (std/gen_server.gem:175)
+  at anonymous fn (std/gen_server.gem:180)
+gen_server.start: init failed: gen_server: init returned a timeout that is a float, expected an int (milliseconds) or nil

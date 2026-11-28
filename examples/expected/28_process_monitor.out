@@ -1,0 +1,50 @@
+test3: got pid=int
+
+[Runtime Error in process 18]: boom
+  --> examples/28_process_monitor.gem:13
+    |
+ 13 |     error("boom")
+    |
+Stack trace:
+  at anonymous fn (examples/28_process_monitor.gem:13)
+
+[Runtime Error in process 23]: kaboom
+  --> examples/28_process_monitor.gem:71
+    |
+ 71 |     error("kaboom")
+    |
+Stack trace:
+  at anonymous fn (examples/28_process_monitor.gem:71)
+test6: healthy process completed
+test7: pcall ok=false error=caught locally
+test10: whereis found=int
+test10: whereis missing=nil
+
+[Runtime Error in process 34]: chain-crash
+  --> examples/28_process_monitor.gem:97
+    |
+ 97 |       error("chain-crash")
+    |
+Stack trace:
+  at anonymous fn (examples/28_process_monitor.gem:97)
+test1: tag=DOWN reason=normal
+test2: tag=DOWN reason=boom
+test3: tag=DOWN reason=normal
+test4a: tag=DOWN reason=normal
+test4b: tag=DOWN reason=normal
+test5: tag=DOWN reason=noproc
+test6: crasher reason=kaboom
+test7: tag=DOWN reason=normal
+test11: after death whereis=nil
+test8: B got DOWN from C, reason=chain-crash
+
+[Runtime Error in process 26]: b-also-crashes
+  --> examples/28_process_monitor.gem:102
+     |
+ 102 |     error("b-also-crashes")
+     |
+Stack trace:
+  at anonymous fn (examples/28_process_monitor.gem:102)
+test9: worker got hello by name
+test12: server got from client
+test8: A got DOWN from B, reason=b-also-crashes

@@ -1,0 +1,7 @@
+17 hello
+from a pipe
+child pipe
+procfs: true
+0
+4 0
+false read_file: '/tmp' is a directory

@@ -1,0 +1,14 @@
+in tail_expr
+type error in +: got string and int tail_expr 9
+in mid_expr
+type error in +: got nil and int mid_expr 14
+in tail_expr
+
+[Runtime Error]: type error in +: got string and int
+  --> examples/145_last_expr_line.gem:9
+   |
+ 9 |   x + y
+   |
+Stack trace:
+  at tail_expr (examples/145_last_expr_line.gem:9)
+  at main (examples/145_last_expr_line.gem:23)

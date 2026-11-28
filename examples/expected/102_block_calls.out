@@ -1,0 +1,10 @@
+test1: 10
+test1: 11
+test2: 30
+test2: 7
+test3: [2, 4, 6]
+test3: spawned with a block
+test4: ok=false error=boom
+test4: abc
+test5: 2
+test5: 3

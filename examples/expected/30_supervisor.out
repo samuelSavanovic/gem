@@ -1,0 +1,83 @@
+
+[Runtime Error in process 14]: crash
+  --> examples/30_supervisor.gem:11
+    |
+ 11 |         error("crash")
+    |
+Stack trace:
+  at anonymous fn (examples/30_supervisor.gem:11)
+
+[Runtime Error in process 17]: crash
+  --> examples/30_supervisor.gem:11
+    |
+ 11 |         error("crash")
+    |
+Stack trace:
+  at anonymous fn (examples/30_supervisor.gem:11)
+
+[Runtime Error in process 20]: crash
+  --> examples/30_supervisor.gem:11
+    |
+ 11 |         error("crash")
+    |
+Stack trace:
+  at anonymous fn (examples/30_supervisor.gem:11)
+
+[Runtime Error in process 21]: crash
+  --> examples/30_supervisor.gem:11
+    |
+ 11 |         error("crash")
+    |
+Stack trace:
+  at anonymous fn (examples/30_supervisor.gem:11)
+
+[Runtime Error in process 22]: crash
+  --> examples/30_supervisor.gem:11
+    |
+ 11 |         error("crash")
+    |
+Stack trace:
+  at anonymous fn (examples/30_supervisor.gem:11)
+test5: children count=2
+test5: id=wc1 restart=permanent
+test5: id=wc2 restart=temporary
+test6: named supervisor ok, children=1
+test1: one_for_one restart ok
+test2: one_for_all restart ok
+test3: transient crash restarted ok
+
+[Runtime Error in process 19]: crash
+  --> examples/30_supervisor.gem:11
+    |
+ 11 |         error("crash")
+    |
+Stack trace:
+  at anonymous fn (examples/30_supervisor.gem:11)
+
+[Runtime Error in process 31]: crash
+  --> examples/30_supervisor.gem:11
+    |
+ 11 |         error("crash")
+    |
+Stack trace:
+  at anonymous fn (examples/30_supervisor.gem:11)
+test3: permanent crash restarted ok
+test3: temporary not restarted ok
+
+[Runtime Error in process 33]: crash
+  --> examples/30_supervisor.gem:11
+    |
+ 11 |         error("crash")
+    |
+Stack trace:
+  at anonymous fn (examples/30_supervisor.gem:11)
+
+[Runtime Error in process 10]: supervisor: max restart intensity reached
+  --> std/supervisor.gem:307
+     |
+ 307 |     error(res.error)
+     |
+Stack trace:
+  at supervisor.sup_main (std/supervisor.gem:307)
+  at anonymous fn (std/supervisor.gem:395)
+test4: supervisor crashed: supervisor: max restart intensity reached

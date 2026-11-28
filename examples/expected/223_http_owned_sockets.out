@@ -1,0 +1,7 @@
+== killed with "kill"
+HTTP/1.1 200 OK
+port free: true
+== the caller killed while the server starts
+server still serves: HTTP/1.1 200 OK
+== stop while a handler is in a blocking call
+closed at once: true true

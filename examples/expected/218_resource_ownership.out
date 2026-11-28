@@ -1,0 +1,59 @@
+== unclaimed: closed when the opener dies abnormally
+
+[Runtime Error in process 1]: session crashed
+  --> examples/218_resource_ownership.gem:49
+    |
+ 49 | let p = pair(fn(c) error("session crashed") end)
+    |
+Stack trace:
+  at anonymous fn (examples/218_resource_ownership.gem:49)
+  at anonymous fn (examples/218_resource_ownership.gem:16)
+crash: true
+kill shutdown: true
+kill kill: true
+
+[Runtime Error in process 5]: linked crash
+  --> examples/218_resource_ownership.gem:59
+    |
+ 59 |   spawn_link(fn() error("linked crash") end)
+    |
+Stack trace:
+  at anonymous fn (examples/218_resource_ownership.gem:59)
+link exit: true
+== unclaimed: open when the opener returns
+still usable: 2 hi
+== claimed: closed on any exit
+normal return: true
+
+[Runtime Error in process 8]: claimed crash
+  --> examples/218_resource_ownership.gem:77
+    |
+ 77 |   error("claimed crash")
+    |
+Stack trace:
+  at anonymous fn (examples/218_resource_ownership.gem:77)
+  at anonymous fn (examples/218_resource_ownership.gem:16)
+crash: true
+kill: true
+orderly shutdown: true
+== claim moves a socket main opened
+session owns: 1 main owns one less: true
+closed with the session: true
+== helpers that only use a socket leave it open
+
+[Runtime Error in process 12]: helper crashed
+  --> examples/218_resource_ownership.gem:117
+     |
+ 117 |   error("helper crashed")
+     |
+Stack trace:
+  at anonymous fn (examples/218_resource_ownership.gem:117)
+after a crash, a kill and a return: from helper!
+== a task that opens a socket hands over a live one
+alive
+== any process may close; waiters raise
+waiter: tcp_read: socket is closed
+watchdog closed it: true
+== a closed socket's owner count drops
+true
+true

@@ -1,0 +1,8 @@
+test1: type=ref
+test2: cancelled=true
+test3: cancel_bogus=false
+test6: unique=true
+test1: got tick
+test2: got fallback
+test5: done
+test4: first second third

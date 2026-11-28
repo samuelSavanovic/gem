@@ -1,0 +1,32 @@
+== tcp_local_port ==
+bound a free port: int true
+client's local port is the server's peer port: true
+accepted socket has the listening port: true
+tcp_local_port: socket is closed
+tcp_local_port: expected a socket, got int
+tcp_local_port: expected a socket, got nil
+== http.start on port 0 ==
+handle keys: int int true
+201 application/json; charset=utf-8 {"id":7}
+200 [1,2]
+two servers, two ports: true
+false
+false
+== gen_server.stop ==
+stop: nil
+handled before the stop: 2
+normal
+gen_server.call: server exited: noproc
+again: nil nil
+linked process: shutdown
+trapper: done
+own monitor: normal
+nil
+gen_server.stop: no process registered as "counter226"
+gen_server.stop: the server did not stop within 50 ms
+later: normal
+gen_server.stop: reason must be a string, got int
+gen_server.stop: timeout must be an int (milliseconds) or nil, got string
+gen_server.stop: expected a {pid} handle, a pid or a registered name, got table
+still up: 0
+leftover messages: none

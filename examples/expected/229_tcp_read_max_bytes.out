@@ -1,0 +1,5 @@
+max 2: he
+nil: llo
+tcp_read: max_bytes must be an int > 0 or nil, got 0
+tcp_read: max_bytes must be an int > 0 or nil, got -1
+tcp_read: max_bytes must be an int > 0 or nil, got string

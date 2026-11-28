@@ -1,0 +1,57 @@
+1 after stop: nil nil nil
+1 reports: ["inner.r:shutdown"]
+1 restart same name: int
+2 down: custom ["c:shutdown", "b:shutdown", "a:shutdown"]
+
+[Runtime Error in process 14]: boom
+  --> examples/189_otp_shutdown.gem:98
+    |
+ 98 |     error("boom")
+    |
+Stack trace:
+  at anonymous fn (examples/189_otp_shutdown.gem:98)
+
+[Runtime Error in process 15]: boom
+  --> examples/189_otp_shutdown.gem:98
+    |
+ 98 |     error("boom")
+    |
+Stack trace:
+  at anonymous fn (examples/189_otp_shutdown.gem:98)
+
+[Runtime Error in process 12]: supervisor: max restart intensity reached
+  --> std/supervisor.gem:307
+     |
+ 307 |     error(res.error)
+     |
+Stack trace:
+  at supervisor.sup_main (std/supervisor.gem:307)
+  at anonymous fn (std/supervisor.gem:395)
+3 down: supervisor: max restart intensity reached true ["t:shutdown"]
+
+[Runtime Error in process 20]: boom
+  --> examples/189_otp_shutdown.gem:113
+     |
+ 113 |     when "crash" then error("boom")
+     |
+Stack trace:
+  at anonymous fn (examples/189_otp_shutdown.gem:113)
+4 reports: ["inner.r:shutdown"]
+4 inner restarted: true true
+4 stopped: nil ["inner.r:shutdown"]
+5 terminate: true nil ["inner.r:shutdown"]
+6 reports: ["z:shutdown", "y:shutdown", "x:shutdown"]
+supervisor: exiting on an error raised at:
+  at bad_start (examples/189_otp_shutdown.gem:148)
+  at supervisor.start_child (std/supervisor.gem:48)
+  at anonymous fn (std/supervisor.gem:291)
+7 start: supervisor.start: child "bad" failed to start: start broke nil ["a:shutdown"]
+8 gen_server.start: expected a module table {init, handle_call, handle_cast, handle_info}, got nil
+8 gen_server.start: expected a module table {init, handle_call, handle_cast, handle_info}, got string
+8 gen_server.start: the module's handle_info must be a fn, got nil
+8 supervisor.start: expected a spec table {strategy, children, ...}, got string
+8 dynamic_supervisor.start: expected an options table {child, ...}, got nil
+8 dynamic_supervisor.start: expected an options table {child, ...}, got string
+8 supervisor.start: the name "taken" is already registered
+8 dynamic_supervisor.start: the name "taken" is already registered
+9 transient noproc pid: -1

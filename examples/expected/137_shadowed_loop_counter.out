@@ -1,0 +1,5 @@
+shadowed: i = 0, steps = 5
+assigned: j = 3
+assigned and shadowed: k = 3
+closure: m = 3
+module var changed by a fn: count = 3

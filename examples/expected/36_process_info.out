@@ -1,0 +1,8 @@
+test1: state=ready trap=false
+test2: mailbox_len=3
+test3: links_count=2
+test4: monitors_count=1
+test6: nil
+test7: before=false
+test7: after=true
+test5: nil

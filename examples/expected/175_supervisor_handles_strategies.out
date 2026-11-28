@@ -1,0 +1,15 @@
+1: 2 children, gs pid is int
+1: call -> 1
+1: gs restarted: true, fresh state -> 1
+2: whereis matches: true
+2: children by name: 1
+2: duplicate: supervisor.start: the name "sup175" is already registered
+2: name still points at the first: true
+3: bare pid: 1
+3: unknown name: supervisor.which_children: no process registered as "nope175"
+3: bad target: supervisor.which_children: expected a pid, a {pid} handle or a registered name, got nil
+3: no answer: supervisor.which_children: timeout
+3: dead supervisor: supervisor.which_children: supervisor exited: shutdown, at once: true
+4: still alive, temp pid -1, perm restarted true
+5: 3 of 3 restarted, ids abc
+6: supervisor.start: unknown strategy "rest_for_one"

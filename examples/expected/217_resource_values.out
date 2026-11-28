@@ -1,0 +1,46 @@
+== values
+socket sqlite
+true true true
+true false true true
+a copy is equal: true
+client server false
+type error in <: got socket and socket
+json.encode: cannot encode a socket
+to_int: cannot convert socket to int
+type error in +: got socket and int
+copied to a process and back: true true
+== wrong values
+tcp_read: expected a socket, got int
+tcp_write: expected a socket, got string
+tcp_accept: expected a socket, got nil
+tcp_close: expected a socket, got int
+tcp_peer: expected a socket, got nil
+tcp_fd: expected a socket, got int
+tcp_read: expected a socket, got sqlite
+sqlite_query: expected a database handle, got socket
+sqlite_close: expected a database handle, got int
+claim: expected a socket or a database handle, got int
+claim: expected a socket or a database handle, got nil
+== tcp_fd
+int true true
+== closed
+ping
+nil nil
+tcp_read: socket is closed
+tcp_write: socket is closed
+tcp_accept: socket is closed
+tcp_peer: socket is closed
+tcp_fd: socket is closed
+claim: socket is closed
+peer sees the close: true
+nil nil
+sqlite_query: not an open database handle
+claim: database is closed
+== tcp_from_fd
+socket true true
+true
+true
+true
+true
+tcp_from_fd: fd -1 is not open
+tcp_from_fd: expected an int fd, got string

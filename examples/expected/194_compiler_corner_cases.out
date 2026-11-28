@@ -1,0 +1,27 @@
+1 {v: 2} 3
+[1, 2, 3]
+3 false [1, 2, 3, 4]
+false right [false, nil, "right"]
+arg
+v
+{key: "val"} ["callee", "arg", "k", "key", "val"]
+1-2-3 [1, 2, 3]
+3 0
+0 a    b!
+mine
+v:[1]
+S
+nil nil nil 9
+[1, 5, 7, 6] 5
+done own body
+a
+b c
+d
+
+[Runtime Error]: reported at line 106
+  --> examples/194_compiler_corner_cases.gem:98
+    |
+ 98 | error("reported at line 106")
+    |
+Stack trace:
+  at main (examples/194_compiler_corner_cases.gem:98)

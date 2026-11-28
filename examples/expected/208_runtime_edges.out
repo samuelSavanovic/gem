@@ -1,0 +1,40 @@
+== pow
+4052555153018976267 1 -9223372036854775808 0 -9223372036854775808
+0.5 8.0 -9223372036854775808
+== float to int
+to_int: 1e+300 is out of the int range
+floor: nan is out of the int range
+ceil: -inf is out of the int range
+round: 1e+300 is out of the int range
+-2 2 -3 0
+== table keys
+table key is NaN
+table key is nil
+1 float key
+== substr and chr
+bc b
+chr: expected 0..255, got 256
+chr: expected 0..255, got -1
+255 0
+== sort
+sort: comparator must be a fn, got int
+sort: expected an array (keys 0 .. n-1), got a table with other keys
+[1, 3] {}
+["a", "b", "c"]
+== in
+in: right operand must be a table, got string
+== field names in errors
+field access on non-table: got int (reading .b)
+attempt to call nil value (field missing)
+== tcp
+tcp_listen: port must be from 0 to 65535, got 70000
+tcp_connect: port must be from 0 to 65535, got -1
+child sees its stdin: true
+child sees the socket: false
+== files and sqlite
+read_file: cannot open '/no/such/file': No such file or directory
+list_dir: cannot open directory '/no/such/dir': No such file or directory
+write_file: cannot open '/no/such/dir/x' for writing: No such file or directory
+sqlite_exec: the SQL contains a NUL byte
+sqlite_query: the SQL contains a NUL byte
+[{n: 0}]

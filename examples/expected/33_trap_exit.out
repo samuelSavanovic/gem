@@ -1,0 +1,39 @@
+test1: prev_flag=false
+test3: prev_seq=false true false
+
+[Runtime Error in process 6]: boom
+  --> examples/33_trap_exit.gem:8
+   |
+ 8 |     error("boom")
+   |
+Stack trace:
+  at anonymous fn (examples/33_trap_exit.gem:8)
+
+[Runtime Error in process 8]: first
+  --> examples/33_trap_exit.gem:36
+    |
+ 36 |     error("first")
+    |
+Stack trace:
+  at anonymous fn (examples/33_trap_exit.gem:36)
+
+[Runtime Error in process 9]: second
+  --> examples/33_trap_exit.gem:39
+    |
+ 39 |     error("second")
+    |
+Stack trace:
+  at anonymous fn (examples/33_trap_exit.gem:39)
+
+[Runtime Error in process 11]: now-fatal
+  --> examples/33_trap_exit.gem:70
+    |
+ 70 |       error("now-fatal")
+    |
+Stack trace:
+  at anonymous fn (examples/33_trap_exit.gem:70)
+test1: got EXIT reason=boom
+test2: got EXIT reason=normal
+test4: received 2 EXIT messages
+test4: first=true second=true
+test5: parent died: now-fatal

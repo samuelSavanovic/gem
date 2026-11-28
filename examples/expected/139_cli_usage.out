@@ -1,0 +1,8 @@
+--help exit: 0
+-h exit: 0
+--help shows usage: 0
+unknown option exit: 2
+no source exit: 2
+-o without name exit: 2
+no stack trace: 1
+flag after source: 0

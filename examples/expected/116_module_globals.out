@@ -1,0 +1,8 @@
+main after bump: 1 1 ["a"]
+child saw: {counter: 2, closure: 2, names: ["a", "b"], mode: "replaced"}
+main still: 1 1 ["a"] main main
+aliasing: {same: true, second: 99, top: 99}
+spawned at 10, main moved to 20: {counter: 10} 20
+std in child: {doc: "{\"ok\":true,\"n\":3}", parts: ["a", "b", "c"]}
+children: [22, 22, 22] main: 20 1
+shadow: ["module", "local"] module
