@@ -137,32 +137,6 @@ fn build_call_graph(fn_defs, top_stmts, builtin_names = {}, extern_names = [])
   let anon_parent = {}
   let anon_nodes = {}
 
-  # `f(); return nil` (or any constant) reads nothing from the frame after the call, so it's a tail call
-  let is_trivial_return = fn(s)
-    if not is_node(s, "return")
-      return false
-    end
-    if s.value == nil
-      return true
-    end
-    if is_node(s.value, "nil")
-      return true
-    end
-    if is_node(s.value, "int")
-      return true
-    end
-    if is_node(s.value, "float")
-      return true
-    end
-    if is_node(s.value, "bool")
-      return true
-    end
-    if is_node(s.value, "string")
-      return true
-    end
-    false
-  end
-
   let collect_calls = nil
   let collect_calls_in_body = nil
 
@@ -423,14 +397,7 @@ fn build_call_graph(fn_defs, top_stmts, builtin_names = {}, extern_names = [])
     let n = len(stmts)
     let i = 0
     while i < n
-      let stmt_is_tail = if i == n - 1
-        is_tail_pos
-      elif i + 1 < n and is_trivial_return(stmts[i + 1])
-        true
-      else
-        false
-      end
-      collect_calls(stmts[i], stmt_is_tail, caller_id)
+      collect_calls(stmts[i], is_tail_pos and i == n - 1, caller_id)
       i += 1
     end
   end

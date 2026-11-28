@@ -1,0 +1,27 @@
+# a param named like a selective import, a module namespace or a module-level fn let
+# is the param: calls through it take whatever arguments it does
+load "./modules/arity_mod" (one)
+load "./modules/arity_mod"
+
+let twice = fn(x) x * 2 end
+
+fn call_one(one)
+  one(1, 2, 3)
+end
+
+fn call_ns(arity_mod)
+  arity_mod.one(1, 2)
+end
+
+fn call_twice(twice)
+  twice()
+end
+
+print(one(1))
+print(arity_mod.one(2))
+print(twice(3))
+print(call_one(fn(a, b, c) a + b + c end))
+print(call_ns({one: fn(a, b) a * b end}))
+print(call_twice(fn() "no args" end))
+let inner = fn(one) one(4, 5) end
+print(inner(fn(a, b) a - b end))

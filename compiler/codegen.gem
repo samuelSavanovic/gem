@@ -602,11 +602,11 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
 
   # Arity errors for direct calls: named fns, externs, `m.f`, and module-level `let f = fn ...` declared once
   # and never assigned. Required params run up to the last one without a default. scope_shadowing_lets already
-  # renamed lets and fn-named params that would shadow these, so a var callee of that name is the fn, except for
-  # a param shadowing a let fn. Calls through values aren't checked.
+  # renamed lets and fn-named params that would shadow these, so a var callee of that name is the fn unless a
+  # param of an enclosing fn has its name (a let fn, a selective import or a module namespace).
+  # Calls through values aren't checked.
   let check_call_arities = fn(fn_defs, extern_fns_list, top_stmts)
     let arity = {}
-    let let_fns = {}
     let assigned = {}
     let find_assigns = nil
     find_assigns = fn(node)
@@ -641,7 +641,6 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
         end
         let max = if f.rest_param == nil then len(f.params) end
         arity[s.name] = {min: min, max: max, def: {params: f.params, defaults: f.defaults, rest_param: f.rest_param, line: s.line, file: file_of(s), tag: "let"}}
-        let_fns[s.name] = true
       end
     end
     for fd in fn_defs
@@ -729,10 +728,10 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
         let f = node.func
         if is_node(f, "var") and has_key(one_fn, f.name) and not set_contains(params, f.name) and len(node.args) != 1
           sink.report(source_of(f), file_of(f), f.line, f.col, len(f.name), "`{f.name}` takes one fn and calls it with no arguments, called with {len(node.args)} arguments", "to pass arguments, wrap the call: `{one_fn[f.name]}`")
-        elif is_node(f, "var") and arity[f.name] != nil and not (let_fns[f.name] == true and set_contains(params, f.name))
+        elif is_node(f, "var") and arity[f.name] != nil and not set_contains(params, f.name)
           let shown = frame_name(f.name)
           check(node, f.name, shown, f, len(shown))
-        elif is_node(f, "dot") and is_node(f.object, "var") and has_key(module_ns, f.object.name)
+        elif is_node(f, "dot") and is_node(f.object, "var") and has_key(module_ns, f.object.name) and not set_contains(params, f.object.name)
           let target = module_ns[f.object.name][f.field]
           if target != nil and arity[target] != nil
             let shown = "{display_name(f.object.name)}.{f.field}"

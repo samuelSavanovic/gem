@@ -5091,3 +5091,10 @@ replaced
 ["q0", "q100000"]
 300000
 bounded
+one(1)
+one(2)
+6
+6
+2
+no args
+-1
