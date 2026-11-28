@@ -45,7 +45,7 @@ fn build_call_graph(fn_defs, top_stmts, builtin_names = {}, extern_names = [])
         let any = false
         for e in s.value.entries
           if e.value != nil and is_node(e.value, "var") and name_to_fn[e.value.name] != nil
-            # key is a raw string when main.gem built the table, a string node when parsed
+            # key is a raw string when modules.gem built the table, a string node when parsed
             let key_str = if type(e.key) == "string"
               e.key
             elif e.key != nil and is_node(e.key, "string")

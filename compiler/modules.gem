@@ -1,0 +1,749 @@
+# Module loading: resolves `load`s, prefixes each module's top-level names, checks exports and binds
+# imports as lets or frozen namespace tables. The entry file's names shadowing a builtin become `__main_<name>`.
+
+load "std/string"
+load "./parser" (parse_source, collect_pattern_names)
+load "./lower" (tag_file)
+load "./ast" (make_program, make_let, make_nil_node, make_var, make_table, make_table_entry)
+load "./cgutil" (is_node)
+load "./loader" (resolve_load_path, load_target_problem)
+load "./builtins" (BUILTIN_FNS)
+load "./lexer" (build_keyword_set, normalize_newlines)
+load "./warnings" (print_file_warnings)
+
+let KEYWORDS = build_keyword_set()
+
+fn module_name_from_path(path)
+  let plen = len(path)
+  let last_slash = -1
+  let i = 0
+  while i < plen
+    if ord(path, i) == 47
+      last_slash = i
+    end
+    i += 1
+  end
+  let name = substr(path, last_slash + 1, plen - last_slash - 1)
+  let nlen = len(name)
+  if nlen > 4
+    if string.ends_with(name, ".gem")
+      name = substr(name, 0, nlen - 4)
+    end
+  end
+  name
+end
+
+# a module's namespace is its base name, so that must be an identifier (`my-utils` isn't) and not a keyword
+fn is_identifier_name(name)
+  if name == "" or KEYWORDS[name] == true
+    return false
+  end
+  let i = 0
+  while i < len(name)
+    let c = ord(name, i)
+    let alpha = (c >= 65 and c <= 90) or (c >= 97 and c <= 122) or c == 95
+    if not alpha and (i == 0 or c < 48 or c > 57)
+      return false
+    end
+    i += 1
+  end
+  true
+end
+
+fn c_safe_name(name)
+  let parts = []
+  for i = 0, len(name)
+    let c = ord(name, i)
+    if (c >= 65 and c <= 90) or (c >= 97 and c <= 122) or (c >= 48 and c <= 57) or c == 95
+      push(parts, chr(c))
+    else
+      push(parts, "_")
+    end
+  end
+  string.join(parts, "")
+end
+
+# The <mangle> in a module's `__mod_<mangle>_<name>` symbols: the base name, plus `_2`, `_3`... when another
+# file has that name or a symbol would collide (`a` + `b_c` vs `a_b` + `c`).
+# registry = {prefixes: mangle -> path, symbols: symbol -> path}, one per program.
+fn module_mangle(full_path, mod_name, top_names, registry)
+  let base = c_safe_name(mod_name)
+  if base == ""
+    base = "m"
+  end
+  let cand = base
+  let n = 1
+  while true
+    let ok = registry.prefixes[cand] == nil
+    if ok
+      for name, _ in top_names
+        let owner = registry.symbols["__mod_" + cand + "_" + name]
+        if owner != nil and owner != full_path
+          ok = false
+          break
+        end
+      end
+    end
+    if ok
+      break
+    end
+    n += 1
+    cand = base + "_" + to_string(n)
+  end
+  registry.prefixes[cand] = full_path
+  for name, _ in top_names
+    registry.symbols["__mod_" + cand + "_" + name] = full_path
+  end
+  cand
+end
+
+# all top-level `export`s merged in order (checked_exports reports duplicates), or nil
+fn find_export_node(stmts)
+  let found = []
+  for stmt in stmts
+    if is_node(stmt, "export")
+      push(found, stmt)
+    end
+  end
+  if len(found) == 0
+    return nil
+  elif len(found) == 1
+    return found[0]
+  end
+  let merged = {tag: "export", names: [], name_pos: [], line: found[0].line, col: found[0].col}
+  for node in found
+    for name in node.names
+      push(merged.names, name)
+    end
+    for pos in node.name_pos
+      push(merged.name_pos, pos)
+    end
+  end
+  merged
+end
+
+fn collect_module_top_names(stmts)
+  let names = {}
+  for stmt in stmts
+    if is_node(stmt, "fn_def") or is_node(stmt, "extern_fn")
+      if not string.starts_with(stmt.name, "__mod_")
+        names[stmt.name] = true
+      end
+    elif is_node(stmt, "let")
+      if not string.starts_with(stmt.name, "__mod_")
+        names[stmt.name] = true
+      end
+    elif is_node(stmt, "block")
+      # a destructuring let at module scope
+      for s in stmt.stmts
+        if is_node(s, "let") and not string.starts_with(s.name, "__mod_")
+          names[s.name] = true
+        end
+      end
+    end
+  end
+  names
+end
+
+fn build_rename_map(top_names, prefix)
+  let rmap = {}
+  for name, _ in top_names
+    rmap[name] = prefix + name
+  end
+  rmap
+end
+
+fn copy_set(s)
+  let result = {}
+  for k, v in s
+    result[k] = v
+  end
+  result
+end
+
+# a module-level builtin-named let is "pending" until reached; fn bodies run later, so they see the binding
+fn fn_body_scope(shadowed)
+  let result = {}
+  for k, v in shadowed
+    if v != "pending"
+      result[k] = v
+    end
+  end
+  result
+end
+
+# defaults see the fn's params
+fn rename_defaults(defaults, rmap, inner)
+  if defaults == nil
+    return nil
+  end
+  for d in defaults
+    if d != nil
+      rename_node(d, rmap, inner)
+    end
+  end
+end
+
+fn rename_pattern(pat, rmap, shadowed)
+  if pat == nil
+    return nil
+  end
+  match pat
+  when {tag: "pat_pin", var: v}
+    rename_node(v, rmap, shadowed)
+  when {tag: "pat_table", entries: entries}
+    for e in entries
+      rename_pattern(e.value, rmap, shadowed)
+    end
+  when {tag: "pat_array", elements: elements}
+    for el in elements
+      rename_pattern(el, rmap, shadowed)
+    end
+  else
+    nil
+  end
+end
+
+fn arm_shadowed(arm, shadowed)
+  if arm.pattern == nil
+    return shadowed
+  end
+  let bound = {}
+  collect_pattern_names(arm.pattern, bound, [])
+  let inner = copy_set(shadowed)
+  for name, _ in bound
+    inner[name] = true
+  end
+  inner
+end
+
+fn rename_node(node, rmap, shadowed)
+  if node == nil
+    return nil
+  end
+  if type(node) != "table"
+    return nil
+  end
+  if node.tag == nil
+    return nil
+  end
+
+  match node
+  when {tag: "var", name: name}
+    if has_key(rmap, name) and not has_key(shadowed, name)
+      node.name = rmap[name]
+    end
+  when {tag: "fn_def", name: name, params: params, body: body}
+    if has_key(rmap, name)
+      node.name = rmap[name]
+    end
+    let inner = fn_body_scope(shadowed)
+    for p in params
+      inner[p] = true
+    end
+    if node.rest_param != nil
+      inner[node.rest_param] = true
+    end
+    rename_defaults(node.defaults, rmap, inner)
+    rename_stmts(body, rmap, inner)
+  when {tag: "extern_fn", name: name}
+    # c_name keeps the C symbol
+    if has_key(rmap, name)
+      if node.c_name == nil
+        node.c_name = name
+      end
+      node.name = rmap[name]
+    end
+  when {tag: "anon_fn", params: params, body: body}
+    let inner = fn_body_scope(shadowed)
+    for p in params
+      inner[p] = true
+    end
+    if node.rest_param != nil
+      inner[node.rest_param] = true
+    end
+    rename_defaults(node.defaults, rmap, inner)
+    rename_stmts(body, rmap, inner)
+  when {tag: "let", name: name, value: value}
+    rename_node(value, rmap, shadowed)
+    if has_key(rmap, name) and not has_key(shadowed, name)
+      node.name = rmap[name]
+    end
+  when {tag: "assign", name: name, value: value}
+    rename_node(value, rmap, shadowed)
+    if has_key(rmap, name) and not has_key(shadowed, name)
+      node.name = rmap[name]
+    end
+  when {tag: "call", func: func, args: args}
+    rename_node(func, rmap, shadowed)
+    for a in args
+      rename_node(a, rmap, shadowed)
+    end
+  when {tag: "binop", left: left, right: right}
+    rename_node(left, rmap, shadowed)
+    rename_node(right, rmap, shadowed)
+  when {tag: "unop", expr: expr}
+    rename_node(expr, rmap, shadowed)
+  when {tag: "dot", object: object}
+    rename_node(object, rmap, shadowed)
+  when {tag: "index", object: object, key: key}
+    rename_node(object, rmap, shadowed)
+    rename_node(key, rmap, shadowed)
+  when {tag: "dot_assign", object: object, value: value}
+    rename_node(object, rmap, shadowed)
+    rename_node(value, rmap, shadowed)
+  when {tag: "index_assign", object: object, key: key, value: value}
+    rename_node(object, rmap, shadowed)
+    rename_node(key, rmap, shadowed)
+    rename_node(value, rmap, shadowed)
+  when {tag: "if", cond: cond}
+    rename_node(cond, rmap, shadowed)
+    rename_stmts(node.then, rmap, shadowed)
+    if node.else != nil
+      rename_stmts(node.else, rmap, shadowed)
+    end
+  when {tag: "while", cond: cond, body: body}
+    rename_node(cond, rmap, shadowed)
+    rename_stmts(body, rmap, shadowed)
+  when {tag: "match", target: target, whens: whens}
+    rename_node(target, rmap, shadowed)
+    # still pre-lower match_arms; the only var refs in a pattern are `^name` pins
+    for arm in whens
+      rename_pattern(arm.pattern, rmap, shadowed)
+      if arm.expr != nil
+        rename_node(arm.expr, rmap, shadowed)
+      end
+      rename_stmts(arm.body, rmap, arm_shadowed(arm, shadowed))
+    end
+    if node.else != nil
+      rename_stmts(node.else, rmap, shadowed)
+    end
+  when {tag: "receive_match", arms: arms}
+    for arm in arms
+      rename_pattern(arm.pattern, rmap, shadowed)
+      if arm.expr != nil
+        rename_node(arm.expr, rmap, shadowed)
+      end
+      rename_stmts(arm.body, rmap, arm_shadowed(arm, shadowed))
+    end
+    if node.after_ms != nil
+      rename_node(node.after_ms, rmap, shadowed)
+    end
+    if node.after_body != nil
+      rename_stmts(node.after_body, rmap, shadowed)
+    end
+  when {tag: "for_in", items: items, body: body}
+    rename_node(items, rmap, shadowed)
+    let inner = copy_set(shadowed)
+    inner[node.var_name] = true
+    if node.val_name != nil
+      inner[node.val_name] = true
+    end
+    rename_stmts(body, rmap, inner)
+  when {tag: "for_range", start: start, end_: end_, body: body}
+    rename_node(start, rmap, shadowed)
+    rename_node(end_, rmap, shadowed)
+    let inner = copy_set(shadowed)
+    inner[node.var_name] = true
+    rename_stmts(body, rmap, inner)
+  when {tag: "return", value: value}
+    if value != nil
+      rename_node(value, rmap, shadowed)
+    end
+  when {tag: "table", entries: entries}
+    for e in entries
+      rename_node(e.value, rmap, shadowed)
+    end
+  when {tag: "array", elements: elements}
+    for e in elements
+      rename_node(e, rmap, shadowed)
+    end
+  when {tag: "interp", parts: parts}
+    for p in parts
+      rename_node(p, rmap, shadowed)
+    end
+  when {tag: "block", stmts: stmts}
+    rename_stmts(stmts, rmap, shadowed)
+  else
+    nil
+  end
+end
+
+# `current` is mutated: a nested let binds into it. At top level a let of a module name is the module binding
+# and gets renamed; in a nested block it shadows the module name for the rest of the block.
+fn rename_stmt_in_scope(stmt, rmap, current, top)
+  if is_node(stmt, "block") and top
+    # module-scope destructuring let: the initializer (first let in the block) still sees the builtins it binds
+    let init_scope = copy_set(current)
+    for s in stmt.stmts
+      if is_node(s, "let") and current[s.name] == "pending"
+        init_scope[s.name] = true
+      end
+    end
+    # The field lets follow in order like separate lets, so a default sees earlier fields.
+    # In a field's default (its let's initializer) its own name still means the builtin.
+    let stmts = stmt.stmts
+    for k = 0, len(stmts)
+      let s = stmts[k]
+      if k == 0
+        rename_stmt_in_scope(s, rmap, init_scope, top)
+      elif is_node(s, "let") and current[s.name] == "pending"
+        rename_stmt_in_scope(s, rmap, current, top)
+      else
+        # a default's statements belong to the next field let that reads the temp (`let name = _dMv`)
+        let scope = current
+        let j = k + 1
+        while j < len(stmts)
+          let f = stmts[j]
+          if is_node(f, "let") and is_node(f.value, "var")
+            if current[f.name] == "pending"
+              scope = copy_set(current)
+              scope[f.name] = true
+            end
+            break
+          end
+          j += 1
+        end
+        rename_stmt_in_scope(s, rmap, scope, top)
+      end
+    end
+  elif is_node(stmt, "block")
+    for s in stmt.stmts
+      rename_stmt_in_scope(s, rmap, current, top)
+    end
+  elif is_node(stmt, "let") and not top
+    rename_node(stmt.value, rmap, current)
+    current[stmt.name] = true
+  elif is_node(stmt, "let") and current[stmt.name] == "pending"
+    # first module-scope let of a builtin's name: its initializer and everything before it still call the builtin
+    let init_scope = copy_set(current)
+    init_scope[stmt.name] = true
+    rename_node(stmt.value, rmap, init_scope)
+    delete(current, stmt.name)
+    stmt.name = rmap[stmt.name]
+  else
+    rename_node(stmt, rmap, current)
+    if is_node(stmt, "let") and not has_key(rmap, stmt.name)
+      current[stmt.name] = true
+    end
+  end
+end
+
+# builtin names a module let binds are "pending" until that let; a fn or extern fn binds its name module-wide
+fn pending_builtin_lets(stmts, rmap)
+  let lets = {}
+  let fns = {}
+  for stmt in stmts
+    if is_node(stmt, "fn_def") or is_node(stmt, "extern_fn")
+      fns[stmt.name] = true
+    elif is_node(stmt, "let")
+      lets[stmt.name] = true
+    elif is_node(stmt, "block")
+      for s in stmt.stmts
+        if is_node(s, "let")
+          lets[s.name] = true
+        end
+      end
+    end
+  end
+  let scope = {}
+  for name, _ in lets
+    if has_key(rmap, name) and has_key(BUILTIN_FNS, name) and not has_key(fns, name)
+      scope[name] = "pending"
+    end
+  end
+  scope
+end
+
+fn rename_stmts(stmts, rmap, shadowed)
+  let current = copy_set(shadowed)
+  for stmt in stmts
+    rename_stmt_in_scope(stmt, rmap, current, false)
+  end
+end
+
+fn is_from_load(stmt)
+  type(stmt) == "table" and stmt.from_load == true
+end
+
+# Entry-file top-level names aren't prefixed, so the ones shadowing a builtin become `__main_<name>`, with
+# the same pending-let rules as a module. Skips spliced-in loads; runs before lower(), so lower's builtin calls stay.
+fn shadow_entry_builtins(stmts, module_bindings)
+  let own = []
+  for stmt in stmts
+    if not is_from_load(stmt)
+      push(own, stmt)
+    end
+  end
+  let rmap = {}
+  let any = false
+  for name, _ in collect_module_top_names(own)
+    if has_key(BUILTIN_FNS, name)
+      rmap[name] = "__main_" + name
+      any = true
+    end
+  end
+  if not any
+    return nil
+  end
+  let scope = pending_builtin_lets(own, rmap)
+  for stmt in own
+    rename_stmt_in_scope(stmt, rmap, scope, true)
+  end
+  for name, renamed in rmap
+    if has_key(module_bindings, name)
+      module_bindings[renamed] = module_bindings[name]
+      delete(module_bindings, name)
+    end
+  end
+end
+
+fn transform_module(stmts, mangle, top_names)
+  let prefix = "__mod_" + mangle + "_"
+  let rmap = build_rename_map(top_names, prefix)
+
+  # statements spliced in from this module's loads are already renamed: a `fn len` here mustn't capture theirs
+  let own = []
+  for stmt in stmts
+    if not is_from_load(stmt)
+      push(own, stmt)
+    end
+  end
+  let module_scope = pending_builtin_lets(own, rmap)
+  for stmt in stmts
+    if not is_from_load(stmt)
+      rename_stmt_in_scope(stmt, rmap, module_scope, true)
+    end
+  end
+
+  let result = []
+  for stmt in stmts
+    if not is_node(stmt, "export")
+      stmt.from_load = true
+      push(result, stmt)
+    end
+  end
+  result
+end
+
+# Exported names the module defines. Undefined ones are reported here and go in `bad` (so a selective import
+# of them reports nothing more); a module that failed to parse already has its error.
+fn checked_exports(export_node, top_names, mod_name, file, parse_failed, sources_by_file, sink, bad)
+  let result = []
+  let seen = {}
+  let i = 0
+  for name in export_node.names
+    let pos = export_node.name_pos[i]
+    i += 1
+    if seen[name] != nil
+      sink.report(sources_by_file[file], file, pos.line, pos.col, len(name), "module `{mod_name}` exports `{name}` twice", "remove the second `{name}` from the `export` list")
+    elif top_names[name] == nil
+      if not parse_failed
+        sink.report(sources_by_file[file], file, pos.line, pos.col, len(name), "module `{mod_name}` exports `{name}`, which it doesn't define", "define `{name}` at the top level of the module, or remove it from the `export` list")
+      end
+      bad[name] = true
+    else
+      push(result, name)
+    end
+    seen[name] = true
+  end
+  result
+end
+
+# A let per selective import, or one frozen namespace table. A selective name that isn't exported is
+# reported once and bound to nil, so its uses don't also report as undeclared.
+fn import_bindings(load_node, mod_name, mangle, exported, bad, module_bindings, sources_by_file, sink)
+  let prefix = "__mod_" + mangle + "_"
+  let result = []
+  if load_node.selective != nil
+    let is_exported = {}
+    for ename in exported
+      is_exported[ename] = true
+    end
+    let i = 0
+    for sel_name in load_node.selective
+      let pos = load_node.selective_pos[i]
+      i += 1
+      if is_exported[sel_name] != nil
+        let imported = make_let(sel_name, make_var(prefix + sel_name), pos.line)
+        imported.selective_import = true
+        push(result, imported)
+      else
+        if bad[sel_name] == nil
+          let hint = if len(exported) > 0
+            "the module exports: " + string.join(exported, ", ")
+          end
+          sink.report(sources_by_file[load_node.file], load_node.file, pos.line, pos.col, len(sel_name), "module `{mod_name}` has no export `{sel_name}`", hint)
+        end
+        push(result, make_let(sel_name, make_nil_node(), pos.line))
+      end
+    end
+  else
+    let binding_name = if load_node.alias != nil then load_node.alias else mod_name end
+    let entries = []
+    for ename in exported
+      push(entries, make_table_entry(ename, make_var(prefix + ename)))
+    end
+    let mod_tbl = make_table(entries)
+    mod_tbl.frozen = true
+    push(result, make_let(binding_name, mod_tbl, load_node.line))
+    module_bindings[binding_name] = exported
+  end
+  result
+end
+
+# `full_path` is still on the load stack: report the cycle, following `parent` links from stmt's file back
+fn report_load_cycle(stmt, full_path, show_path, loaded, sources_by_file, sink)
+  let chain = [full_path]
+  let cur = normalize_path(stmt.file)
+  while cur != full_path and cur != nil
+    insert(chain, 1, cur)
+    cur = loaded[cur].parent
+  end
+  let msg = "load cycle: "
+  for p in chain
+    msg = msg + show_path(p) + " → "
+  end
+  msg = msg + show_path(full_path)
+  let hint = if len(chain) == 1
+    "a file cannot load itself; remove this `load`"
+  else
+    "move the code these modules share into a module that loads none of them"
+  end
+  sink.report(sources_by_file[stmt.file], stmt.file, stmt.line, stmt.col, len("load"), msg, hint)
+end
+
+# the namespace (alias or base name) must be an identifier unique in the file; false, reported, if not
+fn check_namespace_name(stmt, full_path, seen, sources_by_file, sink)
+  if stmt.selective != nil
+    return true
+  end
+  let ns = stmt.alias
+  if ns == nil
+    ns = module_name_from_path(stmt.path)
+    if not is_identifier_name(ns)
+      let msg = "module file name `{ns}` is not an identifier, so it can't name the module's namespace"
+      let hint = "rename it to {c_safe_name(ns)}.gem, or load it with `load \"{stmt.path}\" as name`"
+      if KEYWORDS[ns] == true
+        msg = "module file name `{ns}` is a keyword, so it can't name the module's namespace"
+        hint = "rename the file, or load it with `load \"{stmt.path}\" as name`"
+      end
+      sink.report(sources_by_file[stmt.file], stmt.file, stmt.line, stmt.col, len("load"), msg, hint)
+      return false
+    end
+  end
+  let prev = seen[ns]
+  if prev != nil and prev.path != full_path
+    sink.report(sources_by_file[stmt.file], stmt.file, stmt.line, stmt.col, len("load"), "module name `{ns}` is already used by `load \"{prev.stmt.path}\"` at line {prev.stmt.line}", "rename one of the files, or load one with `load \"{stmt.path}\" as name`")
+    return false
+  end
+  if prev == nil
+    seen[ns] = {path: full_path, stmt: stmt}
+  end
+  true
+end
+
+fn resolve_loads(ast, base_dir, project_root, stdlib_root, loaded, module_bindings, sources_by_file, sink, show_path, registry)
+  let new_stmts = []
+  let count = 0
+  let ns_seen = {}
+  for stmt in ast.stmts
+    if is_node(stmt, "load")
+      let full_path = resolve_load_path(stmt.path, base_dir, project_root, stdlib_root)
+
+      let cached = loaded[full_path]
+      if cached != nil and cached.loading
+        report_load_cycle(stmt, full_path, show_path, loaded, sources_by_file, sink)
+        continue
+      end
+      # missing file first, before checks that assume it's a module
+      if cached == nil
+        let problem = load_target_problem(stmt.path, full_path, show_path)
+        if problem != nil
+          sink.report(sources_by_file[stmt.file], stmt.file, stmt.line, stmt.col, len("load"), problem.msg, problem.hint)
+          continue
+        end
+      end
+      if not check_namespace_name(stmt, full_path, ns_seen, sources_by_file, sink)
+        continue
+      end
+      if cached != nil
+        if cached.exported != nil
+          for b in import_bindings(stmt, cached.mod_name, cached.mangle, cached.exported, cached.bad_exports, module_bindings, sources_by_file, sink)
+            new_stmts[count] = b
+            count += 1
+          end
+        end
+        continue
+      end
+
+      # loading: on the load stack; parent: who loaded it (for cycles)
+      let entry = {exported: nil, loading: true, parent: normalize_path(stmt.file)}
+      loaded[full_path] = entry
+
+      # exists but unreadable (permissions, a race)
+      let read_res = pcall read_file(full_path)
+      if not read_res.ok
+        entry.loading = false
+        sink.report(sources_by_file[stmt.file], stmt.file, stmt.line, stmt.col, len("load"), "cannot read module `{stmt.path}` ({show_path(full_path)})", nil)
+        continue
+      end
+      let source = normalize_newlines(read_res.value)
+      sources_by_file[full_path] = source
+      let errors_before = sink.count()
+      let loaded_ast = parse_source(source, full_path, sink)
+      let parse_failed = sink.count() > errors_before or sink.suppressed()
+      tag_file(loaded_ast, full_path)
+      if not parse_failed
+        print_file_warnings(loaded_ast, full_path, show_path, sink)
+      end
+      let loaded_dir = dirname(full_path)
+      let resolved = resolve_loads(loaded_ast, loaded_dir, project_root, stdlib_root, loaded, module_bindings, sources_by_file, sink, show_path, registry)
+
+      entry.loading = false
+
+      let export_node = find_export_node(resolved.stmts)
+      if export_node == nil
+        # don't pile this onto a parse error
+        if not parse_failed
+          sink.report(sources_by_file[stmt.file], stmt.file, stmt.line, stmt.col, len("load"), "loaded file has no export statement: {stmt.path}", "end the module with `export name, ...`")
+        end
+        continue
+      end
+
+      let mod_name = module_name_from_path(stmt.path)
+      let top_names = collect_module_top_names(resolved.stmts)
+      let mangle = module_mangle(full_path, mod_name, top_names, registry)
+      let bad_exports = {}
+      let exported = checked_exports(export_node, top_names, mod_name, full_path, parse_failed, sources_by_file, sink, bad_exports)
+      loaded[full_path] = {mod_name: mod_name, mangle: mangle, exported: exported, bad_exports: bad_exports, top_names: top_names}
+      let mod_stmts = transform_module(resolved.stmts, mangle, top_names)
+      for b in import_bindings(stmt, mod_name, mangle, exported, bad_exports, module_bindings, sources_by_file, sink)
+        push(mod_stmts, b)
+      end
+      for ms in mod_stmts
+        new_stmts[count] = ms
+        count += 1
+      end
+    else
+      new_stmts[count] = stmt
+      count += 1
+    end
+  end
+  make_program(new_stmts)
+end
+
+# `__mod_<mangle>_<name>` -> `<mod>.<name>` for messages, from the loaded table since names can contain `_`
+fn build_global_display(loaded)
+  let display = {}
+  for _, info in loaded
+    if info.top_names != nil
+      for name, _ in info.top_names
+        display["__mod_" + info.mangle + "_" + name] = info.mod_name + "." + name
+      end
+    end
+  end
+  display
+end
+
+export resolve_loads, build_global_display, find_export_node, checked_exports, collect_module_top_names, module_name_from_path, shadow_entry_builtins

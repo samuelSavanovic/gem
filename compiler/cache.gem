@@ -1,0 +1,143 @@
+# Run-mode binary cache: <cache>/<key>/<basename>. The key hashes the C, the cc flags, the runtime's headers
+# and library (and sources when built from them) and the `extern include` headers found beside the source; not
+# `-l` libs, headers from cc's search path, or what the headers include.
+#
+# cc writes into a run dir under <cache>/.tmp and the result is hard-linked into the entry, so nobody sees a
+# half-written binary; if the entry vanished meanwhile it's a miss. Emptying the cache moves entries into .tmp
+# instead of deleting them: macOS kills a process whose binary loses its last link while execve is loading it.
+
+load "std/string"
+
+# runtime helpers, not builtins, so an older compiler can build this
+extern fn gem_rmdir(path: String) -> Int
+extern fn gem_hash_hex(data: Bytes) -> String
+extern fn gem_file_hash(path: String) -> String
+extern fn gem_mkdirs(path: String) -> Int
+extern fn gem_temp_dir_in(parent: String) -> String
+extern fn gem_rename(from: String, to: String) -> Int
+extern fn gem_file_age(path: String) -> Int
+
+let CACHE_MAX_ENTRIES = 256
+# on a new key, drop .tmp run dirs untouched for a day (left by a killed gem) and entries moved there over a minute ago
+let CACHE_STALE_SECONDS = 86400
+let CACHE_MOVED_SECONDS = 60
+
+fn cache_root()
+  let set = getenv("GEM_CACHE_DIR")
+  if set != nil and set != ""
+    return set
+  end
+  let xdg = getenv("XDG_CACHE_HOME")
+  if xdg != nil and xdg != ""
+    return path_join(xdg, "gem")
+  end
+  let home = getenv("HOME")
+  if home == nil or home == ""
+    return nil
+  end
+  path_join(home, ".cache/gem")
+end
+
+fn runtime_file_hashes(runtime_dir, with_sources)
+  if not is_dir(runtime_dir)
+    return ""
+  end
+  build_string do |add|
+    for name in sort(list_dir(runtime_dir))
+      if string.ends_with(name, ".h") or (with_sources and string.ends_with(name, ".c"))
+        add("{name} {gem_file_hash(path_join(runtime_dir, name))}\n")
+      end
+    end
+  end
+end
+
+# {bin, staging}, or nil when the cache is off or not writable
+fn cache_slot(c_code, c_file, parts, base)
+  if getenv("GEM_CACHE") == "off"
+    return nil
+  end
+  let root = cache_root()
+  if root == nil
+    return nil
+  end
+  # the C's own path (in #line) differs every run
+  let key_text = build_string do |add|
+    add(if c_file != nil then str_replace(c_code, c_file, "") else c_code end)
+    for p in parts
+      add("\n|part| ")
+      add(p)
+    end
+    for line in string.split(c_code, "\n")
+      if string.starts_with(line, "#include \"/")
+        let path = substr(line, 10, len(line) - 11)
+        add("\n|header| {path} {gem_file_hash(path)}")
+      end
+    end
+  end
+  let key = gem_hash_hex(key_text)
+  let staging = path_join(root, ".tmp")
+  if gem_mkdirs(staging) != 1
+    return nil
+  end
+  if not file_exists(path_join(root, key))
+    prune_cache(root, staging)
+    remove_stale_runs(staging)
+  end
+  {bin: path_join(path_join(root, key), base), staging: staging}
+end
+
+# best effort: another run may remove or move it first
+fn remove_flat_dir(dir)
+  let listed = pcall list_dir(dir)
+  if not listed.ok
+    return nil
+  end
+  for f in listed.value
+    remove_file(path_join(dir, f))
+  end
+  gem_rmdir(dir)
+end
+
+# Past CACHE_MAX_ENTRIES, empty the cache by moving every entry into staging as <entry>.<suffix>.
+# The suffix comes from a mkdtemp dir we hold, so no concurrent prune picks the same names.
+fn prune_cache(root, staging)
+  if not is_dir(root)
+    return nil
+  end
+  let entries = []
+  for e in list_dir(root)
+    if not string.starts_with(e, ".")
+      push(entries, e)
+    end
+  end
+  if len(entries) < CACHE_MAX_ENTRIES
+    return nil
+  end
+  let claim = gem_temp_dir_in(staging)
+  if claim == nil
+    return nil
+  end
+  let suffix = substr(claim, len(claim) - 6, 6)
+  for e in entries
+    let dir = path_join(root, e)
+    if is_dir(dir)
+      gem_rename(dir, path_join(staging, e + "." + suffix))
+    end
+  end
+  gem_rmdir(claim)
+end
+
+fn remove_stale_runs(staging)
+  if not is_dir(staging)
+    return nil
+  end
+  for d in list_dir(staging)
+    let dir = path_join(staging, d)
+    let max_age = if string.starts_with(d, "gem-") then CACHE_STALE_SECONDS else CACHE_MOVED_SECONDS end
+    if is_dir(dir) and gem_file_age(dir) > max_age
+      remove_flat_dir(dir)
+    end
+  end
+end
+
+export cache_slot, runtime_file_hashes
