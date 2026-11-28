@@ -838,7 +838,9 @@ static void gem_debug_check_reset(GemProcess *proc, const GemArenaMark *mark, co
         gem_dbg_ptr(&c, t, sizeof(GemTable));
         gem_dbg_val(&c, (GemVal){ .type = VAL_TABLE, .magic = GEM_MAGIC, .table = t });
         if (!gem_region_contains(&c.kept, t)) {
-            /* older table: check its entries here, the walk skips it */
+            /* older table: check its entries here, once however often the log names it; the walk skips it */
+            if (hmgeti(c.seen, t) >= 0) continue;
+            hmput(c.seen, t, 1);
             gem_dbg_ptr(&c, t->keys, sizeof(GemVal) * (size_t)t->len);
             gem_dbg_ptr(&c, t->vals, sizeof(GemVal) * (size_t)t->len);
             for (int j = 0; j < t->len; j++) { gem_dbg_val(&c, t->keys[j]); gem_dbg_val(&c, t->vals[j]); }
