@@ -42,6 +42,21 @@ fn make_dispatcher()
     let id = msg.id
     let params = msg.params
 
+    if method == "exit"
+      if shutdown_requested
+        exit(0)
+      else
+        exit(1)
+      end
+    end
+
+    if shutdown_requested
+      if id != nil
+        rpc.write_message(rpc.make_error_response(id, rpc.ERR_INVALID_REQUEST, "Server is shutting down"))
+      end
+      return
+    end
+
     if method == "initialize"
       rpc.write_message(rpc.make_response(id, server_capabilities()))
       initialized = true
@@ -52,24 +67,9 @@ fn make_dispatcher()
       return
     end
 
-    if method == "exit"
-      if shutdown_requested
-        exit(0)
-      else
-        exit(1)
-      end
-    end
-
     if not initialized
       if id != nil
         rpc.write_message(rpc.make_error_response(id, rpc.ERR_SERVER_NOT_INITIALIZED, "Server not initialized"))
-      end
-      return
-    end
-
-    if shutdown_requested
-      if id != nil
-        rpc.write_message(rpc.make_error_response(id, rpc.ERR_INVALID_REQUEST, "Server is shutting down"))
       end
       return
     end

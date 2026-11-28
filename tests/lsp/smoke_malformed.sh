@@ -54,6 +54,20 @@ check "didClose without a document" "" '{"jsonrpc":"2.0","method":"textDocument/
 check "didChange without changes" "" "$OPEN" '{"jsonrpc":"2.0","method":"textDocument/didChange","params":{"textDocument":{"uri":"file:///tmp/m.gem","version":2}}}'
 check "a document ending in x." '"method":"textDocument/publishDiagnostics"' "$OPEN"
 
+# after shutdown every request but exit errors, initialize included
+out=$(
+  {
+    make_frame "$INIT"
+    make_frame "$INITED"
+    make_frame "$SHUT"
+    make_frame '{"jsonrpc":"2.0","id":10,"method":"initialize","params":{"processId":null,"rootUri":null,"capabilities":{}}}'
+  } | "$BIN" lsp 2>/dev/null
+)
+if [[ "$out" != *'"id":10,"error":{"code":-32600'* ]]; then
+  echo "FAIL: initialize after shutdown: no -32600 error"
+  fails=$((fails + 1))
+fi
+
 if [ "$fails" -ne 0 ]; then
   exit 1
 fi

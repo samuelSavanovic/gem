@@ -91887,79 +91887,79 @@ static GemVal __anon_246(void *_env, GemVal *args, int argc) {
     GemVal gem_v_params = gem_table_get_cached(_t21055, "params", &_ic_3256);
 #line 45 "lsp/handlers.gem"
     gem_set_line(45);
-    if (gem_truthy(gem_eq(gem_v_method, GEM_STR_LIT("initialize", 10)))) {
+    if (gem_truthy(gem_eq(gem_v_method, GEM_STR_LIT("exit", 4)))) {
 #line 46 "lsp/handlers.gem"
         gem_set_line(46);
-    GemVal _t21056 = gem_g___mod_handlers_rpc;
-    static GemICacheSlot _ic_3257 = {0};
-    GemVal _t21062 = gem_table_get_cached(_t21056, "write_message", &_ic_3257);
-    GemVal _t21057 = gem_g___mod_handlers_rpc;
-    static GemICacheSlot _ic_3258 = {0};
-    GemVal _t21060 = gem_table_get_cached(_t21057, "make_response", &_ic_3258);
-    GemVal _t21058 = gem_v_id;
-    GemVal _t21059[] = {_t21058, gem_fn___mod_handlers_server_capabilities(NULL, NULL, 0)};
-    gem_check_callable_field(_t21060, "make_response", "lsp/handlers.gem", 46);
-    GemVal _t21061[] = {_t21060.fn(_t21060.env, _t21059, 2)};
-    gem_check_callable_field(_t21062, "write_message", "lsp/handlers.gem", 46);
-        (void)(_t21062.fn(_t21062.env, _t21061, 1));
-#line 47 "lsp/handlers.gem"
-        gem_set_line(47);
-        (*gem_v_initialized) = gem_bool(1);
-#line 48 "lsp/handlers.gem"
-        gem_set_line(48);
-        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, NULL, 1);
-        gem_pop_frame();
-        return GEM_NIL;
-    }
-#line 51 "lsp/handlers.gem"
-    gem_set_line(51);
-    if (gem_truthy(gem_eq(gem_v_method, GEM_STR_LIT("initialized", 11)))) {
-#line 52 "lsp/handlers.gem"
-        gem_set_line(52);
-        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, NULL, 1);
-        gem_pop_frame();
-        return GEM_NIL;
-    }
-#line 55 "lsp/handlers.gem"
-    gem_set_line(55);
-    if (gem_truthy(gem_eq(gem_v_method, GEM_STR_LIT("exit", 4)))) {
-#line 56 "lsp/handlers.gem"
-        gem_set_line(56);
         if (gem_truthy((*gem_v_shutdown_requested))) {
-#line 57 "lsp/handlers.gem"
-            gem_set_line(57);
-    GemVal _t21063[] = {gem_int(0)};
-            (void)(gem_exit_process_fn(NULL, _t21063, 1));
+#line 47 "lsp/handlers.gem"
+            gem_set_line(47);
+    GemVal _t21056[] = {gem_int(0)};
+            (void)(gem_exit_process_fn(NULL, _t21056, 1));
         } else {
-#line 59 "lsp/handlers.gem"
-            gem_set_line(59);
-    GemVal _t21064[] = {gem_int(1)};
-            (void)(gem_exit_process_fn(NULL, _t21064, 1));
+#line 49 "lsp/handlers.gem"
+            gem_set_line(49);
+    GemVal _t21057[] = {gem_int(1)};
+            (void)(gem_exit_process_fn(NULL, _t21057, 1));
         }
     }
-#line 63 "lsp/handlers.gem"
-    gem_set_line(63);
-    if (gem_truthy(gem_not((*gem_v_initialized)))) {
-#line 64 "lsp/handlers.gem"
-        gem_set_line(64);
+#line 53 "lsp/handlers.gem"
+    gem_set_line(53);
+    if (gem_truthy((*gem_v_shutdown_requested))) {
+#line 54 "lsp/handlers.gem"
+        gem_set_line(54);
         if (gem_truthy(gem_neq(gem_v_id, GEM_NIL))) {
-#line 65 "lsp/handlers.gem"
-            gem_set_line(65);
-    GemVal _t21065 = gem_g___mod_handlers_rpc;
+#line 55 "lsp/handlers.gem"
+            gem_set_line(55);
+    GemVal _t21058 = gem_g___mod_handlers_rpc;
+    static GemICacheSlot _ic_3257 = {0};
+    GemVal _t21065 = gem_table_get_cached(_t21058, "write_message", &_ic_3257);
+    GemVal _t21059 = gem_g___mod_handlers_rpc;
+    static GemICacheSlot _ic_3258 = {0};
+    GemVal _t21063 = gem_table_get_cached(_t21059, "make_error_response", &_ic_3258);
+    GemVal _t21061 = gem_v_id;
+    GemVal _t21060 = gem_g___mod_handlers_rpc;
     static GemICacheSlot _ic_3259 = {0};
-    GemVal _t21072 = gem_table_get_cached(_t21065, "write_message", &_ic_3259);
+    GemVal _t21062[] = {_t21061, gem_table_get_cached(_t21060, "ERR_INVALID_REQUEST", &_ic_3259), GEM_STR_LIT("Server is shutting down", 23)};
+    gem_check_callable_field(_t21063, "make_error_response", "lsp/handlers.gem", 55);
+    GemVal _t21064[] = {_t21063.fn(_t21063.env, _t21062, 3)};
+    gem_check_callable_field(_t21065, "write_message", "lsp/handlers.gem", 55);
+            (void)(_t21065.fn(_t21065.env, _t21064, 1));
+        }
+#line 57 "lsp/handlers.gem"
+        gem_set_line(57);
+        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, NULL, 1);
+        gem_pop_frame();
+        return GEM_NIL;
+    }
+#line 60 "lsp/handlers.gem"
+    gem_set_line(60);
+    if (gem_truthy(gem_eq(gem_v_method, GEM_STR_LIT("initialize", 10)))) {
+#line 61 "lsp/handlers.gem"
+        gem_set_line(61);
     GemVal _t21066 = gem_g___mod_handlers_rpc;
     static GemICacheSlot _ic_3260 = {0};
-    GemVal _t21070 = gem_table_get_cached(_t21066, "make_error_response", &_ic_3260);
-    GemVal _t21068 = gem_v_id;
+    GemVal _t21072 = gem_table_get_cached(_t21066, "write_message", &_ic_3260);
     GemVal _t21067 = gem_g___mod_handlers_rpc;
     static GemICacheSlot _ic_3261 = {0};
-    GemVal _t21069[] = {_t21068, gem_table_get_cached(_t21067, "ERR_SERVER_NOT_INITIALIZED", &_ic_3261), GEM_STR_LIT("Server not initialized", 22)};
-    gem_check_callable_field(_t21070, "make_error_response", "lsp/handlers.gem", 65);
-    GemVal _t21071[] = {_t21070.fn(_t21070.env, _t21069, 3)};
-    gem_check_callable_field(_t21072, "write_message", "lsp/handlers.gem", 65);
-            (void)(_t21072.fn(_t21072.env, _t21071, 1));
-        }
+    GemVal _t21070 = gem_table_get_cached(_t21067, "make_response", &_ic_3261);
+    GemVal _t21068 = gem_v_id;
+    GemVal _t21069[] = {_t21068, gem_fn___mod_handlers_server_capabilities(NULL, NULL, 0)};
+    gem_check_callable_field(_t21070, "make_response", "lsp/handlers.gem", 61);
+    GemVal _t21071[] = {_t21070.fn(_t21070.env, _t21069, 2)};
+    gem_check_callable_field(_t21072, "write_message", "lsp/handlers.gem", 61);
+        (void)(_t21072.fn(_t21072.env, _t21071, 1));
+#line 62 "lsp/handlers.gem"
+        gem_set_line(62);
+        (*gem_v_initialized) = gem_bool(1);
+#line 63 "lsp/handlers.gem"
+        gem_set_line(63);
+        if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, NULL, 1);
+        gem_pop_frame();
+        return GEM_NIL;
+    }
+#line 66 "lsp/handlers.gem"
+    gem_set_line(66);
+    if (gem_truthy(gem_eq(gem_v_method, GEM_STR_LIT("initialized", 11)))) {
 #line 67 "lsp/handlers.gem"
         gem_set_line(67);
         if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, NULL, 1);
@@ -91968,7 +91968,7 @@ static GemVal __anon_246(void *_env, GemVal *args, int argc) {
     }
 #line 70 "lsp/handlers.gem"
     gem_set_line(70);
-    if (gem_truthy((*gem_v_shutdown_requested))) {
+    if (gem_truthy(gem_not((*gem_v_initialized)))) {
 #line 71 "lsp/handlers.gem"
         gem_set_line(71);
         if (gem_truthy(gem_neq(gem_v_id, GEM_NIL))) {
@@ -91983,7 +91983,7 @@ static GemVal __anon_246(void *_env, GemVal *args, int argc) {
     GemVal _t21076 = gem_v_id;
     GemVal _t21075 = gem_g___mod_handlers_rpc;
     static GemICacheSlot _ic_3264 = {0};
-    GemVal _t21077[] = {_t21076, gem_table_get_cached(_t21075, "ERR_INVALID_REQUEST", &_ic_3264), GEM_STR_LIT("Server is shutting down", 23)};
+    GemVal _t21077[] = {_t21076, gem_table_get_cached(_t21075, "ERR_SERVER_NOT_INITIALIZED", &_ic_3264), GEM_STR_LIT("Server not initialized", 22)};
     gem_check_callable_field(_t21078, "make_error_response", "lsp/handlers.gem", 72);
     GemVal _t21079[] = {_t21078.fn(_t21078.env, _t21077, 3)};
     gem_check_callable_field(_t21080, "write_message", "lsp/handlers.gem", 72);
