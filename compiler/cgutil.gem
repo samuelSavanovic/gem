@@ -210,7 +210,7 @@ fn is_node(node, tag)
   type(node) == "table" and node.tag == tag
 end
 
-# A fn literal's defaults (evaluated with its params bound) followed by its body
+# A fn's defaults (evaluated with its params bound) followed by its body
 fn fn_stmts(node)
   let out = []
   if node.defaults != nil
@@ -290,8 +290,9 @@ fn walk_scoped_node(node, bound, v)
     walk_scoped(node.stmts, bound, v)
   elif tag == "match"
     walk_scoped_node(node.target, bound, v)
-    walk_scoped_arms(node.whens, with_name(bound, node.target_var), v)
-    walk_scoped(node.else, bound, v)
+    let b = with_name(bound, node.target_var)
+    walk_scoped_arms(node.whens, b, v)
+    walk_scoped(node.else, b, v)
   elif tag == "receive_match"
     let b = with_name(bound, node.recv_var)
     walk_scoped_arms(node.arms, b, v)

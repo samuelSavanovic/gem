@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # tests/compare_c.sh OLD NEW: both compilers must emit the same C (and the same errors and exit
 # status) for every example, example app file, broken program, std module, the compiler and the LSP.
-# A refactor that should change no output passes it. Both compilers have to live in build/ to find
-# std/ and the runtime, e.g. `cp build/gem build/gem_old` before rebuilding.
+# A refactor that should change no output passes it. A compiler finds std/ two directories above
+# itself, so keep both in a directory directly under the repo root, e.g. `cp build/gem build/gem_old` before rebuilding.
 
 set -u
 cd "$(dirname "$0")/.."

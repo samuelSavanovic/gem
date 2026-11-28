@@ -3810,12 +3810,12 @@ static GemVal __anon_4(void *_env, GemVal *args, int argc) {
     struct _closure___anon_4 *_cls = (struct _closure___anon_4 *)_env;
     GemVal *gem_v_bound = _cls->gem_v_bound;
     GemVal *gem_v_v = _cls->gem_v_v;
-    gem_push_frame("anonymous fn", "compiler/cgutil.gem", 301);
+    gem_push_frame("anonymous fn", "compiler/cgutil.gem", 302);
     GemVal gem_v_c = (argc > 0) ? args[0] : GEM_NIL;
     GemArenaPoint _ret_pt;
     gem_arena_point(&_ret_pt);
-#line 301 "compiler/cgutil.gem"
-    gem_set_line(301);
+#line 302 "compiler/cgutil.gem"
+    gem_set_line(302);
     GemVal _t496 = gem_v_c;
     GemVal _t495 = (*gem_v_bound);
     GemVal _t497[] = {_t496, _t495, (*gem_v_v)};
@@ -4023,53 +4023,56 @@ static GemVal gem_fn___mod_cgutil_walk_scoped_node(void *_env, GemVal *args, int
                                     (void)(gem_fn___mod_cgutil_walk_scoped_node(NULL, _t468, 3));
 #line 293 "compiler/cgutil.gem"
                                     gem_set_line(293);
+    GemVal _t470 = gem_v_bound;
     GemVal _t469 = gem_v_node;
     static GemICacheSlot _ic_30 = {0};
-    GemVal _t474 = gem_table_get_cached(_t469, "whens", &_ic_30);
-    GemVal _t471 = gem_v_bound;
-    GemVal _t470 = gem_v_node;
-    static GemICacheSlot _ic_31 = {0};
-    GemVal _t472[] = {_t471, gem_table_get_cached(_t470, "target_var", &_ic_31)};
-    GemVal _t473 = gem_fn___mod_cgutil_with_name(NULL, _t472, 2);
-    GemVal _t475[] = {_t474, _t473, gem_v_v};
-                                    (void)(gem_fn___mod_cgutil_walk_scoped_arms(NULL, _t475, 3));
+    GemVal _t471[] = {_t470, gem_table_get_cached(_t469, "target_var", &_ic_30)};
+                                    GemVal gem_v_b = gem_fn___mod_cgutil_with_name(NULL, _t471, 2);
 #line 294 "compiler/cgutil.gem"
                                     gem_set_line(294);
+    GemVal _t472 = gem_v_node;
+    static GemICacheSlot _ic_31 = {0};
+    GemVal _t474 = gem_table_get_cached(_t472, "whens", &_ic_31);
+    GemVal _t473 = gem_v_b;
+    GemVal _t475[] = {_t474, _t473, gem_v_v};
+                                    (void)(gem_fn___mod_cgutil_walk_scoped_arms(NULL, _t475, 3));
+#line 295 "compiler/cgutil.gem"
+                                    gem_set_line(295);
     GemVal _t476 = gem_v_node;
     static GemICacheSlot _ic_32 = {0};
     GemVal _t478 = gem_table_get_cached(_t476, "else", &_ic_32);
-    GemVal _t477 = gem_v_bound;
+    GemVal _t477 = gem_v_b;
     GemVal _t479[] = {_t478, _t477, gem_v_v};
                                     (void)(gem_fn___mod_cgutil_walk_scoped(NULL, _t479, 3));
                                 } else {
-#line 295 "compiler/cgutil.gem"
-                                    gem_set_line(295);
-                                    if (gem_truthy(gem_eq(gem_v_tag, GEM_STR_LIT("receive_match", 13)))) {
 #line 296 "compiler/cgutil.gem"
-                                        gem_set_line(296);
+                                    gem_set_line(296);
+                                    if (gem_truthy(gem_eq(gem_v_tag, GEM_STR_LIT("receive_match", 13)))) {
+#line 297 "compiler/cgutil.gem"
+                                        gem_set_line(297);
     GemVal _t481 = gem_v_bound;
     GemVal _t480 = gem_v_node;
     static GemICacheSlot _ic_33 = {0};
     GemVal _t482[] = {_t481, gem_table_get_cached(_t480, "recv_var", &_ic_33)};
                                         GemVal gem_v_b = gem_fn___mod_cgutil_with_name(NULL, _t482, 2);
-#line 297 "compiler/cgutil.gem"
-                                        gem_set_line(297);
+#line 298 "compiler/cgutil.gem"
+                                        gem_set_line(298);
     GemVal _t483 = gem_v_node;
     static GemICacheSlot _ic_34 = {0};
     GemVal _t485 = gem_table_get_cached(_t483, "arms", &_ic_34);
     GemVal _t484 = gem_v_b;
     GemVal _t486[] = {_t485, _t484, gem_v_v};
                                         (void)(gem_fn___mod_cgutil_walk_scoped_arms(NULL, _t486, 3));
-#line 298 "compiler/cgutil.gem"
-                                        gem_set_line(298);
+#line 299 "compiler/cgutil.gem"
+                                        gem_set_line(299);
     GemVal _t487 = gem_v_node;
     static GemICacheSlot _ic_35 = {0};
     GemVal _t489 = gem_table_get_cached(_t487, "after_ms", &_ic_35);
     GemVal _t488 = gem_v_b;
     GemVal _t490[] = {_t489, _t488, gem_v_v};
                                         (void)(gem_fn___mod_cgutil_walk_scoped_node(NULL, _t490, 3));
-#line 299 "compiler/cgutil.gem"
-                                        gem_set_line(299);
+#line 300 "compiler/cgutil.gem"
+                                        gem_set_line(300);
     GemVal _t491 = gem_v_node;
     static GemICacheSlot _ic_36 = {0};
     GemVal _t493 = gem_table_get_cached(_t491, "after_body", &_ic_36);
@@ -4077,8 +4080,8 @@ static GemVal gem_fn___mod_cgutil_walk_scoped_node(void *_env, GemVal *args, int
     GemVal _t494[] = {_t493, _t492, gem_v_v};
                                         (void)(gem_fn___mod_cgutil_walk_scoped(NULL, _t494, 3));
                                     } else {
-#line 301 "compiler/cgutil.gem"
-                                        gem_set_line(301);
+#line 302 "compiler/cgutil.gem"
+                                        gem_set_line(302);
     GemVal _t502 = gem_v_node;
     struct _closure___anon_4 *_t499 = gem_alloc(sizeof(struct _closure___anon_4));
     _t499->_num_captures = 2;
@@ -4099,8 +4102,8 @@ static GemVal gem_fn___mod_cgutil_walk_scoped_node(void *_env, GemVal *args, int
             }
         }
     }
-#line 303 "compiler/cgutil.gem"
-    gem_set_line(303);
+#line 304 "compiler/cgutil.gem"
+    gem_set_line(304);
     GemVal _t504 = GEM_NIL;
     if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t504, 1);
     gem_pop_frame();
@@ -4108,22 +4111,22 @@ static GemVal gem_fn___mod_cgutil_walk_scoped_node(void *_env, GemVal *args, int
 }
 
 static GemVal gem_fn___mod_cgutil_walk_scoped_arms(void *_env, GemVal *args, int argc) {
-#line 306 "compiler/cgutil.gem"
-    gem_push_frame("cgutil.walk_scoped_arms", "compiler/cgutil.gem", 306);
+#line 307 "compiler/cgutil.gem"
+    gem_push_frame("cgutil.walk_scoped_arms", "compiler/cgutil.gem", 307);
     GemVal gem_v_arms = (argc > 0) ? args[0] : GEM_NIL;
     GemVal gem_v_bound = (argc > 1) ? args[1] : GEM_NIL;
     GemVal gem_v_v = (argc > 2) ? args[2] : GEM_NIL;
     GemArenaPoint _ret_pt;
     gem_arena_point(&_ret_pt);
     {
-#line 307 "compiler/cgutil.gem"
-        gem_set_line(307);
+#line 308 "compiler/cgutil.gem"
+        gem_set_line(308);
         GemVal gem_v___for_items_29 = gem_for_items_1(gem_v_arms);
-#line 307 "compiler/cgutil.gem"
-        gem_set_line(307);
+#line 308 "compiler/cgutil.gem"
+        gem_set_line(308);
         GemVal gem_v___for_i_29 = gem_int(0);
-#line 307 "compiler/cgutil.gem"
-        gem_set_line(307);
+#line 308 "compiler/cgutil.gem"
+        gem_set_line(308);
         GemArenaMark _mk31;
         gem_arena_mark(&_mk31);
         while (1) {
@@ -4134,23 +4137,23 @@ static GemVal gem_fn___mod_cgutil_walk_scoped_arms(void *_env, GemVal *args, int
             }
     GemVal _t505 = gem_v___for_i_29;
             if (!gem_truthy(gem_lt(_t505, gem_for_len_1(gem_v___for_items_29)))) break;
-#line 307 "compiler/cgutil.gem"
-            gem_set_line(307);
-    GemVal _t506 = gem_v___for_items_29;
-            GemVal gem_v_w = gem_table_get(_t506, gem_v___for_i_29);
-#line 307 "compiler/cgutil.gem"
-            gem_set_line(307);
-            gem_v___for_i_29 = gem_add(gem_v___for_i_29, gem_int(1));
 #line 308 "compiler/cgutil.gem"
             gem_set_line(308);
+    GemVal _t506 = gem_v___for_items_29;
+            GemVal gem_v_w = gem_table_get(_t506, gem_v___for_i_29);
+#line 308 "compiler/cgutil.gem"
+            gem_set_line(308);
+            gem_v___for_i_29 = gem_add(gem_v___for_i_29, gem_int(1));
+#line 309 "compiler/cgutil.gem"
+            gem_set_line(309);
     GemVal _t507 = gem_v_w;
     static GemICacheSlot _ic_37 = {0};
     GemVal _t509 = gem_table_get_cached(_t507, "value", &_ic_37);
     GemVal _t508 = gem_v_bound;
     GemVal _t510[] = {_t509, _t508, gem_v_v};
             (void)(gem_fn___mod_cgutil_walk_scoped_node(NULL, _t510, 3));
-#line 309 "compiler/cgutil.gem"
-            gem_set_line(309);
+#line 310 "compiler/cgutil.gem"
+            gem_set_line(310);
     GemVal _t511 = gem_v_w;
     static GemICacheSlot _ic_38 = {0};
     GemVal _t513 = gem_table_get_cached(_t511, "bindings", &_ic_38);
@@ -4169,26 +4172,26 @@ static GemVal gem_fn___mod_cgutil_walk_scoped_arms(void *_env, GemVal *args, int
 }
 
 static GemVal gem_fn___mod_cgutil_with_name(void *_env, GemVal *args, int argc) {
-#line 313 "compiler/cgutil.gem"
-    gem_push_frame("cgutil.with_name", "compiler/cgutil.gem", 313);
+#line 314 "compiler/cgutil.gem"
+    gem_push_frame("cgutil.with_name", "compiler/cgutil.gem", 314);
     GemVal gem_v_set = (argc > 0) ? args[0] : GEM_NIL;
     GemVal gem_v_name = (argc > 1) ? args[1] : GEM_NIL;
-#line 314 "compiler/cgutil.gem"
-    gem_set_line(314);
+#line 315 "compiler/cgutil.gem"
+    gem_set_line(315);
     GemVal _t519 = gem_v_set;
     GemVal _t518 = gem_table_new_braces();
     GemVal _t520[] = {_t519, _t518};
     GemVal gem_v_out = gem_fn___mod_cgutil_set_union(NULL, _t520, 2);
-#line 315 "compiler/cgutil.gem"
-    gem_set_line(315);
-    if (gem_truthy(gem_neq(gem_v_name, GEM_NIL))) {
 #line 316 "compiler/cgutil.gem"
-        gem_set_line(316);
+    gem_set_line(316);
+    if (gem_truthy(gem_neq(gem_v_name, GEM_NIL))) {
+#line 317 "compiler/cgutil.gem"
+        gem_set_line(317);
     GemVal _t521 = gem_v_out;
         gem_table_set(_t521, gem_v_name, gem_bool(1));
     }
-#line 318 "compiler/cgutil.gem"
-    gem_set_line(318);
+#line 319 "compiler/cgutil.gem"
+    gem_set_line(319);
     GemVal _t522 = gem_v_out;
     gem_pop_frame();
     return _t522;
@@ -33479,30 +33482,30 @@ static GemVal __anon_94(void *_env, GemVal *args, int argc) {
     struct _closure___anon_94 *_cls = (struct _closure___anon_94 *)_env;
     GemVal *gem_v_captured = _cls->gem_v_captured;
     GemVal *gem_v_is_global = _cls->gem_v_is_global;
-    gem_push_frame("anonymous fn", "compiler/captures.gem", 29);
+    gem_push_frame("anonymous fn", "compiler/captures.gem", 30);
     GemVal gem_v_node = (argc > 0) ? args[0] : GEM_NIL;
     GemVal gem_v_bound = (argc > 1) ? args[1] : GEM_NIL;
     GemArenaPoint _ret_pt;
     gem_arena_point(&_ret_pt);
-#line 30 "compiler/captures.gem"
-    gem_set_line(30);
+#line 31 "compiler/captures.gem"
+    gem_set_line(31);
     GemVal _t7263 = gem_v_node;
     static GemICacheSlot _ic_1179 = {0};
     if (gem_truthy(gem_neq(gem_table_get_cached(_t7263, "non_escaping", &_ic_1179), gem_bool(1)))) {
-#line 31 "compiler/captures.gem"
-        gem_set_line(31);
+#line 32 "compiler/captures.gem"
+        gem_set_line(32);
     GemVal _t7265 = gem_v_node;
     GemVal _t7264 = gem_table_new_braces();
     GemVal _t7266[] = {_t7265, _t7264, (*gem_v_is_global)};
         GemVal gem_v___for_tbl_154 = gem_fn___mod_captures_closure_free_vars(NULL, _t7266, 3);
-#line 31 "compiler/captures.gem"
-        gem_set_line(31);
+#line 32 "compiler/captures.gem"
+        gem_set_line(32);
         GemVal gem_v___for_len_154 = gem_for_len_1(gem_v___for_tbl_154);
-#line 31 "compiler/captures.gem"
-        gem_set_line(31);
+#line 32 "compiler/captures.gem"
+        gem_set_line(32);
         GemVal gem_v___for_i_154 = gem_int(0);
-#line 31 "compiler/captures.gem"
-        gem_set_line(31);
+#line 32 "compiler/captures.gem"
+        gem_set_line(32);
         GemArenaMark _mk184;
         gem_arena_mark(&_mk184);
         while (1) {
@@ -33513,31 +33516,31 @@ static GemVal __anon_94(void *_env, GemVal *args, int argc) {
             }
     GemVal _t7267 = gem_v___for_i_154;
             if (!gem_truthy(gem_lt(_t7267, gem_v___for_len_154))) break;
-#line 31 "compiler/captures.gem"
-            gem_set_line(31);
-    GemVal _t7268 = gem_v___for_tbl_154;
-            GemVal gem_v_name = gem_table_key_at_2(_t7268, gem_v___for_i_154);
-#line 31 "compiler/captures.gem"
-            gem_set_line(31);
-    GemVal _t7269 = gem_v___for_tbl_154;
-            GemVal gem_v__ = gem_table_val_at_2(_t7269, gem_v___for_i_154);
-#line 31 "compiler/captures.gem"
-            gem_set_line(31);
-            gem_v___for_i_154 = gem_add(gem_v___for_i_154, gem_int(1));
 #line 32 "compiler/captures.gem"
             gem_set_line(32);
+    GemVal _t7268 = gem_v___for_tbl_154;
+            GemVal gem_v_name = gem_table_key_at_2(_t7268, gem_v___for_i_154);
+#line 32 "compiler/captures.gem"
+            gem_set_line(32);
+    GemVal _t7269 = gem_v___for_tbl_154;
+            GemVal gem_v__ = gem_table_val_at_2(_t7269, gem_v___for_i_154);
+#line 32 "compiler/captures.gem"
+            gem_set_line(32);
+            gem_v___for_i_154 = gem_add(gem_v___for_i_154, gem_int(1));
+#line 33 "compiler/captures.gem"
+            gem_set_line(33);
     GemVal _t7270 = gem_v_bound;
             if (gem_truthy(gem_eq(gem_table_get(_t7270, gem_v_name), gem_bool(1)))) {
-#line 33 "compiler/captures.gem"
-                gem_set_line(33);
+#line 34 "compiler/captures.gem"
+                gem_set_line(34);
     GemVal _t7271 = (*gem_v_captured);
                 gem_table_set(_t7271, gem_v_name, gem_bool(1));
             }
         }
 
     }
-#line 37 "compiler/captures.gem"
-    gem_set_line(37);
+#line 38 "compiler/captures.gem"
+    gem_set_line(38);
     GemVal _t7272 = gem_bool(0);
     if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t7272, 1);
     gem_pop_frame();
@@ -33545,19 +33548,19 @@ static GemVal __anon_94(void *_env, GemVal *args, int argc) {
 }
 
 static GemVal gem_fn___mod_captures_find_captured_in_scope(void *_env, GemVal *args, int argc) {
-#line 27 "compiler/captures.gem"
-    gem_push_frame("captures.find_captured_in_scope", "compiler/captures.gem", 27);
+#line 28 "compiler/captures.gem"
+    gem_push_frame("captures.find_captured_in_scope", "compiler/captures.gem", 28);
     GemVal gem_v_stmts = (argc > 0) ? args[0] : GEM_NIL;
     GemVal gem_v_scope_vars = (argc > 1) ? args[1] : GEM_NIL;
     GemVal gem_v_is_global = (argc > 2) ? args[2] : GEM_NIL;
     GemArenaPoint _ret_pt;
     gem_arena_point(&_ret_pt);
-#line 28 "compiler/captures.gem"
-    gem_set_line(28);
-    GemVal _t7261 = gem_table_new_braces();
-    GemVal gem_v_captured = _t7261;
 #line 29 "compiler/captures.gem"
     gem_set_line(29);
+    GemVal _t7261 = gem_table_new_braces();
+    GemVal gem_v_captured = _t7261;
+#line 30 "compiler/captures.gem"
+    gem_set_line(30);
     GemVal _t7279 = gem_g___mod_captures_walk_scoped;
     GemVal _t7277 = gem_v_stmts;
     GemVal _t7276 = gem_v_scope_vars;
@@ -33574,10 +33577,10 @@ static GemVal gem_fn___mod_captures_find_captured_in_scope(void *_env, GemVal *a
     _t7273->gem_v_is_global = _t7275;
     gem_table_set(_t7262, GEM_STR_LIT("closure", 7), gem_make_fn(__anon_94, _t7273));
     GemVal _t7278[] = {_t7277, _t7276, _t7262};
-    gem_check_callable(_t7279, "compiler/captures.gem", 29);
+    gem_check_callable(_t7279, "compiler/captures.gem", 30);
     (void)(_t7279.fn(_t7279.env, _t7278, 3));
-#line 39 "compiler/captures.gem"
-    gem_set_line(39);
+#line 40 "compiler/captures.gem"
+    gem_set_line(40);
     GemVal _t7280 = gem_v_captured;
     if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t7280, 1);
     gem_pop_frame();
@@ -33592,8 +33595,8 @@ static GemVal __anon_95(void *_env, GemVal *args, int argc) {
     gem_leaf_site = &_leaf_site;
     GemVal gem_v_node = (argc > 0) ? args[0] : GEM_NIL;
     GemVal gem_v_bound = (argc > 1) ? args[1] : GEM_NIL;
-#line 47 "compiler/captures.gem"
-    gem_leaf_line = 47;
+#line 49 "compiler/captures.gem"
+    gem_leaf_line = 49;
     GemVal _t7282 = gem_bool(1);
     gem_leaf_site = NULL;
     return _t7282;
@@ -33612,8 +33615,8 @@ static GemVal __anon_96(void *_env, GemVal *args, int argc) {
     gem_leaf_site = &_leaf_site;
     GemVal gem_v_name = (argc > 0) ? args[0] : GEM_NIL;
     GemVal gem_v_bound = (argc > 1) ? args[1] : GEM_NIL;
-#line 48 "compiler/captures.gem"
-    gem_leaf_line = 48;
+#line 50 "compiler/captures.gem"
+    gem_leaf_line = 50;
     GemVal _t7283 = (*gem_v_scope_vars);
     GemVal _t7284 = gem_eq(gem_table_get(_t7283, gem_v_name), gem_bool(1));
     GemVal _t7286;
@@ -33624,8 +33627,8 @@ static GemVal __anon_96(void *_env, GemVal *args, int argc) {
         _t7286 = gem_neq(gem_table_get(_t7285, gem_v_name), gem_bool(1));
     }
     if (gem_truthy(_t7286)) {
-#line 49 "compiler/captures.gem"
-        gem_leaf_line = 49;
+#line 51 "compiler/captures.gem"
+        gem_leaf_line = 51;
     GemVal _t7287 = (*gem_v_writes);
         gem_table_set(_t7287, gem_v_name, gem_bool(1));
         gem_leaf_site = NULL;
@@ -33637,13 +33640,13 @@ static GemVal __anon_96(void *_env, GemVal *args, int argc) {
 }
 
 static GemVal gem_fn___mod_captures_closure_writes_visitor(void *_env, GemVal *args, int argc) {
-#line 46 "compiler/captures.gem"
+#line 48 "compiler/captures.gem"
     static const GemLeafSite _leaf_site = {"captures.closure_writes_visitor", "compiler/captures.gem"};
     gem_leaf_site = &_leaf_site;
     GemVal gem_v_scope_vars = (argc > 0) ? args[0] : GEM_NIL;
     GemVal gem_v_writes = (argc > 1) ? args[1] : GEM_NIL;
-#line 47 "compiler/captures.gem"
-    gem_leaf_line = 47;
+#line 49 "compiler/captures.gem"
+    gem_leaf_line = 49;
     GemVal _t7281 = gem_table_new_braces();
     gem_table_set(_t7281, GEM_STR_LIT("read", 4), gem_make_fn(gem_fn___mod_captures_ignore, NULL));
     gem_table_set(_t7281, GEM_STR_LIT("closure", 7), gem_make_fn(__anon_95, NULL));
@@ -33674,12 +33677,12 @@ static GemVal __anon_97(void *_env, GemVal *args, int argc) {
     gem_leaf_site = &_leaf_site;
     GemVal gem_v_name = (argc > 0) ? args[0] : GEM_NIL;
     GemVal gem_v_bound = (argc > 1) ? args[1] : GEM_NIL;
-#line 58 "compiler/captures.gem"
-    gem_leaf_line = 58;
+#line 60 "compiler/captures.gem"
+    gem_leaf_line = 60;
     GemVal _t7297 = (*gem_v_scope_vars);
     if (gem_truthy(gem_eq(gem_table_get(_t7297, gem_v_name), gem_bool(1)))) {
-#line 59 "compiler/captures.gem"
-        gem_leaf_line = 59;
+#line 61 "compiler/captures.gem"
+        gem_leaf_line = 61;
     GemVal _t7298 = (*gem_v_writes);
         gem_table_set(_t7298, gem_v_name, gem_bool(1));
         gem_leaf_site = NULL;
@@ -33697,21 +33700,21 @@ struct _closure___anon_98 {
 static GemVal __anon_98(void *_env, GemVal *args, int argc) {
     struct _closure___anon_98 *_cls = (struct _closure___anon_98 *)_env;
     GemVal *gem_v_inner = _cls->gem_v_inner;
-    gem_push_frame("anonymous fn", "compiler/captures.gem", 61);
+    gem_push_frame("anonymous fn", "compiler/captures.gem", 63);
     GemVal gem_v_node = (argc > 0) ? args[0] : GEM_NIL;
     GemVal gem_v_bound = (argc > 1) ? args[1] : GEM_NIL;
     GemArenaPoint _ret_pt;
     gem_arena_point(&_ret_pt);
-#line 62 "compiler/captures.gem"
-    gem_set_line(62);
+#line 64 "compiler/captures.gem"
+    gem_set_line(64);
     GemVal _t7305 = gem_g___mod_captures_walk_scoped_fn;
     GemVal _t7303 = gem_v_node;
     GemVal _t7302 = gem_table_new_braces();
     GemVal _t7304[] = {_t7303, _t7302, (*gem_v_inner)};
-    gem_check_callable(_t7305, "compiler/captures.gem", 62);
+    gem_check_callable(_t7305, "compiler/captures.gem", 64);
     (void)(_t7305.fn(_t7305.env, _t7304, 3));
-#line 63 "compiler/captures.gem"
-    gem_set_line(63);
+#line 65 "compiler/captures.gem"
+    gem_set_line(65);
     GemVal _t7306 = gem_bool(0);
     if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t7306, 1);
     gem_pop_frame();
@@ -33719,23 +33722,23 @@ static GemVal __anon_98(void *_env, GemVal *args, int argc) {
 }
 
 static GemVal gem_fn___mod_captures_find_capture_writes_in_scope(void *_env, GemVal *args, int argc) {
-#line 54 "compiler/captures.gem"
-    gem_push_frame("captures.find_capture_writes_in_scope", "compiler/captures.gem", 54);
+#line 56 "compiler/captures.gem"
+    gem_push_frame("captures.find_capture_writes_in_scope", "compiler/captures.gem", 56);
     GemVal gem_v_stmts = (argc > 0) ? args[0] : GEM_NIL;
     GemVal gem_v_scope_vars = (argc > 1) ? args[1] : GEM_NIL;
     GemArenaPoint _ret_pt;
     gem_arena_point(&_ret_pt);
-#line 55 "compiler/captures.gem"
-    gem_set_line(55);
+#line 57 "compiler/captures.gem"
+    gem_set_line(57);
     GemVal _t7292 = gem_table_new_braces();
     GemVal gem_v_writes = _t7292;
-#line 56 "compiler/captures.gem"
-    gem_set_line(56);
+#line 58 "compiler/captures.gem"
+    gem_set_line(58);
     GemVal _t7293 = gem_v_scope_vars;
     GemVal _t7294[] = {_t7293, gem_v_writes};
     GemVal gem_v_inner = gem_fn___mod_captures_closure_writes_visitor(NULL, _t7294, 2);
-#line 57 "compiler/captures.gem"
-    gem_set_line(57);
+#line 59 "compiler/captures.gem"
+    gem_set_line(59);
     GemVal _t7311 = gem_g___mod_captures_walk_scoped;
     GemVal _t7309 = gem_v_stmts;
     GemVal _t7295 = gem_table_new_braces();
@@ -33757,10 +33760,10 @@ static GemVal gem_fn___mod_captures_find_capture_writes_in_scope(void *_env, Gem
     _t7307->gem_v_inner = _t7308;
     gem_table_set(_t7296, GEM_STR_LIT("closure", 7), gem_make_fn(__anon_98, _t7307));
     GemVal _t7310[] = {_t7309, _t7295, _t7296};
-    gem_check_callable(_t7311, "compiler/captures.gem", 57);
+    gem_check_callable(_t7311, "compiler/captures.gem", 59);
     (void)(_t7311.fn(_t7311.env, _t7310, 3));
-#line 65 "compiler/captures.gem"
-    gem_set_line(65);
+#line 67 "compiler/captures.gem"
+    gem_set_line(67);
     GemVal _t7312 = gem_v_writes;
     if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t7312, 1);
     gem_pop_frame();
@@ -33768,29 +33771,29 @@ static GemVal gem_fn___mod_captures_find_capture_writes_in_scope(void *_env, Gem
 }
 
 static GemVal gem_fn___mod_captures_find_writes_in_closure_body(void *_env, GemVal *args, int argc) {
-#line 69 "compiler/captures.gem"
-    gem_push_frame("captures.find_writes_in_closure_body", "compiler/captures.gem", 69);
+#line 71 "compiler/captures.gem"
+    gem_push_frame("captures.find_writes_in_closure_body", "compiler/captures.gem", 71);
     GemVal gem_v_body = (argc > 0) ? args[0] : GEM_NIL;
     GemVal gem_v_captures_set = (argc > 1) ? args[1] : GEM_NIL;
     GemVal gem_v_defined = (argc > 2) ? args[2] : GEM_NIL;
     GemArenaPoint _ret_pt;
     gem_arena_point(&_ret_pt);
-#line 70 "compiler/captures.gem"
-    gem_set_line(70);
+#line 72 "compiler/captures.gem"
+    gem_set_line(72);
     GemVal _t7313 = gem_table_new_braces();
     GemVal gem_v_writes = _t7313;
-#line 71 "compiler/captures.gem"
-    gem_set_line(71);
+#line 73 "compiler/captures.gem"
+    gem_set_line(73);
     GemVal _t7319 = gem_g___mod_captures_walk_scoped;
     GemVal _t7317 = gem_v_body;
     GemVal _t7316 = gem_v_defined;
     GemVal _t7314 = gem_v_captures_set;
     GemVal _t7315[] = {_t7314, gem_v_writes};
     GemVal _t7318[] = {_t7317, _t7316, gem_fn___mod_captures_closure_writes_visitor(NULL, _t7315, 2)};
-    gem_check_callable(_t7319, "compiler/captures.gem", 71);
+    gem_check_callable(_t7319, "compiler/captures.gem", 73);
     (void)(_t7319.fn(_t7319.env, _t7318, 3));
-#line 72 "compiler/captures.gem"
-    gem_set_line(72);
+#line 74 "compiler/captures.gem"
+    gem_set_line(74);
     GemVal _t7320 = gem_v_writes;
     if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t7320, 1);
     gem_pop_frame();
@@ -33798,39 +33801,39 @@ static GemVal gem_fn___mod_captures_find_writes_in_closure_body(void *_env, GemV
 }
 
 static GemVal gem_fn___mod_captures_contains_anon_fn(void *_env, GemVal *args, int argc) {
-#line 82 "compiler/captures.gem"
-    gem_push_frame("captures.contains_anon_fn", "compiler/captures.gem", 82);
+#line 84 "compiler/captures.gem"
+    gem_push_frame("captures.contains_anon_fn", "compiler/captures.gem", 84);
     GemVal gem_v_node = (argc > 0) ? args[0] : GEM_NIL;
     GemArenaPoint _ret_pt;
     gem_arena_point(&_ret_pt);
-#line 83 "compiler/captures.gem"
-    gem_set_line(83);
+#line 85 "compiler/captures.gem"
+    gem_set_line(85);
     if (gem_truthy(gem_neq(gem_type_1(gem_v_node), GEM_STR_LIT("table", 5)))) {
-#line 84 "compiler/captures.gem"
-        gem_set_line(84);
+#line 86 "compiler/captures.gem"
+        gem_set_line(86);
         GemVal _t7321 = gem_bool(0);
         if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t7321, 1);
         gem_pop_frame();
         return _t7321;
     }
-#line 86 "compiler/captures.gem"
-    gem_set_line(86);
+#line 88 "compiler/captures.gem"
+    gem_set_line(88);
     GemVal _t7322 = gem_v_node;
     static GemICacheSlot _ic_1180 = {0};
     if (gem_truthy(gem_eq(gem_table_get_cached(_t7322, "tag", &_ic_1180), GEM_STR_LIT("anon_fn", 7)))) {
-#line 87 "compiler/captures.gem"
-        gem_set_line(87);
+#line 89 "compiler/captures.gem"
+        gem_set_line(89);
         GemVal _t7323 = gem_bool(1);
         if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t7323, 1);
         gem_pop_frame();
         return _t7323;
     }
-#line 89 "compiler/captures.gem"
-    gem_set_line(89);
+#line 91 "compiler/captures.gem"
+    gem_set_line(91);
     GemVal _t7326 = gem_g___mod_captures_any_child;
     GemVal _t7324 = gem_v_node;
     GemVal _t7325[] = {_t7324, gem_make_fn(gem_fn___mod_captures_contains_anon_fn, NULL)};
-    gem_check_callable(_t7326, "compiler/captures.gem", 89);
+    gem_check_callable(_t7326, "compiler/captures.gem", 91);
     GemVal _t7327 = _t7326.fn(_t7326.env, _t7325, 2);
     if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t7327, 1);
     gem_pop_frame();
@@ -33844,12 +33847,12 @@ struct _closure___anon_99 {
 static GemVal __anon_99(void *_env, GemVal *args, int argc) {
     struct _closure___anon_99 *_cls = (struct _closure___anon_99 *)_env;
     GemVal *gem_v_name = _cls->gem_v_name;
-    gem_push_frame("anonymous fn", "compiler/captures.gem", 112);
+    gem_push_frame("anonymous fn", "compiler/captures.gem", 114);
     GemVal gem_v_c = (argc > 0) ? args[0] : GEM_NIL;
     GemArenaPoint _ret_pt;
     gem_arena_point(&_ret_pt);
-#line 112 "compiler/captures.gem"
-    gem_set_line(112);
+#line 114 "compiler/captures.gem"
+    gem_set_line(114);
     GemVal _t7348 = gem_v_c;
     GemVal _t7349[] = {_t7348, (*gem_v_name)};
     GemVal _t7350 = gem_fn___mod_captures_binds_name(NULL, _t7349, 2);
@@ -33859,24 +33862,24 @@ static GemVal __anon_99(void *_env, GemVal *args, int argc) {
 }
 
 static GemVal gem_fn___mod_captures_binds_name(void *_env, GemVal *args, int argc) {
-#line 93 "compiler/captures.gem"
-    gem_push_frame("captures.binds_name", "compiler/captures.gem", 93);
+#line 95 "compiler/captures.gem"
+    gem_push_frame("captures.binds_name", "compiler/captures.gem", 95);
     GemVal gem_v_node = (argc > 0) ? args[0] : GEM_NIL;
     GemVal gem_v_name = (argc > 1) ? args[1] : GEM_NIL;
     GemArenaPoint _ret_pt;
     gem_arena_point(&_ret_pt);
-#line 94 "compiler/captures.gem"
-    gem_set_line(94);
+#line 96 "compiler/captures.gem"
+    gem_set_line(96);
     if (gem_truthy(gem_neq(gem_type_1(gem_v_node), GEM_STR_LIT("table", 5)))) {
-#line 95 "compiler/captures.gem"
-        gem_set_line(95);
+#line 97 "compiler/captures.gem"
+        gem_set_line(97);
         GemVal _t7328 = gem_bool(0);
         if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t7328, 1);
         gem_pop_frame();
         return _t7328;
     }
-#line 97 "compiler/captures.gem"
-    gem_set_line(97);
+#line 99 "compiler/captures.gem"
+    gem_set_line(99);
     GemVal _t7329 = gem_v_node;
     static GemICacheSlot _ic_1181 = {0};
     GemVal _t7330 = gem_eq(gem_table_get_cached(_t7329, "tag", &_ic_1181), GEM_STR_LIT("let", 3));
@@ -33890,15 +33893,15 @@ static GemVal gem_fn___mod_captures_binds_name(void *_env, GemVal *args, int arg
         _t7333 = gem_eq(_t7332, gem_v_name);
     }
     if (gem_truthy(_t7333)) {
-#line 98 "compiler/captures.gem"
-        gem_set_line(98);
+#line 100 "compiler/captures.gem"
+        gem_set_line(100);
         GemVal _t7334 = gem_bool(1);
         if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t7334, 1);
         gem_pop_frame();
         return _t7334;
     }
-#line 100 "compiler/captures.gem"
-    gem_set_line(100);
+#line 102 "compiler/captures.gem"
+    gem_set_line(102);
     GemVal _t7335 = gem_v_node;
     static GemICacheSlot _ic_1183 = {0};
     GemVal _t7336 = gem_eq(gem_table_get_cached(_t7335, "tag", &_ic_1183), GEM_STR_LIT("fn_def", 6));
@@ -33911,34 +33914,34 @@ static GemVal gem_fn___mod_captures_binds_name(void *_env, GemVal *args, int arg
         _t7338 = gem_eq(gem_table_get_cached(_t7337, "tag", &_ic_1184), GEM_STR_LIT("anon_fn", 7));
     }
     if (gem_truthy(_t7338)) {
-#line 101 "compiler/captures.gem"
-        gem_set_line(101);
+#line 103 "compiler/captures.gem"
+        gem_set_line(103);
     GemVal _t7339 = gem_v_node;
     static GemICacheSlot _ic_1185 = {0};
     GemVal _t7340 = gem_table_get_cached(_t7339, "rest_param", &_ic_1185);
         if (gem_truthy(gem_eq(_t7340, gem_v_name))) {
-#line 102 "compiler/captures.gem"
-            gem_set_line(102);
+#line 104 "compiler/captures.gem"
+            gem_set_line(104);
             GemVal _t7341 = gem_bool(1);
             if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t7341, 1);
             gem_pop_frame();
             return _t7341;
         }
-#line 104 "compiler/captures.gem"
-        gem_set_line(104);
+#line 106 "compiler/captures.gem"
+        gem_set_line(106);
     GemVal _t7342 = gem_v_node;
     static GemICacheSlot _ic_1186 = {0};
         if (gem_truthy(gem_neq(gem_table_get_cached(_t7342, "params", &_ic_1186), GEM_NIL))) {
-#line 105 "compiler/captures.gem"
-            gem_set_line(105);
+#line 107 "compiler/captures.gem"
+            gem_set_line(107);
     GemVal _t7343 = gem_v_node;
     static GemICacheSlot _ic_1187 = {0};
             GemVal gem_v___for_items_155 = gem_for_items_1(gem_table_get_cached(_t7343, "params", &_ic_1187));
-#line 105 "compiler/captures.gem"
-            gem_set_line(105);
+#line 107 "compiler/captures.gem"
+            gem_set_line(107);
             GemVal gem_v___for_i_155 = gem_int(0);
-#line 105 "compiler/captures.gem"
-            gem_set_line(105);
+#line 107 "compiler/captures.gem"
+            gem_set_line(107);
             GemArenaMark _mk185;
             gem_arena_mark(&_mk185);
             while (1) {
@@ -33949,19 +33952,19 @@ static GemVal gem_fn___mod_captures_binds_name(void *_env, GemVal *args, int arg
                 }
     GemVal _t7344 = gem_v___for_i_155;
                 if (!gem_truthy(gem_lt(_t7344, gem_for_len_1(gem_v___for_items_155)))) break;
-#line 105 "compiler/captures.gem"
-                gem_set_line(105);
+#line 107 "compiler/captures.gem"
+                gem_set_line(107);
     GemVal _t7345 = gem_v___for_items_155;
                 GemVal gem_v_p = gem_table_get(_t7345, gem_v___for_i_155);
-#line 105 "compiler/captures.gem"
-                gem_set_line(105);
+#line 107 "compiler/captures.gem"
+                gem_set_line(107);
                 gem_v___for_i_155 = gem_add(gem_v___for_i_155, gem_int(1));
-#line 106 "compiler/captures.gem"
-                gem_set_line(106);
+#line 108 "compiler/captures.gem"
+                gem_set_line(108);
     GemVal _t7346 = gem_v_p;
                 if (gem_truthy(gem_eq(_t7346, gem_v_name))) {
-#line 107 "compiler/captures.gem"
-                    gem_set_line(107);
+#line 109 "compiler/captures.gem"
+                    gem_set_line(109);
                     GemVal _t7347 = gem_bool(1);
                     if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t7347, 1);
                     gem_pop_frame();
@@ -33971,8 +33974,8 @@ static GemVal gem_fn___mod_captures_binds_name(void *_env, GemVal *args, int arg
 
         }
     }
-#line 112 "compiler/captures.gem"
-    gem_set_line(112);
+#line 114 "compiler/captures.gem"
+    gem_set_line(114);
     GemVal _t7355 = gem_g___mod_captures_any_child;
     GemVal _t7353 = gem_v_node;
     struct _closure___anon_99 *_t7351 = gem_alloc(sizeof(struct _closure___anon_99));
@@ -33981,7 +33984,7 @@ static GemVal gem_fn___mod_captures_binds_name(void *_env, GemVal *args, int arg
     *_t7352 = gem_v_name;
     _t7351->gem_v_name = _t7352;
     GemVal _t7354[] = {_t7353, gem_make_fn(__anon_99, _t7351)};
-    gem_check_callable(_t7355, "compiler/captures.gem", 112);
+    gem_check_callable(_t7355, "compiler/captures.gem", 114);
     GemVal _t7356 = _t7355.fn(_t7355.env, _t7354, 2);
     if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t7356, 1);
     gem_pop_frame();
@@ -33995,12 +33998,12 @@ struct _closure___anon_100 {
 static GemVal __anon_100(void *_env, GemVal *args, int argc) {
     struct _closure___anon_100 *_cls = (struct _closure___anon_100 *)_env;
     GemVal *gem_v_shadowed = _cls->gem_v_shadowed;
-    gem_push_frame("anonymous fn", "compiler/captures.gem", 136);
+    gem_push_frame("anonymous fn", "compiler/captures.gem", 138);
     GemVal gem_v_c = (argc > 0) ? args[0] : GEM_NIL;
     GemArenaPoint _ret_pt;
     gem_arena_point(&_ret_pt);
-#line 136 "compiler/captures.gem"
-    gem_set_line(136);
+#line 138 "compiler/captures.gem"
+    gem_set_line(138);
     GemVal _t7394 = gem_v_c;
     GemVal _t7395[] = {_t7394, (*gem_v_shadowed)};
     GemVal _t7396 = gem_fn___mod_captures_mark_non_escaping(NULL, _t7395, 2);
@@ -34010,46 +34013,46 @@ static GemVal __anon_100(void *_env, GemVal *args, int argc) {
 }
 
 static GemVal gem_fn___mod_captures_mark_non_escaping(void *_env, GemVal *args, int argc) {
-#line 115 "compiler/captures.gem"
-    gem_push_frame("captures.mark_non_escaping", "compiler/captures.gem", 115);
+#line 117 "compiler/captures.gem"
+    gem_push_frame("captures.mark_non_escaping", "compiler/captures.gem", 117);
     GemVal gem_v_node = (argc > 0) ? args[0] : GEM_NIL;
     GemVal gem_v_shadowed = (argc > 1) ? args[1] : GEM_NIL;
     GemArenaPoint _ret_pt;
     gem_arena_point(&_ret_pt);
-#line 116 "compiler/captures.gem"
-    gem_set_line(116);
+#line 118 "compiler/captures.gem"
+    gem_set_line(118);
     if (gem_truthy(gem_eq(gem_v_node, GEM_NIL))) {
-#line 117 "compiler/captures.gem"
-        gem_set_line(117);
+#line 119 "compiler/captures.gem"
+        gem_set_line(119);
         GemVal _t7357 = GEM_NIL;
         if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t7357, 1);
         gem_pop_frame();
         return _t7357;
     }
-#line 119 "compiler/captures.gem"
-    gem_set_line(119);
+#line 121 "compiler/captures.gem"
+    gem_set_line(121);
     if (gem_truthy(gem_neq(gem_type_1(gem_v_node), GEM_STR_LIT("table", 5)))) {
-#line 120 "compiler/captures.gem"
-        gem_set_line(120);
+#line 122 "compiler/captures.gem"
+        gem_set_line(122);
         GemVal _t7358 = GEM_NIL;
         if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t7358, 1);
         gem_pop_frame();
         return _t7358;
     }
-#line 122 "compiler/captures.gem"
-    gem_set_line(122);
+#line 124 "compiler/captures.gem"
+    gem_set_line(124);
     GemVal _t7359 = gem_v_node;
     static GemICacheSlot _ic_1188 = {0};
     if (gem_truthy(gem_eq(gem_table_get_cached(_t7359, "tag", &_ic_1188), GEM_NIL))) {
-#line 123 "compiler/captures.gem"
-        gem_set_line(123);
+#line 125 "compiler/captures.gem"
+        gem_set_line(125);
         GemVal _t7360 = GEM_NIL;
         if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t7360, 1);
         gem_pop_frame();
         return _t7360;
     }
-#line 126 "compiler/captures.gem"
-    gem_set_line(126);
+#line 128 "compiler/captures.gem"
+    gem_set_line(128);
     GemVal _t7361 = gem_v_node;
     static GemICacheSlot _ic_1189 = {0};
     GemVal _t7362 = gem_eq(gem_table_get_cached(_t7361, "tag", &_ic_1189), GEM_STR_LIT("call", 4));
@@ -34069,7 +34072,7 @@ static GemVal gem_fn___mod_captures_mark_non_escaping(void *_env, GemVal *args, 
     GemVal _t7365 = gem_v_node;
     static GemICacheSlot _ic_1191 = {0};
     GemVal _t7366[] = {gem_table_get_cached(_t7365, "func", &_ic_1191), GEM_STR_LIT("var", 3)};
-    gem_check_callable(_t7367, "compiler/captures.gem", 126);
+    gem_check_callable(_t7367, "compiler/captures.gem", 128);
         _t7368 = _t7367.fn(_t7367.env, _t7366, 2);
     }
     GemVal _t7374;
@@ -34083,7 +34086,7 @@ static GemVal gem_fn___mod_captures_mark_non_escaping(void *_env, GemVal *args, 
     GemVal _t7370 = gem_table_get_cached(_t7369, "func", &_ic_1192);
     static GemICacheSlot _ic_1193 = {0};
     GemVal _t7372[] = {_t7371, gem_table_get_cached(_t7370, "name", &_ic_1193)};
-    gem_check_callable(_t7373, "compiler/captures.gem", 126);
+    gem_check_callable(_t7373, "compiler/captures.gem", 128);
         _t7374 = _t7373.fn(_t7373.env, _t7372, 2);
     }
     GemVal _t7380;
@@ -34097,25 +34100,25 @@ static GemVal gem_fn___mod_captures_mark_non_escaping(void *_env, GemVal *args, 
     GemVal _t7376 = gem_table_get_cached(_t7375, "func", &_ic_1194);
     static GemICacheSlot _ic_1195 = {0};
     GemVal _t7378[] = {_t7377, gem_table_get_cached(_t7376, "name", &_ic_1195)};
-    gem_check_callable(_t7379, "compiler/captures.gem", 126);
+    gem_check_callable(_t7379, "compiler/captures.gem", 128);
         _t7380 = gem_not(_t7379.fn(_t7379.env, _t7378, 2));
     }
     if (gem_truthy(_t7380)) {
-#line 127 "compiler/captures.gem"
-        gem_set_line(127);
+#line 129 "compiler/captures.gem"
+        gem_set_line(129);
     GemVal _t7381 = gem_v_node;
     static GemICacheSlot _ic_1196 = {0};
         if (gem_truthy(gem_neq(gem_table_get_cached(_t7381, "args", &_ic_1196), GEM_NIL))) {
-#line 128 "compiler/captures.gem"
-            gem_set_line(128);
+#line 130 "compiler/captures.gem"
+            gem_set_line(130);
     GemVal _t7382 = gem_v_node;
     static GemICacheSlot _ic_1197 = {0};
             GemVal gem_v___for_items_156 = gem_for_items_1(gem_table_get_cached(_t7382, "args", &_ic_1197));
-#line 128 "compiler/captures.gem"
-            gem_set_line(128);
+#line 130 "compiler/captures.gem"
+            gem_set_line(130);
             GemVal gem_v___for_i_156 = gem_int(0);
-#line 128 "compiler/captures.gem"
-            gem_set_line(128);
+#line 130 "compiler/captures.gem"
+            gem_set_line(130);
             GemArenaMark _mk186;
             gem_arena_mark(&_mk186);
             while (1) {
@@ -34126,18 +34129,18 @@ static GemVal gem_fn___mod_captures_mark_non_escaping(void *_env, GemVal *args, 
                 }
     GemVal _t7383 = gem_v___for_i_156;
                 if (!gem_truthy(gem_lt(_t7383, gem_for_len_1(gem_v___for_items_156)))) break;
-#line 128 "compiler/captures.gem"
-                gem_set_line(128);
+#line 130 "compiler/captures.gem"
+                gem_set_line(130);
     GemVal _t7384 = gem_v___for_items_156;
                 GemVal gem_v_a = gem_table_get(_t7384, gem_v___for_i_156);
-#line 128 "compiler/captures.gem"
-                gem_set_line(128);
+#line 130 "compiler/captures.gem"
+                gem_set_line(130);
                 gem_v___for_i_156 = gem_add(gem_v___for_i_156, gem_int(1));
-#line 129 "compiler/captures.gem"
-                gem_set_line(129);
+#line 131 "compiler/captures.gem"
+                gem_set_line(131);
     GemVal _t7386 = gem_g___mod_captures_is_node;
     GemVal _t7385[] = {gem_v_a, GEM_STR_LIT("anon_fn", 7)};
-    gem_check_callable(_t7386, "compiler/captures.gem", 129);
+    gem_check_callable(_t7386, "compiler/captures.gem", 131);
     GemVal _t7387 = _t7386.fn(_t7386.env, _t7385, 2);
     GemVal _t7390;
     if (!gem_truthy(_t7387)) {
@@ -34158,16 +34161,16 @@ static GemVal gem_fn___mod_captures_mark_non_escaping(void *_env, GemVal *args, 
         _t7393 = gem_not(gem_fn___mod_captures_contains_anon_fn(NULL, _t7392, 1));
     }
                 if (gem_truthy(_t7393)) {
-#line 130 "compiler/captures.gem"
-                    gem_set_line(130);
+#line 132 "compiler/captures.gem"
+                    gem_set_line(132);
                     gem_table_set(gem_v_a, GEM_STR_LIT("non_escaping", 12), gem_bool(1));
                 }
             }
 
         }
     }
-#line 136 "compiler/captures.gem"
-    gem_set_line(136);
+#line 138 "compiler/captures.gem"
+    gem_set_line(138);
     GemVal _t7401 = gem_g___mod_captures_each_child;
     GemVal _t7399 = gem_v_node;
     struct _closure___anon_100 *_t7397 = gem_alloc(sizeof(struct _closure___anon_100));
@@ -34176,7 +34179,7 @@ static GemVal gem_fn___mod_captures_mark_non_escaping(void *_env, GemVal *args, 
     *_t7398 = gem_v_shadowed;
     _t7397->gem_v_shadowed = _t7398;
     GemVal _t7400[] = {_t7399, gem_make_fn(__anon_100, _t7397)};
-    gem_check_callable(_t7401, "compiler/captures.gem", 136);
+    gem_check_callable(_t7401, "compiler/captures.gem", 138);
     GemVal _t7402 = _t7401.fn(_t7401.env, _t7400, 2);
     if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t7402, 1);
     gem_pop_frame();
@@ -34184,27 +34187,27 @@ static GemVal gem_fn___mod_captures_mark_non_escaping(void *_env, GemVal *args, 
 }
 
 static GemVal gem_fn___mod_captures_mark_non_escaping_stmts(void *_env, GemVal *args, int argc) {
-#line 140 "compiler/captures.gem"
-    gem_push_frame("captures.mark_non_escaping_stmts", "compiler/captures.gem", 140);
+#line 142 "compiler/captures.gem"
+    gem_push_frame("captures.mark_non_escaping_stmts", "compiler/captures.gem", 142);
     GemVal gem_v_stmts = (argc > 0) ? args[0] : GEM_NIL;
     GemVal gem_v_scope = (argc > 1) ? args[1] : GEM_NIL;
     GemArenaPoint _ret_pt;
     gem_arena_point(&_ret_pt);
-#line 141 "compiler/captures.gem"
-    gem_set_line(141);
+#line 143 "compiler/captures.gem"
+    gem_set_line(143);
     GemVal _t7403 = gem_table_new_braces();
     GemVal gem_v_shadowed = _t7403;
-#line 142 "compiler/captures.gem"
-    gem_set_line(142);
+#line 144 "compiler/captures.gem"
+    gem_set_line(144);
     GemVal gem_v___for_tbl_157 = gem_g___mod_captures_non_escape_callees;
-#line 142 "compiler/captures.gem"
-    gem_set_line(142);
+#line 144 "compiler/captures.gem"
+    gem_set_line(144);
     GemVal gem_v___for_len_157 = gem_for_len_1(gem_v___for_tbl_157);
-#line 142 "compiler/captures.gem"
-    gem_set_line(142);
+#line 144 "compiler/captures.gem"
+    gem_set_line(144);
     GemVal gem_v___for_i_157 = gem_int(0);
-#line 142 "compiler/captures.gem"
-    gem_set_line(142);
+#line 144 "compiler/captures.gem"
+    gem_set_line(144);
     GemArenaMark _mk187;
     gem_arena_mark(&_mk187);
     while (1) {
@@ -34215,41 +34218,41 @@ static GemVal gem_fn___mod_captures_mark_non_escaping_stmts(void *_env, GemVal *
         }
     GemVal _t7404 = gem_v___for_i_157;
         if (!gem_truthy(gem_lt(_t7404, gem_v___for_len_157))) break;
-#line 142 "compiler/captures.gem"
-        gem_set_line(142);
+#line 144 "compiler/captures.gem"
+        gem_set_line(144);
     GemVal _t7405 = gem_v___for_tbl_157;
         GemVal gem_v_callee = gem_table_key_at_2(_t7405, gem_v___for_i_157);
-#line 142 "compiler/captures.gem"
-        gem_set_line(142);
+#line 144 "compiler/captures.gem"
+        gem_set_line(144);
     GemVal _t7406 = gem_v___for_tbl_157;
         GemVal gem_v__ = gem_table_val_at_2(_t7406, gem_v___for_i_157);
-#line 142 "compiler/captures.gem"
-        gem_set_line(142);
+#line 144 "compiler/captures.gem"
+        gem_set_line(144);
         gem_v___for_i_157 = gem_add(gem_v___for_i_157, gem_int(1));
-#line 143 "compiler/captures.gem"
-        gem_set_line(143);
+#line 145 "compiler/captures.gem"
+        gem_set_line(145);
     GemVal _t7407 = gem_v_scope;
     GemVal _t7408[] = {_t7407, gem_v_callee};
         if (gem_truthy(gem_fn___mod_captures_binds_name(NULL, _t7408, 2))) {
-#line 144 "compiler/captures.gem"
-            gem_set_line(144);
+#line 146 "compiler/captures.gem"
+            gem_set_line(146);
     GemVal _t7411 = gem_g___mod_captures_set_add;
     GemVal _t7409 = gem_v_shadowed;
     GemVal _t7410[] = {_t7409, gem_v_callee};
-    gem_check_callable(_t7411, "compiler/captures.gem", 144);
+    gem_check_callable(_t7411, "compiler/captures.gem", 146);
             (void)(_t7411.fn(_t7411.env, _t7410, 2));
         }
     }
 
     {
-#line 147 "compiler/captures.gem"
-        gem_set_line(147);
+#line 149 "compiler/captures.gem"
+        gem_set_line(149);
         GemVal gem_v___for_items_158 = gem_for_items_1(gem_v_stmts);
-#line 147 "compiler/captures.gem"
-        gem_set_line(147);
+#line 149 "compiler/captures.gem"
+        gem_set_line(149);
         GemVal gem_v___for_i_158 = gem_int(0);
-#line 147 "compiler/captures.gem"
-        gem_set_line(147);
+#line 149 "compiler/captures.gem"
+        gem_set_line(149);
         GemArenaMark _mk188;
         gem_arena_mark(&_mk188);
         while (1) {
@@ -34260,15 +34263,15 @@ static GemVal gem_fn___mod_captures_mark_non_escaping_stmts(void *_env, GemVal *
             }
     GemVal _t7412 = gem_v___for_i_158;
             if (!gem_truthy(gem_lt(_t7412, gem_for_len_1(gem_v___for_items_158)))) break;
-#line 147 "compiler/captures.gem"
-            gem_set_line(147);
+#line 149 "compiler/captures.gem"
+            gem_set_line(149);
     GemVal _t7413 = gem_v___for_items_158;
             GemVal gem_v_s = gem_table_get(_t7413, gem_v___for_i_158);
-#line 147 "compiler/captures.gem"
-            gem_set_line(147);
+#line 149 "compiler/captures.gem"
+            gem_set_line(149);
             gem_v___for_i_158 = gem_add(gem_v___for_i_158, gem_int(1));
-#line 148 "compiler/captures.gem"
-            gem_set_line(148);
+#line 150 "compiler/captures.gem"
+            gem_set_line(150);
     GemVal _t7414 = gem_v_s;
     GemVal _t7415[] = {_t7414, gem_v_shadowed};
             (void)(gem_fn___mod_captures_mark_non_escaping(NULL, _t7415, 2));
@@ -42847,11 +42850,11 @@ static GemVal __anon_126(void *_env, GemVal *args, int argc) {
     GemVal *gem_v_tmp_counter = _cls->gem_v_tmp_counter;
     static const GemLeafSite _leaf_site = {"anonymous fn", "compiler/codegen.gem"};
     gem_leaf_site = &_leaf_site;
-#line 164 "compiler/codegen.gem"
-    gem_leaf_line = 164;
-    (*gem_v_tmp_counter) = gem_add((*gem_v_tmp_counter), gem_int(1));
 #line 165 "compiler/codegen.gem"
     gem_leaf_line = 165;
+    (*gem_v_tmp_counter) = gem_add((*gem_v_tmp_counter), gem_int(1));
+#line 166 "compiler/codegen.gem"
+    gem_leaf_line = 166;
     GemVal _t9303[] = {GEM_STR_LIT("_t", 2), (*gem_v_tmp_counter)};
     GemVal _t9304 = gem_interp(2, _t9303);
     gem_leaf_site = NULL;
@@ -42865,8 +42868,8 @@ static GemVal __anon_127(void *_env, GemVal *args, int argc) {
     static const GemLeafSite _leaf_site = {"anonymous fn", "compiler/codegen.gem"};
     gem_leaf_site = &_leaf_site;
     GemVal gem_v_e = (argc > 0) ? args[0] : GEM_NIL;
-#line 170 "compiler/codegen.gem"
-    gem_leaf_line = 170;
+#line 171 "compiler/codegen.gem"
+    gem_leaf_line = 171;
     GemVal _t9306[] = {gem_v_e, gem_int(0), gem_int(2)};
     GemVal _t9307 = gem_eq(gem_substr_fn(NULL, _t9306, 3), GEM_STR_LIT("_t", 2));
     GemVal _t9308;
@@ -42876,14 +42879,14 @@ static GemVal __anon_127(void *_env, GemVal *args, int argc) {
         _t9308 = gem_gt(gem_len_1(gem_v_e), gem_int(2));
     }
     if (gem_truthy(_t9308)) {
-#line 171 "compiler/codegen.gem"
-        gem_leaf_line = 171;
+#line 172 "compiler/codegen.gem"
+        gem_leaf_line = 172;
         GemVal gem_v___for_i_235 = gem_int(2);
-#line 171 "compiler/codegen.gem"
-        gem_leaf_line = 171;
+#line 172 "compiler/codegen.gem"
+        gem_leaf_line = 172;
         GemVal gem_v___for_limit_235 = gem_len_1(gem_v_e);
-#line 171 "compiler/codegen.gem"
-        gem_leaf_line = 171;
+#line 172 "compiler/codegen.gem"
+        gem_leaf_line = 172;
         GemArenaMark _mk267;
         gem_arena_mark(&_mk267);
         while (1) {
@@ -42894,18 +42897,18 @@ static GemVal __anon_127(void *_env, GemVal *args, int argc) {
             }
     GemVal _t9309 = gem_v___for_i_235;
             if (!gem_truthy(gem_lt(_t9309, gem_v___for_limit_235))) break;
-#line 171 "compiler/codegen.gem"
-            gem_leaf_line = 171;
-            GemVal gem_v_i = gem_v___for_i_235;
-#line 171 "compiler/codegen.gem"
-            gem_leaf_line = 171;
-            gem_v___for_i_235 = gem_add(gem_v___for_i_235, gem_int(1));
 #line 172 "compiler/codegen.gem"
             gem_leaf_line = 172;
-    GemVal _t9310 = gem_v_e;
-            GemVal gem_v_c = gem_table_get(_t9310, gem_v_i);
+            GemVal gem_v_i = gem_v___for_i_235;
+#line 172 "compiler/codegen.gem"
+            gem_leaf_line = 172;
+            gem_v___for_i_235 = gem_add(gem_v___for_i_235, gem_int(1));
 #line 173 "compiler/codegen.gem"
             gem_leaf_line = 173;
+    GemVal _t9310 = gem_v_e;
+            GemVal gem_v_c = gem_table_get(_t9310, gem_v_i);
+#line 174 "compiler/codegen.gem"
+            gem_leaf_line = 174;
     GemVal _t9311 = gem_lt(gem_v_c, GEM_STR_LIT("0", 1));
     GemVal _t9312;
     if (gem_truthy(_t9311)) {
@@ -42914,22 +42917,22 @@ static GemVal __anon_127(void *_env, GemVal *args, int argc) {
         _t9312 = gem_gt(gem_v_c, GEM_STR_LIT("9", 1));
     }
             if (gem_truthy(_t9312)) {
-#line 174 "compiler/codegen.gem"
-                gem_leaf_line = 174;
+#line 175 "compiler/codegen.gem"
+                gem_leaf_line = 175;
                 GemVal _t9313 = gem_bool(0);
                 gem_leaf_site = NULL;
                 return _t9313;
             }
         }
 
-#line 177 "compiler/codegen.gem"
-        gem_leaf_line = 177;
+#line 178 "compiler/codegen.gem"
+        gem_leaf_line = 178;
         GemVal _t9314 = gem_bool(1);
         gem_leaf_site = NULL;
         return _t9314;
     }
-#line 179 "compiler/codegen.gem"
-    gem_leaf_line = 179;
+#line 180 "compiler/codegen.gem"
+    gem_leaf_line = 180;
     GemVal _t9315 = gem_eq(gem_v_e, GEM_STR_LIT("GEM_NIL", 7));
     GemVal _t9316;
     if (gem_truthy(_t9315)) {
@@ -42978,32 +42981,32 @@ static GemVal __anon_128(void *_env, GemVal *args, int argc) {
     struct _closure___anon_128 *_cls = (struct _closure___anon_128 *)_env;
     GemVal *gem_v_is_inert_expr = _cls->gem_v_is_inert_expr;
     GemVal *gem_v_tmp = _cls->gem_v_tmp;
-    gem_push_frame("anonymous fn", "compiler/codegen.gem", 182);
+    gem_push_frame("anonymous fn", "compiler/codegen.gem", 183);
     GemVal gem_v_r = (argc > 0) ? args[0] : GEM_NIL;
     GemArenaPoint _ret_pt;
     gem_arena_point(&_ret_pt);
-#line 183 "compiler/codegen.gem"
-    gem_set_line(183);
+#line 184 "compiler/codegen.gem"
+    gem_set_line(184);
     GemVal _t9327 = (*gem_v_is_inert_expr);
     GemVal _t9325 = gem_v_r;
     static GemICacheSlot _ic_1623 = {0};
     GemVal _t9326[] = {gem_table_get_cached(_t9325, "expr", &_ic_1623)};
-    gem_check_callable(_t9327, "compiler/codegen.gem", 183);
+    gem_check_callable(_t9327, "compiler/codegen.gem", 184);
     if (gem_truthy(_t9327.fn(_t9327.env, _t9326, 1))) {
-#line 184 "compiler/codegen.gem"
-        gem_set_line(184);
+#line 185 "compiler/codegen.gem"
+        gem_set_line(185);
         GemVal _t9328 = gem_v_r;
         if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t9328, 1);
         gem_pop_frame();
         return _t9328;
     }
-#line 186 "compiler/codegen.gem"
-    gem_set_line(186);
-    GemVal _t9329 = (*gem_v_tmp);
-    gem_check_callable(_t9329, "compiler/codegen.gem", 186);
-    GemVal gem_v_t = _t9329.fn(_t9329.env, NULL, 0);
 #line 187 "compiler/codegen.gem"
     gem_set_line(187);
+    GemVal _t9329 = (*gem_v_tmp);
+    gem_check_callable(_t9329, "compiler/codegen.gem", 187);
+    GemVal gem_v_t = _t9329.fn(_t9329.env, NULL, 0);
+#line 188 "compiler/codegen.gem"
+    gem_set_line(188);
     GemVal _t9330 = gem_table_new_braces();
     gem_table_set(_t9330, GEM_STR_LIT("expr", 4), gem_v_t);
     GemVal _t9331 = gem_v_r;
@@ -43029,11 +43032,11 @@ static GemVal __anon_129(void *_env, GemVal *args, int argc) {
     GemVal *gem_v_anon_counter = _cls->gem_v_anon_counter;
     static const GemLeafSite _leaf_site = {"anonymous fn", "compiler/codegen.gem"};
     gem_leaf_site = &_leaf_site;
-#line 191 "compiler/codegen.gem"
-    gem_leaf_line = 191;
-    (*gem_v_anon_counter) = gem_add((*gem_v_anon_counter), gem_int(1));
 #line 192 "compiler/codegen.gem"
     gem_leaf_line = 192;
+    (*gem_v_anon_counter) = gem_add((*gem_v_anon_counter), gem_int(1));
+#line 193 "compiler/codegen.gem"
+    gem_leaf_line = 193;
     GemVal _t9340[] = {GEM_STR_LIT("__anon_", 7), (*gem_v_anon_counter)};
     GemVal _t9341 = gem_interp(2, _t9340);
     gem_leaf_site = NULL;
@@ -43047,8 +43050,8 @@ static GemVal __anon_130(void *_env, GemVal *args, int argc) {
     static const GemLeafSite _leaf_site = {"anonymous fn", "compiler/codegen.gem"};
     gem_leaf_site = &_leaf_site;
     GemVal gem_v_name = (argc > 0) ? args[0] : GEM_NIL;
-#line 196 "compiler/codegen.gem"
-    gem_leaf_line = 196;
+#line 197 "compiler/codegen.gem"
+    gem_leaf_line = 197;
     GemVal _t9343[] = {GEM_STR_LIT("gem_v_", 6), gem_v_name};
     GemVal _t9344 = gem_interp(2, _t9343);
     gem_leaf_site = NULL;
@@ -43064,40 +43067,40 @@ static GemVal __anon_131(void *_env, GemVal *args, int argc) {
     struct _closure___anon_131 *_cls = (struct _closure___anon_131 *)_env;
     GemVal *gem_v_fs = _cls->gem_v_fs;
     GemVal *gem_v_top_level_vars = _cls->gem_v_top_level_vars;
-    gem_push_frame("anonymous fn", "compiler/codegen.gem", 202);
+    gem_push_frame("anonymous fn", "compiler/codegen.gem", 203);
     GemVal gem_v_name = (argc > 0) ? args[0] : GEM_NIL;
-#line 203 "compiler/codegen.gem"
-    gem_set_line(203);
+#line 204 "compiler/codegen.gem"
+    gem_set_line(204);
     GemVal _t9347 = gem_g___mod_codegen_set_contains;
     GemVal _t9345 = (*gem_v_top_level_vars);
     GemVal _t9346[] = {_t9345, gem_v_name};
-    gem_check_callable(_t9347, "compiler/codegen.gem", 203);
+    gem_check_callable(_t9347, "compiler/codegen.gem", 204);
     if (gem_truthy(gem_not(_t9347.fn(_t9347.env, _t9346, 2)))) {
-#line 204 "compiler/codegen.gem"
-        gem_set_line(204);
+#line 205 "compiler/codegen.gem"
+        gem_set_line(205);
         GemVal _t9348 = gem_bool(0);
         gem_pop_frame();
         return _t9348;
     }
-#line 206 "compiler/codegen.gem"
-    gem_set_line(206);
+#line 207 "compiler/codegen.gem"
+    gem_set_line(207);
     GemVal _t9349 = (*gem_v_fs);
     static GemICacheSlot _ic_1626 = {0};
     if (gem_truthy(gem_table_get_cached(_t9349, "in_top_level", &_ic_1626))) {
-#line 207 "compiler/codegen.gem"
-        gem_set_line(207);
+#line 208 "compiler/codegen.gem"
+        gem_set_line(208);
         GemVal _t9350 = gem_bool(1);
         gem_pop_frame();
         return _t9350;
     }
-#line 209 "compiler/codegen.gem"
-    gem_set_line(209);
+#line 210 "compiler/codegen.gem"
+    gem_set_line(210);
     GemVal _t9354 = gem_g___mod_codegen_set_contains;
     GemVal _t9351 = (*gem_v_fs);
     static GemICacheSlot _ic_1627 = {0};
     GemVal _t9352 = gem_table_get_cached(_t9351, "fn_scope_locals", &_ic_1627);
     GemVal _t9353[] = {_t9352, gem_v_name};
-    gem_check_callable(_t9354, "compiler/codegen.gem", 209);
+    gem_check_callable(_t9354, "compiler/codegen.gem", 210);
     GemVal _t9355 = gem_not(_t9354.fn(_t9354.env, _t9353, 2));
     GemVal _t9360;
     if (!gem_truthy(_t9355)) {
@@ -43108,7 +43111,7 @@ static GemVal __anon_131(void *_env, GemVal *args, int argc) {
     static GemICacheSlot _ic_1628 = {0};
     GemVal _t9357 = gem_table_get_cached(_t9356, "closure_captures", &_ic_1628);
     GemVal _t9358[] = {_t9357, gem_v_name};
-    gem_check_callable(_t9359, "compiler/codegen.gem", 209);
+    gem_check_callable(_t9359, "compiler/codegen.gem", 210);
         _t9360 = gem_not(_t9359.fn(_t9359.env, _t9358, 2));
     }
     GemVal _t9361 = _t9360;
@@ -43123,8 +43126,8 @@ static GemVal __anon_132(void *_env, GemVal *args, int argc) {
     static const GemLeafSite _leaf_site = {"anonymous fn", "compiler/codegen.gem"};
     gem_leaf_site = &_leaf_site;
     GemVal gem_v_name = (argc > 0) ? args[0] : GEM_NIL;
-#line 213 "compiler/codegen.gem"
-    gem_leaf_line = 213;
+#line 214 "compiler/codegen.gem"
+    gem_leaf_line = 214;
     GemVal _t9364[] = {GEM_STR_LIT("gem_g_", 6), gem_v_name};
     GemVal _t9365 = gem_interp(2, _t9364);
     gem_leaf_site = NULL;
@@ -43138,8 +43141,8 @@ static GemVal __anon_133(void *_env, GemVal *args, int argc) {
     static const GemLeafSite _leaf_site = {"anonymous fn", "compiler/codegen.gem"};
     gem_leaf_site = &_leaf_site;
     GemVal gem_v_name = (argc > 0) ? args[0] : GEM_NIL;
-#line 217 "compiler/codegen.gem"
-    gem_leaf_line = 217;
+#line 218 "compiler/codegen.gem"
+    gem_leaf_line = 218;
     GemVal _t9366[] = {GEM_STR_LIT("gem_gi_", 7), gem_v_name};
     GemVal _t9367 = gem_interp(2, _t9366);
     gem_leaf_site = NULL;
@@ -43153,17 +43156,17 @@ static GemVal __anon_134(void *_env, GemVal *args, int argc) {
     static const GemLeafSite _leaf_site = {"anonymous fn", "compiler/codegen.gem"};
     gem_leaf_site = &_leaf_site;
     GemVal gem_v_items = (argc > 0) ? args[0] : GEM_NIL;
-#line 221 "compiler/codegen.gem"
-    gem_leaf_line = 221;
+#line 222 "compiler/codegen.gem"
+    gem_leaf_line = 222;
     GemVal gem_v_out = GEM_STR_LIT("", 0);
-#line 222 "compiler/codegen.gem"
-    gem_leaf_line = 222;
+#line 223 "compiler/codegen.gem"
+    gem_leaf_line = 223;
     GemVal gem_v___for_i_236 = gem_int(0);
-#line 222 "compiler/codegen.gem"
-    gem_leaf_line = 222;
+#line 223 "compiler/codegen.gem"
+    gem_leaf_line = 223;
     GemVal gem_v___for_limit_236 = gem_len_1(gem_v_items);
-#line 222 "compiler/codegen.gem"
-    gem_leaf_line = 222;
+#line 223 "compiler/codegen.gem"
+    gem_leaf_line = 223;
     int _t9369 = 0;
     GemArenaMark _mk268;
     gem_arena_mark(&_mk268);
@@ -43175,30 +43178,30 @@ static GemVal __anon_134(void *_env, GemVal *args, int argc) {
         }
     GemVal _t9368 = gem_v___for_i_236;
         if (!gem_truthy(gem_lt(_t9368, gem_v___for_limit_236))) break;
-#line 222 "compiler/codegen.gem"
-        gem_leaf_line = 222;
-        GemVal gem_v_i = gem_v___for_i_236;
-#line 222 "compiler/codegen.gem"
-        gem_leaf_line = 222;
-        gem_v___for_i_236 = gem_add(gem_v___for_i_236, gem_int(1));
 #line 223 "compiler/codegen.gem"
         gem_leaf_line = 223;
-        if (gem_truthy(gem_gt(gem_v_i, gem_int(0)))) {
+        GemVal gem_v_i = gem_v___for_i_236;
+#line 223 "compiler/codegen.gem"
+        gem_leaf_line = 223;
+        gem_v___for_i_236 = gem_add(gem_v___for_i_236, gem_int(1));
 #line 224 "compiler/codegen.gem"
-            gem_leaf_line = 224;
+        gem_leaf_line = 224;
+        if (gem_truthy(gem_gt(gem_v_i, gem_int(0)))) {
+#line 225 "compiler/codegen.gem"
+            gem_leaf_line = 225;
             gem_string_append_to(&gem_v_out, GEM_STR_LIT(", ", 2), &_t9369);
 
         }
-#line 226 "compiler/codegen.gem"
-        gem_leaf_line = 226;
+#line 227 "compiler/codegen.gem"
+        gem_leaf_line = 227;
     GemVal _t9370 = gem_v_items;
         gem_string_append_to(&gem_v_out, gem_table_get(_t9370, gem_v_i), &_t9369);
 
     }
     if (_t9369) gem_v_out = gem_string_finish(gem_v_out);
 
-#line 228 "compiler/codegen.gem"
-    gem_leaf_line = 228;
+#line 229 "compiler/codegen.gem"
+    gem_leaf_line = 229;
     GemVal _t9371 = gem_v_out;
     gem_leaf_site = NULL;
     return _t9371;
@@ -43211,65 +43214,65 @@ struct _closure___anon_135 {
 static GemVal __anon_135(void *_env, GemVal *args, int argc) {
     struct _closure___anon_135 *_cls = (struct _closure___anon_135 *)_env;
     GemVal *gem_v_join_c = _cls->gem_v_join_c;
-    gem_push_frame("anonymous fn", "compiler/codegen.gem", 231);
+    gem_push_frame("anonymous fn", "compiler/codegen.gem", 232);
     GemVal gem_v_p = (argc > 0) ? args[0] : GEM_NIL;
     GemVal gem_v_mark = (argc > 1) ? args[1] : GEM_NIL;
     GemVal gem_v_roots = (argc > 2) ? args[2] : GEM_NIL;
     GemVal gem_v_pinned = (argc > 3) ? args[3] : GEM_NIL;
     GemArenaPoint _ret_pt;
     gem_arena_point(&_ret_pt);
-#line 232 "compiler/codegen.gem"
-    gem_set_line(232);
-    GemVal gem_v_b = gem_buf_new_fn(NULL, NULL, 0);
 #line 233 "compiler/codegen.gem"
     gem_set_line(233);
+    GemVal gem_v_b = gem_buf_new_fn(NULL, NULL, 0);
+#line 234 "compiler/codegen.gem"
+    gem_set_line(234);
     GemVal _t9374 = gem_v_b;
     GemVal _t9372 = gem_v_p;
     GemVal _t9373[] = {_t9372, GEM_STR_LIT("if (gem_arena_reset_due(&", 25), gem_v_mark, GEM_STR_LIT(")) {\n", 5)};
     GemVal _t9375[] = {_t9374, gem_interp(4, _t9373)};
     (void)(gem_buf_push_fn(NULL, _t9375, 2));
-#line 234 "compiler/codegen.gem"
-    gem_set_line(234);
-    GemVal gem_v_roots_arg = GEM_STR_LIT("NULL", 4);
 #line 235 "compiler/codegen.gem"
     gem_set_line(235);
-    GemVal gem_v_pinned_arg = GEM_STR_LIT("NULL", 4);
+    GemVal gem_v_roots_arg = GEM_STR_LIT("NULL", 4);
 #line 236 "compiler/codegen.gem"
     gem_set_line(236);
-    if (gem_truthy(gem_gt(gem_len_1(gem_v_roots), gem_int(0)))) {
+    GemVal gem_v_pinned_arg = GEM_STR_LIT("NULL", 4);
 #line 237 "compiler/codegen.gem"
-        gem_set_line(237);
+    gem_set_line(237);
+    if (gem_truthy(gem_gt(gem_len_1(gem_v_roots), gem_int(0)))) {
+#line 238 "compiler/codegen.gem"
+        gem_set_line(238);
     GemVal _t9380 = gem_v_b;
     GemVal _t9378 = gem_v_p;
     GemVal _t9377 = (*gem_v_join_c);
     GemVal _t9376[] = {gem_v_roots};
-    gem_check_callable(_t9377, "compiler/codegen.gem", 237);
+    gem_check_callable(_t9377, "compiler/codegen.gem", 238);
     GemVal _t9379[] = {_t9378, GEM_STR_LIT("    GemVal *_rr[] = {", 21), _t9377.fn(_t9377.env, _t9376, 1), GEM_STR_LIT("};\n", 3)};
     GemVal _t9381[] = {_t9380, gem_interp(4, _t9379)};
         (void)(gem_buf_push_fn(NULL, _t9381, 2));
-#line 238 "compiler/codegen.gem"
-        gem_set_line(238);
+#line 239 "compiler/codegen.gem"
+        gem_set_line(239);
         gem_v_roots_arg = GEM_STR_LIT("_rr", 3);
     }
-#line 240 "compiler/codegen.gem"
-    gem_set_line(240);
-    if (gem_truthy(gem_gt(gem_len_1(gem_v_pinned), gem_int(0)))) {
 #line 241 "compiler/codegen.gem"
-        gem_set_line(241);
+    gem_set_line(241);
+    if (gem_truthy(gem_gt(gem_len_1(gem_v_pinned), gem_int(0)))) {
+#line 242 "compiler/codegen.gem"
+        gem_set_line(242);
     GemVal _t9386 = gem_v_b;
     GemVal _t9384 = gem_v_p;
     GemVal _t9383 = (*gem_v_join_c);
     GemVal _t9382[] = {gem_v_pinned};
-    gem_check_callable(_t9383, "compiler/codegen.gem", 241);
+    gem_check_callable(_t9383, "compiler/codegen.gem", 242);
     GemVal _t9385[] = {_t9384, GEM_STR_LIT("    GemVal *_rp[] = {", 21), _t9383.fn(_t9383.env, _t9382, 1), GEM_STR_LIT("};\n", 3)};
     GemVal _t9387[] = {_t9386, gem_interp(4, _t9385)};
         (void)(gem_buf_push_fn(NULL, _t9387, 2));
-#line 242 "compiler/codegen.gem"
-        gem_set_line(242);
+#line 243 "compiler/codegen.gem"
+        gem_set_line(243);
         gem_v_pinned_arg = GEM_STR_LIT("_rp", 3);
     }
-#line 244 "compiler/codegen.gem"
-    gem_set_line(244);
+#line 245 "compiler/codegen.gem"
+    gem_set_line(245);
     GemVal _t9394 = gem_v_b;
     GemVal _t9392 = gem_v_p;
     GemVal _t9391 = gem_v_mark;
@@ -43279,14 +43282,14 @@ static GemVal __anon_135(void *_env, GemVal *args, int argc) {
     GemVal _t9393[] = {_t9392, GEM_STR_LIT("    gem_arena_reset_region(&", 28), _t9391, GEM_STR_LIT(", ", 2), _t9390, GEM_STR_LIT(", ", 2), _t9389, GEM_STR_LIT(", ", 2), _t9388, GEM_STR_LIT(", ", 2), gem_len_1(gem_v_pinned), GEM_STR_LIT(");\n", 3)};
     GemVal _t9395[] = {_t9394, gem_interp(12, _t9393)};
     (void)(gem_buf_push_fn(NULL, _t9395, 2));
-#line 245 "compiler/codegen.gem"
-    gem_set_line(245);
+#line 246 "compiler/codegen.gem"
+    gem_set_line(246);
     GemVal _t9397 = gem_v_b;
     GemVal _t9396[] = {gem_v_p, GEM_STR_LIT("}\n", 2)};
     GemVal _t9398[] = {_t9397, gem_interp(2, _t9396)};
     (void)(gem_buf_push_fn(NULL, _t9398, 2));
-#line 246 "compiler/codegen.gem"
-    gem_set_line(246);
+#line 247 "compiler/codegen.gem"
+    gem_set_line(247);
     GemVal _t9399[] = {gem_v_b};
     GemVal _t9400 = gem_to_string_fn(NULL, _t9399, 1);
     if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t9400, 1);
@@ -43307,13 +43310,13 @@ static GemVal __anon_136(void *_env, GemVal *args, int argc) {
     GemVal *gem_v_is_global_ref = _cls->gem_v_is_global_ref;
     GemVal *gem_v_ns_targets = _cls->gem_v_ns_targets;
     GemVal *gem_v_top_level_vars = _cls->gem_v_top_level_vars;
-    gem_push_frame("anonymous fn", "compiler/codegen.gem", 250);
+    gem_push_frame("anonymous fn", "compiler/codegen.gem", 251);
     GemVal gem_v_name = (argc > 0) ? args[0] : GEM_NIL;
     GemVal gem_v_p = (argc > 1) ? args[1] : GEM_NIL;
     GemArenaPoint _ret_pt;
     gem_arena_point(&_ret_pt);
-#line 251 "compiler/codegen.gem"
-    gem_set_line(251);
+#line 252 "compiler/codegen.gem"
+    gem_set_line(252);
     GemVal _t9403 = (*gem_v_ns_targets);
     GemVal _t9404 = gem_eq(gem_table_get(_t9403, gem_v_name), GEM_NIL);
     GemVal _t9407;
@@ -43322,29 +43325,29 @@ static GemVal __anon_136(void *_env, GemVal *args, int argc) {
     } else {
     GemVal _t9406 = (*gem_v_is_global_ref);
     GemVal _t9405[] = {gem_v_name};
-    gem_check_callable(_t9406, "compiler/codegen.gem", 251);
+    gem_check_callable(_t9406, "compiler/codegen.gem", 252);
         _t9407 = gem_not(_t9406.fn(_t9406.env, _t9405, 1));
     }
     if (gem_truthy(_t9407)) {
-#line 252 "compiler/codegen.gem"
-        gem_set_line(252);
+#line 253 "compiler/codegen.gem"
+        gem_set_line(253);
         GemVal _t9408 = GEM_STR_LIT("", 0);
         if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t9408, 1);
         gem_pop_frame();
         return _t9408;
     }
-#line 254 "compiler/codegen.gem"
-    gem_set_line(254);
-    GemVal gem_v_out = GEM_STR_LIT("", 0);
 #line 255 "compiler/codegen.gem"
     gem_set_line(255);
+    GemVal gem_v_out = GEM_STR_LIT("", 0);
+#line 256 "compiler/codegen.gem"
+    gem_set_line(256);
     GemVal _t9409 = (*gem_v_ns_targets);
     GemVal gem_v___for_items_237 = gem_for_items_1(gem_table_get(_t9409, gem_v_name));
-#line 255 "compiler/codegen.gem"
-    gem_set_line(255);
+#line 256 "compiler/codegen.gem"
+    gem_set_line(256);
     GemVal gem_v___for_i_237 = gem_int(0);
-#line 255 "compiler/codegen.gem"
-    gem_set_line(255);
+#line 256 "compiler/codegen.gem"
+    gem_set_line(256);
     int _t9411 = 0;
     GemArenaMark _mk269;
     gem_arena_mark(&_mk269);
@@ -43356,40 +43359,40 @@ static GemVal __anon_136(void *_env, GemVal *args, int argc) {
         }
     GemVal _t9410 = gem_v___for_i_237;
         if (!gem_truthy(gem_lt(_t9410, gem_for_len_1(gem_v___for_items_237)))) break;
-#line 255 "compiler/codegen.gem"
-        gem_set_line(255);
-    GemVal _t9412 = gem_v___for_items_237;
-        GemVal gem_v_t = gem_table_get(_t9412, gem_v___for_i_237);
-#line 255 "compiler/codegen.gem"
-        gem_set_line(255);
-        gem_v___for_i_237 = gem_add(gem_v___for_i_237, gem_int(1));
 #line 256 "compiler/codegen.gem"
         gem_set_line(256);
+    GemVal _t9412 = gem_v___for_items_237;
+        GemVal gem_v_t = gem_table_get(_t9412, gem_v___for_i_237);
+#line 256 "compiler/codegen.gem"
+        gem_set_line(256);
+        gem_v___for_i_237 = gem_add(gem_v___for_i_237, gem_int(1));
+#line 257 "compiler/codegen.gem"
+        gem_set_line(257);
     GemVal _t9416 = gem_g___mod_codegen_set_contains;
     GemVal _t9414 = (*gem_v_top_level_vars);
     GemVal _t9413 = gem_v_t;
     static GemICacheSlot _ic_1629 = {0};
     GemVal _t9415[] = {_t9414, gem_table_get_cached(_t9413, "binding", &_ic_1629)};
-    gem_check_callable(_t9416, "compiler/codegen.gem", 256);
+    gem_check_callable(_t9416, "compiler/codegen.gem", 257);
         if (gem_truthy(_t9416.fn(_t9416.env, _t9415, 2))) {
-#line 257 "compiler/codegen.gem"
-            gem_set_line(257);
+#line 258 "compiler/codegen.gem"
+            gem_set_line(258);
     GemVal _t9427 = gem_v_p;
     GemVal _t9419 = (*gem_v_gmangle);
     GemVal _t9417 = gem_v_t;
     static GemICacheSlot _ic_1630 = {0};
     GemVal _t9418[] = {gem_table_get_cached(_t9417, "binding", &_ic_1630)};
-    gem_check_callable(_t9419, "compiler/codegen.gem", 257);
+    gem_check_callable(_t9419, "compiler/codegen.gem", 258);
     GemVal _t9426 = _t9419.fn(_t9419.env, _t9418, 1);
     GemVal _t9422 = gem_g___mod_codegen_escape_c_string;
     GemVal _t9420 = gem_v_t;
     static GemICacheSlot _ic_1631 = {0};
     GemVal _t9421[] = {gem_table_get_cached(_t9420, "field", &_ic_1631)};
-    gem_check_callable(_t9422, "compiler/codegen.gem", 257);
+    gem_check_callable(_t9422, "compiler/codegen.gem", 258);
     GemVal _t9425 = _t9422.fn(_t9422.env, _t9421, 1);
     GemVal _t9424 = (*gem_v_gmangle);
     GemVal _t9423[] = {gem_v_name};
-    gem_check_callable(_t9424, "compiler/codegen.gem", 257);
+    gem_check_callable(_t9424, "compiler/codegen.gem", 258);
     GemVal _t9428[] = {_t9427, GEM_STR_LIT("gem_ns_refresh(", 15), _t9426, GEM_STR_LIT(", \"", 3), _t9425, GEM_STR_LIT("\", ", 3), _t9424.fn(_t9424.env, _t9423, 1), GEM_STR_LIT(");\n", 3)};
             gem_string_append_to(&gem_v_out, gem_interp(8, _t9428), &_t9411);
 
@@ -43397,8 +43400,8 @@ static GemVal __anon_136(void *_env, GemVal *args, int argc) {
     }
     if (_t9411) gem_v_out = gem_string_finish(gem_v_out);
 
-#line 260 "compiler/codegen.gem"
-    gem_set_line(260);
+#line 261 "compiler/codegen.gem"
+    gem_set_line(261);
     GemVal _t9429 = gem_v_out;
     if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t9429, 1);
     gem_pop_frame();
@@ -43418,52 +43421,52 @@ static GemVal __anon_137(void *_env, GemVal *args, int argc) {
     GemVal *gem_v_gindex = _cls->gem_v_gindex;
     GemVal *gem_v_is_global_ref = _cls->gem_v_is_global_ref;
     GemVal *gem_v_mangle = _cls->gem_v_mangle;
-    gem_push_frame("anonymous fn", "compiler/codegen.gem", 263);
+    gem_push_frame("anonymous fn", "compiler/codegen.gem", 264);
     GemVal gem_v_name = (argc > 0) ? args[0] : GEM_NIL;
     GemArenaPoint _ret_pt;
     gem_arena_point(&_ret_pt);
-#line 264 "compiler/codegen.gem"
-    gem_set_line(264);
+#line 265 "compiler/codegen.gem"
+    gem_set_line(265);
     GemVal _t9436 = (*gem_v_is_global_ref);
     GemVal _t9435[] = {gem_v_name};
-    gem_check_callable(_t9436, "compiler/codegen.gem", 264);
+    gem_check_callable(_t9436, "compiler/codegen.gem", 265);
     if (gem_truthy(_t9436.fn(_t9436.env, _t9435, 1))) {
-#line 265 "compiler/codegen.gem"
-        gem_set_line(265);
+#line 266 "compiler/codegen.gem"
+        gem_set_line(266);
     GemVal _t9438 = (*gem_v_gindex);
     GemVal _t9437[] = {gem_v_name};
-    gem_check_callable(_t9438, "compiler/codegen.gem", 265);
+    gem_check_callable(_t9438, "compiler/codegen.gem", 266);
     GemVal _t9439[] = {GEM_STR_LIT("(*gem_global_ref(", 17), _t9438.fn(_t9438.env, _t9437, 1), GEM_STR_LIT("))", 2)};
         GemVal _t9440 = gem_interp(3, _t9439);
         if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t9440, 1);
         gem_pop_frame();
         return _t9440;
     }
-#line 267 "compiler/codegen.gem"
-    gem_set_line(267);
+#line 268 "compiler/codegen.gem"
+    gem_set_line(268);
     GemVal _t9444 = gem_g___mod_codegen_set_contains;
     GemVal _t9441 = (*gem_v_fs);
     static GemICacheSlot _ic_1632 = {0};
     GemVal _t9442 = gem_table_get_cached(_t9441, "boxed_vars", &_ic_1632);
     GemVal _t9443[] = {_t9442, gem_v_name};
-    gem_check_callable(_t9444, "compiler/codegen.gem", 267);
+    gem_check_callable(_t9444, "compiler/codegen.gem", 268);
     if (gem_truthy(_t9444.fn(_t9444.env, _t9443, 2))) {
-#line 268 "compiler/codegen.gem"
-        gem_set_line(268);
+#line 269 "compiler/codegen.gem"
+        gem_set_line(269);
     GemVal _t9446 = (*gem_v_mangle);
     GemVal _t9445[] = {gem_v_name};
-    gem_check_callable(_t9446, "compiler/codegen.gem", 268);
+    gem_check_callable(_t9446, "compiler/codegen.gem", 269);
     GemVal _t9447[] = {GEM_STR_LIT("(*", 2), _t9446.fn(_t9446.env, _t9445, 1), GEM_STR_LIT(")", 1)};
         GemVal _t9448 = gem_interp(3, _t9447);
         if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t9448, 1);
         gem_pop_frame();
         return _t9448;
     }
-#line 270 "compiler/codegen.gem"
-    gem_set_line(270);
+#line 271 "compiler/codegen.gem"
+    gem_set_line(271);
     GemVal _t9450 = (*gem_v_mangle);
     GemVal _t9449[] = {gem_v_name};
-    gem_check_callable(_t9450, "compiler/codegen.gem", 270);
+    gem_check_callable(_t9450, "compiler/codegen.gem", 271);
     GemVal _t9451 = _t9450.fn(_t9450.env, _t9449, 1);
     if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t9451, 1);
     gem_pop_frame();
@@ -43481,22 +43484,22 @@ static GemVal __anon_138(void *_env, GemVal *args, int argc) {
     GemVal *gem_v_gindex = _cls->gem_v_gindex;
     GemVal *gem_v_is_global_ref = _cls->gem_v_is_global_ref;
     GemVal *gem_v_var_lvalue = _cls->gem_v_var_lvalue;
-    gem_push_frame("anonymous fn", "compiler/codegen.gem", 273);
+    gem_push_frame("anonymous fn", "compiler/codegen.gem", 274);
     GemVal gem_v_name = (argc > 0) ? args[0] : GEM_NIL;
     GemVal gem_v_expr = (argc > 1) ? args[1] : GEM_NIL;
     GemArenaPoint _ret_pt;
     gem_arena_point(&_ret_pt);
-#line 274 "compiler/codegen.gem"
-    gem_set_line(274);
+#line 275 "compiler/codegen.gem"
+    gem_set_line(275);
     GemVal _t9457 = (*gem_v_is_global_ref);
     GemVal _t9456[] = {gem_v_name};
-    gem_check_callable(_t9457, "compiler/codegen.gem", 274);
+    gem_check_callable(_t9457, "compiler/codegen.gem", 275);
     if (gem_truthy(_t9457.fn(_t9457.env, _t9456, 1))) {
-#line 275 "compiler/codegen.gem"
-        gem_set_line(275);
+#line 276 "compiler/codegen.gem"
+        gem_set_line(276);
     GemVal _t9459 = (*gem_v_gindex);
     GemVal _t9458[] = {gem_v_name};
-    gem_check_callable(_t9459, "compiler/codegen.gem", 275);
+    gem_check_callable(_t9459, "compiler/codegen.gem", 276);
     GemVal _t9460 = _t9459.fn(_t9459.env, _t9458, 1);
     GemVal _t9461[] = {GEM_STR_LIT("gem_global_set(", 15), _t9460, GEM_STR_LIT(", ", 2), gem_v_expr, GEM_STR_LIT(");", 2)};
         GemVal _t9462 = gem_interp(5, _t9461);
@@ -43504,11 +43507,11 @@ static GemVal __anon_138(void *_env, GemVal *args, int argc) {
         gem_pop_frame();
         return _t9462;
     }
-#line 277 "compiler/codegen.gem"
-    gem_set_line(277);
+#line 278 "compiler/codegen.gem"
+    gem_set_line(278);
     GemVal _t9464 = (*gem_v_var_lvalue);
     GemVal _t9463[] = {gem_v_name};
-    gem_check_callable(_t9464, "compiler/codegen.gem", 277);
+    gem_check_callable(_t9464, "compiler/codegen.gem", 278);
     GemVal _t9465 = _t9464.fn(_t9464.env, _t9463, 1);
     GemVal _t9466[] = {_t9465, GEM_STR_LIT(" = ", 3), gem_v_expr, GEM_STR_LIT(";", 1)};
     GemVal _t9467 = gem_interp(4, _t9466);
@@ -43527,20 +43530,20 @@ static GemVal __anon_139(void *_env, GemVal *args, int argc) {
     static const GemLeafSite _leaf_site = {"anonymous fn", "compiler/codegen.gem"};
     gem_leaf_site = &_leaf_site;
     GemVal gem_v_p = (argc > 0) ? args[0] : GEM_NIL;
-#line 282 "compiler/codegen.gem"
-    gem_leaf_line = 282;
+#line 283 "compiler/codegen.gem"
+    gem_leaf_line = 283;
     GemVal _t9472 = (*gem_v_fs);
     static GemICacheSlot _ic_1633 = {0};
     if (gem_truthy(gem_table_get_cached(_t9472, "in_leaf_fn", &_ic_1633))) {
-#line 283 "compiler/codegen.gem"
-        gem_leaf_line = 283;
+#line 284 "compiler/codegen.gem"
+        gem_leaf_line = 284;
     GemVal _t9473[] = {gem_v_p, GEM_STR_LIT("gem_leaf_site = NULL;\n", 22)};
         GemVal _t9474 = gem_interp(2, _t9473);
         gem_leaf_site = NULL;
         return _t9474;
     } else {
-#line 285 "compiler/codegen.gem"
-        gem_leaf_line = 285;
+#line 286 "compiler/codegen.gem"
+        gem_leaf_line = 286;
     GemVal _t9475[] = {gem_v_p, GEM_STR_LIT("gem_pop_frame();\n", 17)};
         GemVal _t9476 = gem_interp(2, _t9475);
         gem_leaf_site = NULL;
@@ -43557,21 +43560,21 @@ static GemVal __anon_140(void *_env, GemVal *args, int argc) {
     struct _closure___anon_140 *_cls = (struct _closure___anon_140 *)_env;
     GemVal *gem_v_fs = _cls->gem_v_fs;
     GemVal *gem_v_pop_str = _cls->gem_v_pop_str;
-    gem_push_frame("anonymous fn", "compiler/codegen.gem", 290);
+    gem_push_frame("anonymous fn", "compiler/codegen.gem", 291);
     GemVal gem_v_p = (argc > 0) ? args[0] : GEM_NIL;
     GemVal gem_v_t = (argc > 1) ? args[1] : GEM_NIL;
     GemArenaPoint _ret_pt;
     gem_arena_point(&_ret_pt);
-#line 291 "compiler/codegen.gem"
-    gem_set_line(291);
+#line 292 "compiler/codegen.gem"
+    gem_set_line(292);
     GemVal gem_v___val_238 = GEM_NIL;
-#line 291 "compiler/codegen.gem"
-    gem_set_line(291);
+#line 292 "compiler/codegen.gem"
+    gem_set_line(292);
     GemVal _t9478 = (*gem_v_fs);
     static GemICacheSlot _ic_1634 = {0};
     if (gem_truthy(gem_neq(gem_table_get_cached(_t9478, "ret_point", &_ic_1634), GEM_NIL))) {
-#line 292 "compiler/codegen.gem"
-        gem_set_line(292);
+#line 293 "compiler/codegen.gem"
+        gem_set_line(293);
     GemVal _t9483 = gem_v_p;
     GemVal _t9479 = (*gem_v_fs);
     static GemICacheSlot _ic_1635 = {0};
@@ -43582,19 +43585,19 @@ static GemVal __anon_140(void *_env, GemVal *args, int argc) {
     GemVal _t9484[] = {_t9483, GEM_STR_LIT("if (gem_ret_reset_due(&", 23), _t9482, GEM_STR_LIT(")) gem_arena_reset_return(&", 27), _t9481, GEM_STR_LIT(", &", 3), gem_v_t, GEM_STR_LIT(", 1);\n", 6)};
         gem_v___val_238 = gem_interp(8, _t9484);
     } else {
-#line 294 "compiler/codegen.gem"
-        gem_set_line(294);
+#line 295 "compiler/codegen.gem"
+        gem_set_line(295);
         gem_v___val_238 = GEM_STR_LIT("", 0);
     }
-#line 291 "compiler/codegen.gem"
-    gem_set_line(291);
+#line 292 "compiler/codegen.gem"
+    gem_set_line(292);
     GemVal gem_v_reset = gem_v___val_238;
-#line 296 "compiler/codegen.gem"
-    gem_set_line(296);
+#line 297 "compiler/codegen.gem"
+    gem_set_line(297);
     GemVal _t9489 = gem_v_reset;
     GemVal _t9486 = (*gem_v_pop_str);
     GemVal _t9485[] = {gem_v_p};
-    gem_check_callable(_t9486, "compiler/codegen.gem", 296);
+    gem_check_callable(_t9486, "compiler/codegen.gem", 297);
     GemVal _t9488 = _t9486.fn(_t9486.env, _t9485, 1);
     GemVal _t9487 = gem_v_p;
     GemVal _t9490[] = {_t9489, _t9488, _t9487, GEM_STR_LIT("return ", 7), gem_v_t, GEM_STR_LIT(";", 1)};
@@ -43613,20 +43616,20 @@ static GemVal __anon_141(void *_env, GemVal *args, int argc) {
     struct _closure___anon_141 *_cls = (struct _closure___anon_141 *)_env;
     GemVal *gem_v_fs = _cls->gem_v_fs;
     GemVal *gem_v_pop_str = _cls->gem_v_pop_str;
-    gem_push_frame("anonymous fn", "compiler/codegen.gem", 298);
+    gem_push_frame("anonymous fn", "compiler/codegen.gem", 299);
     GemVal gem_v_p = (argc > 0) ? args[0] : GEM_NIL;
     GemArenaPoint _ret_pt;
     gem_arena_point(&_ret_pt);
-#line 299 "compiler/codegen.gem"
-    gem_set_line(299);
+#line 300 "compiler/codegen.gem"
+    gem_set_line(300);
     GemVal gem_v___val_239 = GEM_NIL;
-#line 299 "compiler/codegen.gem"
-    gem_set_line(299);
+#line 300 "compiler/codegen.gem"
+    gem_set_line(300);
     GemVal _t9494 = (*gem_v_fs);
     static GemICacheSlot _ic_1637 = {0};
     if (gem_truthy(gem_neq(gem_table_get_cached(_t9494, "ret_point", &_ic_1637), GEM_NIL))) {
-#line 300 "compiler/codegen.gem"
-        gem_set_line(300);
+#line 301 "compiler/codegen.gem"
+        gem_set_line(301);
     GemVal _t9498 = gem_v_p;
     GemVal _t9495 = (*gem_v_fs);
     static GemICacheSlot _ic_1638 = {0};
@@ -43636,19 +43639,19 @@ static GemVal __anon_141(void *_env, GemVal *args, int argc) {
     GemVal _t9499[] = {_t9498, GEM_STR_LIT("if (gem_ret_reset_due(&", 23), _t9497, GEM_STR_LIT(")) gem_arena_reset_return(&", 27), gem_table_get_cached(_t9496, "ret_point", &_ic_1639), GEM_STR_LIT(", NULL, 1);\n", 12)};
         gem_v___val_239 = gem_interp(6, _t9499);
     } else {
-#line 302 "compiler/codegen.gem"
-        gem_set_line(302);
+#line 303 "compiler/codegen.gem"
+        gem_set_line(303);
         gem_v___val_239 = GEM_STR_LIT("", 0);
     }
-#line 299 "compiler/codegen.gem"
-    gem_set_line(299);
+#line 300 "compiler/codegen.gem"
+    gem_set_line(300);
     GemVal gem_v_reset = gem_v___val_239;
-#line 304 "compiler/codegen.gem"
-    gem_set_line(304);
+#line 305 "compiler/codegen.gem"
+    gem_set_line(305);
     GemVal _t9503 = gem_v_reset;
     GemVal _t9501 = (*gem_v_pop_str);
     GemVal _t9500[] = {gem_v_p};
-    gem_check_callable(_t9501, "compiler/codegen.gem", 304);
+    gem_check_callable(_t9501, "compiler/codegen.gem", 305);
     GemVal _t9502 = _t9501.fn(_t9501.env, _t9500, 1);
     GemVal _t9504[] = {_t9503, _t9502, gem_v_p, GEM_STR_LIT("return GEM_NIL;", 15)};
     GemVal _t9505 = gem_interp(4, _t9504);
@@ -43668,21 +43671,21 @@ static GemVal __anon_142(void *_env, GemVal *args, int argc) {
     gem_leaf_site = &_leaf_site;
     GemVal gem_v_line = (argc > 0) ? args[0] : GEM_NIL;
     GemVal gem_v_p = (argc > 1) ? args[1] : GEM_NIL;
-#line 307 "compiler/codegen.gem"
-    gem_leaf_line = 307;
+#line 308 "compiler/codegen.gem"
+    gem_leaf_line = 308;
     GemVal _t9508 = (*gem_v_fs);
     static GemICacheSlot _ic_1640 = {0};
     if (gem_truthy(gem_table_get_cached(_t9508, "in_leaf_fn", &_ic_1640))) {
-#line 308 "compiler/codegen.gem"
-        gem_leaf_line = 308;
+#line 309 "compiler/codegen.gem"
+        gem_leaf_line = 309;
     GemVal _t9509 = gem_v_p;
     GemVal _t9510[] = {_t9509, GEM_STR_LIT("gem_leaf_line = ", 16), gem_v_line, GEM_STR_LIT(";\n", 2)};
         GemVal _t9511 = gem_interp(4, _t9510);
         gem_leaf_site = NULL;
         return _t9511;
     } else {
-#line 310 "compiler/codegen.gem"
-        gem_leaf_line = 310;
+#line 311 "compiler/codegen.gem"
+        gem_leaf_line = 311;
     GemVal _t9512 = gem_v_p;
     GemVal _t9513[] = {_t9512, GEM_STR_LIT("gem_set_line(", 13), gem_v_line, GEM_STR_LIT(");\n", 3)};
         GemVal _t9514 = gem_interp(4, _t9513);
@@ -43695,33 +43698,33 @@ struct _closure___anon_143 {
     intptr_t _num_captures;
 };
 static GemVal __anon_143(void *_env, GemVal *args, int argc) {
-    gem_push_frame("anonymous fn", "compiler/codegen.gem", 314);
+    gem_push_frame("anonymous fn", "compiler/codegen.gem", 315);
     GemVal gem_v_name = (argc > 0) ? args[0] : GEM_NIL;
     GemVal gem_v_file = (argc > 1) ? args[1] : GEM_NIL;
     GemVal gem_v_line = (argc > 2) ? args[2] : GEM_NIL;
     GemVal gem_v_body = (argc > 3) ? args[3] : GEM_NIL;
-#line 315 "compiler/codegen.gem"
-    gem_set_line(315);
-    GemVal gem_v_b = gem_buf_new_fn(NULL, NULL, 0);
 #line 316 "compiler/codegen.gem"
     gem_set_line(316);
+    GemVal gem_v_b = gem_buf_new_fn(NULL, NULL, 0);
+#line 317 "compiler/codegen.gem"
+    gem_set_line(317);
     GemVal _t9522 = gem_v_b;
     GemVal _t9517 = gem_g___mod_codegen_escape_c_string;
     GemVal _t9516[] = {gem_v_name};
-    gem_check_callable(_t9517, "compiler/codegen.gem", 316);
+    gem_check_callable(_t9517, "compiler/codegen.gem", 317);
     GemVal _t9520 = _t9517.fn(_t9517.env, _t9516, 1);
     GemVal _t9519 = gem_g___mod_codegen_escape_c_string;
     GemVal _t9518[] = {gem_v_file};
-    gem_check_callable(_t9519, "compiler/codegen.gem", 316);
+    gem_check_callable(_t9519, "compiler/codegen.gem", 317);
     GemVal _t9521[] = {GEM_STR_LIT("    static const GemLeafSite _leaf_site = {\"", 44), _t9520, GEM_STR_LIT("\", \"", 4), _t9519.fn(_t9519.env, _t9518, 1), GEM_STR_LIT("\"};\n", 4)};
     GemVal _t9523[] = {_t9522, gem_interp(5, _t9521)};
     (void)(gem_buf_push_fn(NULL, _t9523, 2));
-#line 317 "compiler/codegen.gem"
-    gem_set_line(317);
-    GemVal _t9524[] = {gem_v_b, GEM_STR_LIT("    gem_leaf_site = &_leaf_site;\n", 33)};
-    (void)(gem_buf_push_fn(NULL, _t9524, 2));
 #line 318 "compiler/codegen.gem"
     gem_set_line(318);
+    GemVal _t9524[] = {gem_v_b, GEM_STR_LIT("    gem_leaf_site = &_leaf_site;\n", 33)};
+    (void)(gem_buf_push_fn(NULL, _t9524, 2));
+#line 319 "compiler/codegen.gem"
+    gem_set_line(319);
     GemVal _t9525 = gem_eq(gem_len_1(gem_v_body), gem_int(0));
     GemVal _t9526;
     if (gem_truthy(_t9525)) {
@@ -43738,15 +43741,15 @@ static GemVal __anon_143(void *_env, GemVal *args, int argc) {
         _t9528 = gem_eq(gem_table_get_cached(_t9527, "line", &_ic_1641), GEM_NIL);
     }
     if (gem_truthy(_t9528)) {
-#line 319 "compiler/codegen.gem"
-        gem_set_line(319);
+#line 320 "compiler/codegen.gem"
+        gem_set_line(320);
     GemVal _t9530 = gem_v_b;
     GemVal _t9529[] = {GEM_STR_LIT("    gem_leaf_line = ", 20), gem_v_line, GEM_STR_LIT(";\n", 2)};
     GemVal _t9531[] = {_t9530, gem_interp(3, _t9529)};
         (void)(gem_buf_push_fn(NULL, _t9531, 2));
     }
-#line 321 "compiler/codegen.gem"
-    gem_set_line(321);
+#line 322 "compiler/codegen.gem"
+    gem_set_line(322);
     GemVal _t9532[] = {gem_v_b};
     GemVal _t9533 = gem_to_string_fn(NULL, _t9532, 1);
     gem_pop_frame();
@@ -43764,14 +43767,14 @@ static GemVal __anon_144(void *_env, GemVal *args, int argc) {
     GemVal *gem_v_builtins = _cls->gem_v_builtins;
     GemVal *gem_v_defined_fns = _cls->gem_v_defined_fns;
     GemVal *gem_v_fs = _cls->gem_v_fs;
-    gem_push_frame("anonymous fn", "compiler/codegen.gem", 325);
+    gem_push_frame("anonymous fn", "compiler/codegen.gem", 326);
     GemVal gem_v_name = (argc > 0) ? args[0] : GEM_NIL;
-#line 326 "compiler/codegen.gem"
-    gem_set_line(326);
+#line 327 "compiler/codegen.gem"
+    gem_set_line(327);
     GemVal _t9536 = gem_g___mod_codegen_set_contains;
     GemVal _t9534 = (*gem_v_builtins);
     GemVal _t9535[] = {_t9534, gem_v_name};
-    gem_check_callable(_t9536, "compiler/codegen.gem", 326);
+    gem_check_callable(_t9536, "compiler/codegen.gem", 327);
     GemVal _t9537 = _t9536.fn(_t9536.env, _t9535, 2);
     GemVal _t9542;
     if (!gem_truthy(_t9537)) {
@@ -43782,7 +43785,7 @@ static GemVal __anon_144(void *_env, GemVal *args, int argc) {
     static GemICacheSlot _ic_1642 = {0};
     GemVal _t9539 = gem_table_get_cached(_t9538, "local_names", &_ic_1642);
     GemVal _t9540[] = {_t9539, gem_v_name};
-    gem_check_callable(_t9541, "compiler/codegen.gem", 326);
+    gem_check_callable(_t9541, "compiler/codegen.gem", 327);
         _t9542 = gem_not(_t9541.fn(_t9541.env, _t9540, 2));
     }
     GemVal _t9546;
@@ -43792,7 +43795,7 @@ static GemVal __anon_144(void *_env, GemVal *args, int argc) {
     GemVal _t9545 = gem_g___mod_codegen_set_contains;
     GemVal _t9543 = (*gem_v_defined_fns);
     GemVal _t9544[] = {_t9543, gem_v_name};
-    gem_check_callable(_t9545, "compiler/codegen.gem", 326);
+    gem_check_callable(_t9545, "compiler/codegen.gem", 327);
         _t9546 = _t9545.fn(_t9545.env, _t9544, 2);
     }
     GemVal _t9547 = _t9546;
@@ -43811,19 +43814,19 @@ static GemVal __anon_145(void *_env, GemVal *args, int argc) {
     GemVal *gem_v_compile_expr = _cls->gem_v_compile_expr;
     GemVal *gem_v_is_inert_expr = _cls->gem_v_is_inert_expr;
     GemVal *gem_v_pin_operand = _cls->gem_v_pin_operand;
-    gem_push_frame("anonymous fn", "compiler/codegen.gem", 332);
+    gem_push_frame("anonymous fn", "compiler/codegen.gem", 333);
     GemVal gem_v_left_r = (argc > 0) ? args[0] : GEM_NIL;
     GemVal gem_v_right_node = (argc > 1) ? args[1] : GEM_NIL;
     GemArenaPoint _ret_pt;
     gem_arena_point(&_ret_pt);
-#line 333 "compiler/codegen.gem"
-    gem_set_line(333);
-    GemVal _t9552 = (*gem_v_compile_expr);
-    GemVal _t9551[] = {gem_v_right_node};
-    gem_check_callable(_t9552, "compiler/codegen.gem", 333);
-    GemVal gem_v_right_r = _t9552.fn(_t9552.env, _t9551, 1);
 #line 334 "compiler/codegen.gem"
     gem_set_line(334);
+    GemVal _t9552 = (*gem_v_compile_expr);
+    GemVal _t9551[] = {gem_v_right_node};
+    gem_check_callable(_t9552, "compiler/codegen.gem", 334);
+    GemVal gem_v_right_r = _t9552.fn(_t9552.env, _t9551, 1);
+#line 335 "compiler/codegen.gem"
+    gem_set_line(335);
     GemVal _t9553 = gem_v_right_r;
     static GemICacheSlot _ic_1643 = {0};
     GemVal _t9554 = gem_neq(gem_table_get_cached(_t9553, "setup", &_ic_1643), GEM_STR_LIT("", 0));
@@ -43835,19 +43838,19 @@ static GemVal __anon_145(void *_env, GemVal *args, int argc) {
     GemVal _t9555 = gem_v_right_r;
     static GemICacheSlot _ic_1644 = {0};
     GemVal _t9556[] = {gem_table_get_cached(_t9555, "expr", &_ic_1644)};
-    gem_check_callable(_t9557, "compiler/codegen.gem", 334);
+    gem_check_callable(_t9557, "compiler/codegen.gem", 335);
         _t9558 = gem_not(_t9557.fn(_t9557.env, _t9556, 1));
     }
     if (gem_truthy(_t9558)) {
-#line 335 "compiler/codegen.gem"
-        gem_set_line(335);
+#line 336 "compiler/codegen.gem"
+        gem_set_line(336);
     GemVal _t9560 = (*gem_v_pin_operand);
     GemVal _t9559[] = {gem_v_left_r};
-    gem_check_callable(_t9560, "compiler/codegen.gem", 335);
+    gem_check_callable(_t9560, "compiler/codegen.gem", 336);
         gem_v_left_r = _t9560.fn(_t9560.env, _t9559, 1);
     }
-#line 337 "compiler/codegen.gem"
-    gem_set_line(337);
+#line 338 "compiler/codegen.gem"
+    gem_set_line(338);
     GemVal _t9561 = gem_table_new_braces();
     GemVal _t9562 = gem_v_left_r;
     static GemICacheSlot _ic_1645 = {0};
@@ -43876,18 +43879,18 @@ static GemVal __anon_146(void *_env, GemVal *args, int argc) {
     struct _closure___anon_146 *_cls = (struct _closure___anon_146 *)_env;
     GemVal *gem_v_is_inert_expr = _cls->gem_v_is_inert_expr;
     GemVal *gem_v_pin_operand = _cls->gem_v_pin_operand;
-    gem_push_frame("anonymous fn", "compiler/codegen.gem", 341);
+    gem_push_frame("anonymous fn", "compiler/codegen.gem", 342);
     GemVal gem_v_results = (argc > 0) ? args[0] : GEM_NIL;
     GemArenaPoint _ret_pt;
     gem_arena_point(&_ret_pt);
-#line 342 "compiler/codegen.gem"
-    gem_set_line(342);
-    GemVal gem_v_later_runs = gem_bool(0);
 #line 343 "compiler/codegen.gem"
     gem_set_line(343);
-    GemVal gem_v_i = gem_sub(gem_len_1(gem_v_results), gem_int(1));
+    GemVal gem_v_later_runs = gem_bool(0);
 #line 344 "compiler/codegen.gem"
     gem_set_line(344);
+    GemVal gem_v_i = gem_sub(gem_len_1(gem_v_results), gem_int(1));
+#line 345 "compiler/codegen.gem"
+    gem_set_line(345);
     GemArenaMark _mk270;
     gem_arena_mark(&_mk270);
     while (1) {
@@ -43897,27 +43900,27 @@ static GemVal __anon_146(void *_env, GemVal *args, int argc) {
             gem_arena_reset_region(&_mk270, _rr, 5, NULL, 0);
         }
         if (!gem_truthy(gem_ge(gem_v_i, gem_int(0)))) break;
-#line 345 "compiler/codegen.gem"
-        gem_set_line(345);
-    GemVal _t9571 = gem_v_results;
-        GemVal gem_v_r = gem_table_get(_t9571, gem_v_i);
 #line 346 "compiler/codegen.gem"
         gem_set_line(346);
-        if (gem_truthy(gem_v_later_runs)) {
+    GemVal _t9571 = gem_v_results;
+        GemVal gem_v_r = gem_table_get(_t9571, gem_v_i);
 #line 347 "compiler/codegen.gem"
-            gem_set_line(347);
-    GemVal _t9573 = (*gem_v_pin_operand);
-    GemVal _t9572[] = {gem_v_r};
-    gem_check_callable(_t9573, "compiler/codegen.gem", 347);
-            gem_v_r = _t9573.fn(_t9573.env, _t9572, 1);
+        gem_set_line(347);
+        if (gem_truthy(gem_v_later_runs)) {
 #line 348 "compiler/codegen.gem"
             gem_set_line(348);
+    GemVal _t9573 = (*gem_v_pin_operand);
+    GemVal _t9572[] = {gem_v_r};
+    gem_check_callable(_t9573, "compiler/codegen.gem", 348);
+            gem_v_r = _t9573.fn(_t9573.env, _t9572, 1);
+#line 349 "compiler/codegen.gem"
+            gem_set_line(349);
     GemVal _t9575 = gem_v_results;
     GemVal _t9574 = gem_v_i;
             gem_table_set(_t9575, _t9574, gem_v_r);
         }
-#line 350 "compiler/codegen.gem"
-        gem_set_line(350);
+#line 351 "compiler/codegen.gem"
+        gem_set_line(351);
     GemVal _t9576 = gem_v_r;
     static GemICacheSlot _ic_1649 = {0};
     GemVal _t9577 = gem_neq(gem_table_get_cached(_t9576, "setup", &_ic_1649), GEM_STR_LIT("", 0));
@@ -43929,33 +43932,33 @@ static GemVal __anon_146(void *_env, GemVal *args, int argc) {
     GemVal _t9578 = gem_v_r;
     static GemICacheSlot _ic_1650 = {0};
     GemVal _t9579[] = {gem_table_get_cached(_t9578, "expr", &_ic_1650)};
-    gem_check_callable(_t9580, "compiler/codegen.gem", 350);
+    gem_check_callable(_t9580, "compiler/codegen.gem", 351);
         _t9581 = gem_not(_t9580.fn(_t9580.env, _t9579, 1));
     }
         if (gem_truthy(_t9581)) {
-#line 351 "compiler/codegen.gem"
-            gem_set_line(351);
+#line 352 "compiler/codegen.gem"
+            gem_set_line(352);
             gem_v_later_runs = gem_bool(1);
         }
-#line 353 "compiler/codegen.gem"
-        gem_set_line(353);
+#line 354 "compiler/codegen.gem"
+        gem_set_line(354);
         gem_v_i = gem_sub(gem_v_i, gem_int(1));
     }
-#line 355 "compiler/codegen.gem"
-    gem_set_line(355);
-    GemVal gem_v_b = gem_buf_new_fn(NULL, NULL, 0);
 #line 356 "compiler/codegen.gem"
     gem_set_line(356);
+    GemVal gem_v_b = gem_buf_new_fn(NULL, NULL, 0);
+#line 357 "compiler/codegen.gem"
+    gem_set_line(357);
     GemVal _t9582 = gem_table_new();
     GemVal gem_v_exprs = _t9582;
-#line 357 "compiler/codegen.gem"
-    gem_set_line(357);
+#line 358 "compiler/codegen.gem"
+    gem_set_line(358);
     GemVal gem_v___for_items_240 = gem_for_items_1(gem_v_results);
-#line 357 "compiler/codegen.gem"
-    gem_set_line(357);
+#line 358 "compiler/codegen.gem"
+    gem_set_line(358);
     GemVal gem_v___for_i_240 = gem_int(0);
-#line 357 "compiler/codegen.gem"
-    gem_set_line(357);
+#line 358 "compiler/codegen.gem"
+    gem_set_line(358);
     GemArenaMark _mk271;
     gem_arena_mark(&_mk271);
     while (1) {
@@ -43966,22 +43969,22 @@ static GemVal __anon_146(void *_env, GemVal *args, int argc) {
         }
     GemVal _t9583 = gem_v___for_i_240;
         if (!gem_truthy(gem_lt(_t9583, gem_for_len_1(gem_v___for_items_240)))) break;
-#line 357 "compiler/codegen.gem"
-        gem_set_line(357);
-    GemVal _t9584 = gem_v___for_items_240;
-        GemVal gem_v_r = gem_table_get(_t9584, gem_v___for_i_240);
-#line 357 "compiler/codegen.gem"
-        gem_set_line(357);
-        gem_v___for_i_240 = gem_add(gem_v___for_i_240, gem_int(1));
 #line 358 "compiler/codegen.gem"
         gem_set_line(358);
+    GemVal _t9584 = gem_v___for_items_240;
+        GemVal gem_v_r = gem_table_get(_t9584, gem_v___for_i_240);
+#line 358 "compiler/codegen.gem"
+        gem_set_line(358);
+        gem_v___for_i_240 = gem_add(gem_v___for_i_240, gem_int(1));
+#line 359 "compiler/codegen.gem"
+        gem_set_line(359);
     GemVal _t9586 = gem_v_b;
     GemVal _t9585 = gem_v_r;
     static GemICacheSlot _ic_1651 = {0};
     GemVal _t9587[] = {_t9586, gem_table_get_cached(_t9585, "setup", &_ic_1651)};
         (void)(gem_buf_push_fn(NULL, _t9587, 2));
-#line 359 "compiler/codegen.gem"
-        gem_set_line(359);
+#line 360 "compiler/codegen.gem"
+        gem_set_line(360);
     GemVal _t9589 = gem_v_exprs;
     GemVal _t9588 = gem_v_r;
     static GemICacheSlot _ic_1652 = {0};
@@ -43989,8 +43992,8 @@ static GemVal __anon_146(void *_env, GemVal *args, int argc) {
         (void)(gem_push_fn(NULL, _t9590, 2));
     }
 
-#line 361 "compiler/codegen.gem"
-    gem_set_line(361);
+#line 362 "compiler/codegen.gem"
+    gem_set_line(362);
     GemVal _t9591 = gem_table_new_braces();
     GemVal _t9592[] = {gem_v_b};
     gem_table_set(_t9591, GEM_STR_LIT("setup", 5), gem_to_string_fn(NULL, _t9592, 1));
@@ -44008,15 +44011,15 @@ struct _closure___anon_147 {
 static GemVal __anon_147(void *_env, GemVal *args, int argc) {
     struct _closure___anon_147 *_cls = (struct _closure___anon_147 *)_env;
     GemVal *gem_v_fs = _cls->gem_v_fs;
-    gem_push_frame("anonymous fn", "compiler/codegen.gem", 389);
+    gem_push_frame("anonymous fn", "compiler/codegen.gem", 390);
     GemVal gem_v_node = (argc > 0) ? args[0] : GEM_NIL;
-#line 390 "compiler/codegen.gem"
-    gem_set_line(390);
+#line 391 "compiler/codegen.gem"
+    gem_set_line(391);
     GemVal _t9597 = gem_v_node;
     static GemICacheSlot _ic_1653 = {0};
     GemVal gem_v_func = gem_table_get_cached(_t9597, "func", &_ic_1653);
-#line 391 "compiler/codegen.gem"
-    gem_set_line(391);
+#line 392 "compiler/codegen.gem"
+    gem_set_line(392);
     GemVal _t9598 = gem_neq(gem_type_1(gem_v_func), GEM_STR_LIT("table", 5));
     GemVal _t9600;
     if (gem_truthy(_t9598)) {
@@ -44037,18 +44040,18 @@ static GemVal __anon_147(void *_env, GemVal *args, int argc) {
     GemVal _t9602 = gem_v_func;
     static GemICacheSlot _ic_1656 = {0};
     GemVal _t9604[] = {_t9603, gem_table_get_cached(_t9602, "name", &_ic_1656)};
-    gem_check_callable(_t9605, "compiler/codegen.gem", 391);
+    gem_check_callable(_t9605, "compiler/codegen.gem", 392);
         _t9606 = _t9605.fn(_t9605.env, _t9604, 2);
     }
     if (gem_truthy(_t9606)) {
-#line 392 "compiler/codegen.gem"
-        gem_set_line(392);
+#line 393 "compiler/codegen.gem"
+        gem_set_line(393);
         GemVal _t9607 = gem_bool(0);
         gem_pop_frame();
         return _t9607;
     }
-#line 394 "compiler/codegen.gem"
-    gem_set_line(394);
+#line 395 "compiler/codegen.gem"
+    gem_set_line(395);
     GemVal _t9609 = gem_g___mod_codegen_LEAF_BUILTINS;
     GemVal _t9608 = gem_v_func;
     static GemICacheSlot _ic_1657 = {0};
@@ -44066,71 +44069,71 @@ static GemVal __anon_148(void *_env, GemVal *args, int argc) {
     struct _closure___anon_148 *_cls = (struct _closure___anon_148 *)_env;
     GemVal *gem_v_leaf_safe_call = _cls->gem_v_leaf_safe_call;
     GemVal *gem_v_node_has_calls = _cls->gem_v_node_has_calls;
-    gem_push_frame("anonymous fn", "compiler/codegen.gem", 397);
+    gem_push_frame("anonymous fn", "compiler/codegen.gem", 398);
     GemVal gem_v_node = (argc > 0) ? args[0] : GEM_NIL;
     GemArenaPoint _ret_pt;
     gem_arena_point(&_ret_pt);
-#line 398 "compiler/codegen.gem"
-    gem_set_line(398);
-    if (gem_truthy(gem_eq(gem_v_node, GEM_NIL))) {
 #line 399 "compiler/codegen.gem"
-        gem_set_line(399);
+    gem_set_line(399);
+    if (gem_truthy(gem_eq(gem_v_node, GEM_NIL))) {
+#line 400 "compiler/codegen.gem"
+        gem_set_line(400);
         GemVal _t9612 = gem_bool(0);
         if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t9612, 1);
         gem_pop_frame();
         return _t9612;
     }
-#line 401 "compiler/codegen.gem"
-    gem_set_line(401);
-    if (gem_truthy(gem_neq(gem_type_1(gem_v_node), GEM_STR_LIT("table", 5)))) {
 #line 402 "compiler/codegen.gem"
-        gem_set_line(402);
+    gem_set_line(402);
+    if (gem_truthy(gem_neq(gem_type_1(gem_v_node), GEM_STR_LIT("table", 5)))) {
+#line 403 "compiler/codegen.gem"
+        gem_set_line(403);
         GemVal _t9613 = gem_bool(0);
         if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t9613, 1);
         gem_pop_frame();
         return _t9613;
     }
-#line 404 "compiler/codegen.gem"
-    gem_set_line(404);
+#line 405 "compiler/codegen.gem"
+    gem_set_line(405);
     GemVal _t9614 = gem_v_node;
     static GemICacheSlot _ic_1658 = {0};
     GemVal gem_v_tag = gem_table_get_cached(_t9614, "tag", &_ic_1658);
-#line 405 "compiler/codegen.gem"
-    gem_set_line(405);
-    if (gem_truthy(gem_eq(gem_v_tag, GEM_STR_LIT("receive_match", 13)))) {
 #line 406 "compiler/codegen.gem"
-        gem_set_line(406);
+    gem_set_line(406);
+    if (gem_truthy(gem_eq(gem_v_tag, GEM_STR_LIT("receive_match", 13)))) {
+#line 407 "compiler/codegen.gem"
+        gem_set_line(407);
         GemVal _t9615 = gem_bool(1);
         if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t9615, 1);
         gem_pop_frame();
         return _t9615;
     }
-#line 408 "compiler/codegen.gem"
-    gem_set_line(408);
-    if (gem_truthy(gem_eq(gem_v_tag, GEM_STR_LIT("call", 4)))) {
 #line 409 "compiler/codegen.gem"
-        gem_set_line(409);
+    gem_set_line(409);
+    if (gem_truthy(gem_eq(gem_v_tag, GEM_STR_LIT("call", 4)))) {
+#line 410 "compiler/codegen.gem"
+        gem_set_line(410);
     GemVal _t9617 = (*gem_v_leaf_safe_call);
     GemVal _t9616[] = {gem_v_node};
-    gem_check_callable(_t9617, "compiler/codegen.gem", 409);
+    gem_check_callable(_t9617, "compiler/codegen.gem", 410);
         if (gem_truthy(gem_not(_t9617.fn(_t9617.env, _t9616, 1)))) {
-#line 410 "compiler/codegen.gem"
-            gem_set_line(410);
+#line 411 "compiler/codegen.gem"
+            gem_set_line(411);
             GemVal _t9618 = gem_bool(1);
             if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t9618, 1);
             gem_pop_frame();
             return _t9618;
         }
-#line 412 "compiler/codegen.gem"
-        gem_set_line(412);
+#line 413 "compiler/codegen.gem"
+        gem_set_line(413);
     GemVal _t9619 = gem_v_node;
     static GemICacheSlot _ic_1659 = {0};
         GemVal gem_v___for_items_241 = gem_for_items_1(gem_table_get_cached(_t9619, "args", &_ic_1659));
-#line 412 "compiler/codegen.gem"
-        gem_set_line(412);
+#line 413 "compiler/codegen.gem"
+        gem_set_line(413);
         GemVal gem_v___for_i_241 = gem_int(0);
-#line 412 "compiler/codegen.gem"
-        gem_set_line(412);
+#line 413 "compiler/codegen.gem"
+        gem_set_line(413);
         GemArenaMark _mk272;
         gem_arena_mark(&_mk272);
         while (1) {
@@ -44141,21 +44144,21 @@ static GemVal __anon_148(void *_env, GemVal *args, int argc) {
             }
     GemVal _t9620 = gem_v___for_i_241;
             if (!gem_truthy(gem_lt(_t9620, gem_for_len_1(gem_v___for_items_241)))) break;
-#line 412 "compiler/codegen.gem"
-            gem_set_line(412);
-    GemVal _t9621 = gem_v___for_items_241;
-            GemVal gem_v_a = gem_table_get(_t9621, gem_v___for_i_241);
-#line 412 "compiler/codegen.gem"
-            gem_set_line(412);
-            gem_v___for_i_241 = gem_add(gem_v___for_i_241, gem_int(1));
 #line 413 "compiler/codegen.gem"
             gem_set_line(413);
+    GemVal _t9621 = gem_v___for_items_241;
+            GemVal gem_v_a = gem_table_get(_t9621, gem_v___for_i_241);
+#line 413 "compiler/codegen.gem"
+            gem_set_line(413);
+            gem_v___for_i_241 = gem_add(gem_v___for_i_241, gem_int(1));
+#line 414 "compiler/codegen.gem"
+            gem_set_line(414);
     GemVal _t9623 = (*gem_v_node_has_calls);
     GemVal _t9622[] = {gem_v_a};
-    gem_check_callable(_t9623, "compiler/codegen.gem", 413);
+    gem_check_callable(_t9623, "compiler/codegen.gem", 414);
             if (gem_truthy(_t9623.fn(_t9623.env, _t9622, 1))) {
-#line 414 "compiler/codegen.gem"
-                gem_set_line(414);
+#line 415 "compiler/codegen.gem"
+                gem_set_line(415);
                 GemVal _t9624 = gem_bool(1);
                 if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t9624, 1);
                 gem_pop_frame();
@@ -44163,15 +44166,15 @@ static GemVal __anon_148(void *_env, GemVal *args, int argc) {
             }
         }
 
-#line 417 "compiler/codegen.gem"
-        gem_set_line(417);
+#line 418 "compiler/codegen.gem"
+        gem_set_line(418);
         GemVal _t9625 = gem_bool(0);
         if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t9625, 1);
         gem_pop_frame();
         return _t9625;
     }
-#line 419 "compiler/codegen.gem"
-    gem_set_line(419);
+#line 420 "compiler/codegen.gem"
+    gem_set_line(420);
     GemVal _t9626 = gem_eq(gem_v_tag, GEM_STR_LIT("anon_fn", 7));
     GemVal _t9627;
     if (gem_truthy(_t9626)) {
@@ -44180,19 +44183,19 @@ static GemVal __anon_148(void *_env, GemVal *args, int argc) {
         _t9627 = gem_eq(gem_v_tag, GEM_STR_LIT("fn_def", 6));
     }
     if (gem_truthy(_t9627)) {
-#line 421 "compiler/codegen.gem"
-        gem_set_line(421);
+#line 422 "compiler/codegen.gem"
+        gem_set_line(422);
         GemVal _t9628 = gem_bool(0);
         if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t9628, 1);
         gem_pop_frame();
         return _t9628;
     }
-#line 423 "compiler/codegen.gem"
-    gem_set_line(423);
+#line 424 "compiler/codegen.gem"
+    gem_set_line(424);
     GemVal _t9631 = gem_g___mod_codegen_any_child;
     GemVal _t9629 = gem_v_node;
     GemVal _t9630[] = {_t9629, (*gem_v_node_has_calls)};
-    gem_check_callable(_t9631, "compiler/codegen.gem", 423);
+    gem_check_callable(_t9631, "compiler/codegen.gem", 424);
     GemVal _t9632 = _t9631.fn(_t9631.env, _t9630, 2);
     if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t9632, 1);
     gem_pop_frame();
@@ -44206,19 +44209,19 @@ struct _closure___anon_149 {
 static GemVal __anon_149(void *_env, GemVal *args, int argc) {
     struct _closure___anon_149 *_cls = (struct _closure___anon_149 *)_env;
     GemVal *gem_v_node_has_calls = _cls->gem_v_node_has_calls;
-    gem_push_frame("anonymous fn", "compiler/codegen.gem", 425);
+    gem_push_frame("anonymous fn", "compiler/codegen.gem", 426);
     GemVal gem_v_node = (argc > 0) ? args[0] : GEM_NIL;
     GemVal gem_v_body = (argc > 1) ? args[1] : GEM_NIL;
     GemArenaPoint _ret_pt;
     gem_arena_point(&_ret_pt);
-#line 426 "compiler/codegen.gem"
-    gem_set_line(426);
+#line 427 "compiler/codegen.gem"
+    gem_set_line(427);
     GemVal gem_v___for_items_242 = gem_for_items_1(gem_v_body);
-#line 426 "compiler/codegen.gem"
-    gem_set_line(426);
+#line 427 "compiler/codegen.gem"
+    gem_set_line(427);
     GemVal gem_v___for_i_242 = gem_int(0);
-#line 426 "compiler/codegen.gem"
-    gem_set_line(426);
+#line 427 "compiler/codegen.gem"
+    gem_set_line(427);
     GemArenaMark _mk273;
     gem_arena_mark(&_mk273);
     while (1) {
@@ -44229,21 +44232,21 @@ static GemVal __anon_149(void *_env, GemVal *args, int argc) {
         }
     GemVal _t9635 = gem_v___for_i_242;
         if (!gem_truthy(gem_lt(_t9635, gem_for_len_1(gem_v___for_items_242)))) break;
-#line 426 "compiler/codegen.gem"
-        gem_set_line(426);
-    GemVal _t9636 = gem_v___for_items_242;
-        GemVal gem_v_s = gem_table_get(_t9636, gem_v___for_i_242);
-#line 426 "compiler/codegen.gem"
-        gem_set_line(426);
-        gem_v___for_i_242 = gem_add(gem_v___for_i_242, gem_int(1));
 #line 427 "compiler/codegen.gem"
         gem_set_line(427);
+    GemVal _t9636 = gem_v___for_items_242;
+        GemVal gem_v_s = gem_table_get(_t9636, gem_v___for_i_242);
+#line 427 "compiler/codegen.gem"
+        gem_set_line(427);
+        gem_v___for_i_242 = gem_add(gem_v___for_i_242, gem_int(1));
+#line 428 "compiler/codegen.gem"
+        gem_set_line(428);
     GemVal _t9638 = (*gem_v_node_has_calls);
     GemVal _t9637[] = {gem_v_s};
-    gem_check_callable(_t9638, "compiler/codegen.gem", 427);
+    gem_check_callable(_t9638, "compiler/codegen.gem", 428);
         if (gem_truthy(_t9638.fn(_t9638.env, _t9637, 1))) {
-#line 428 "compiler/codegen.gem"
-            gem_set_line(428);
+#line 429 "compiler/codegen.gem"
+            gem_set_line(429);
             GemVal _t9639 = gem_bool(0);
             if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t9639, 1);
             gem_pop_frame();
@@ -44251,21 +44254,21 @@ static GemVal __anon_149(void *_env, GemVal *args, int argc) {
         }
     }
 
-#line 431 "compiler/codegen.gem"
-    gem_set_line(431);
+#line 432 "compiler/codegen.gem"
+    gem_set_line(432);
     GemVal _t9640 = gem_v_node;
     static GemICacheSlot _ic_1660 = {0};
     if (gem_truthy(gem_neq(gem_table_get_cached(_t9640, "defaults", &_ic_1660), GEM_NIL))) {
-#line 432 "compiler/codegen.gem"
-        gem_set_line(432);
+#line 433 "compiler/codegen.gem"
+        gem_set_line(433);
     GemVal _t9641 = gem_v_node;
     static GemICacheSlot _ic_1661 = {0};
         GemVal gem_v___for_items_243 = gem_for_items_1(gem_table_get_cached(_t9641, "defaults", &_ic_1661));
-#line 432 "compiler/codegen.gem"
-        gem_set_line(432);
+#line 433 "compiler/codegen.gem"
+        gem_set_line(433);
         GemVal gem_v___for_i_243 = gem_int(0);
-#line 432 "compiler/codegen.gem"
-        gem_set_line(432);
+#line 433 "compiler/codegen.gem"
+        gem_set_line(433);
         GemArenaMark _mk274;
         gem_arena_mark(&_mk274);
         while (1) {
@@ -44276,15 +44279,15 @@ static GemVal __anon_149(void *_env, GemVal *args, int argc) {
             }
     GemVal _t9642 = gem_v___for_i_243;
             if (!gem_truthy(gem_lt(_t9642, gem_for_len_1(gem_v___for_items_243)))) break;
-#line 432 "compiler/codegen.gem"
-            gem_set_line(432);
-    GemVal _t9643 = gem_v___for_items_243;
-            GemVal gem_v_d = gem_table_get(_t9643, gem_v___for_i_243);
-#line 432 "compiler/codegen.gem"
-            gem_set_line(432);
-            gem_v___for_i_243 = gem_add(gem_v___for_i_243, gem_int(1));
 #line 433 "compiler/codegen.gem"
             gem_set_line(433);
+    GemVal _t9643 = gem_v___for_items_243;
+            GemVal gem_v_d = gem_table_get(_t9643, gem_v___for_i_243);
+#line 433 "compiler/codegen.gem"
+            gem_set_line(433);
+            gem_v___for_i_243 = gem_add(gem_v___for_i_243, gem_int(1));
+#line 434 "compiler/codegen.gem"
+            gem_set_line(434);
     GemVal _t9644 = gem_neq(gem_v_d, GEM_NIL);
     GemVal _t9647;
     if (!gem_truthy(_t9644)) {
@@ -44292,12 +44295,12 @@ static GemVal __anon_149(void *_env, GemVal *args, int argc) {
     } else {
     GemVal _t9646 = (*gem_v_node_has_calls);
     GemVal _t9645[] = {gem_v_d};
-    gem_check_callable(_t9646, "compiler/codegen.gem", 433);
+    gem_check_callable(_t9646, "compiler/codegen.gem", 434);
         _t9647 = _t9646.fn(_t9646.env, _t9645, 1);
     }
             if (gem_truthy(_t9647)) {
-#line 434 "compiler/codegen.gem"
-                gem_set_line(434);
+#line 435 "compiler/codegen.gem"
+                gem_set_line(435);
                 GemVal _t9648 = gem_bool(0);
                 if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t9648, 1);
                 gem_pop_frame();
@@ -44306,8 +44309,8 @@ static GemVal __anon_149(void *_env, GemVal *args, int argc) {
         }
 
     }
-#line 438 "compiler/codegen.gem"
-    gem_set_line(438);
+#line 439 "compiler/codegen.gem"
+    gem_set_line(439);
     GemVal _t9649 = gem_bool(1);
     if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t9649, 1);
     gem_pop_frame();
@@ -44327,12 +44330,12 @@ static GemVal __anon_150(void *_env, GemVal *args, int argc) {
     GemVal *gem_v_fs = _cls->gem_v_fs;
     GemVal *gem_v_node_may_read_slots = _cls->gem_v_node_may_read_slots;
     GemVal *gem_v_slot_reader_builtins = _cls->gem_v_slot_reader_builtins;
-    gem_push_frame("anonymous fn", "compiler/codegen.gem", 444);
+    gem_push_frame("anonymous fn", "compiler/codegen.gem", 445);
     GemVal gem_v_node = (argc > 0) ? args[0] : GEM_NIL;
     GemArenaPoint _ret_pt;
     gem_arena_point(&_ret_pt);
-#line 445 "compiler/codegen.gem"
-    gem_set_line(445);
+#line 446 "compiler/codegen.gem"
+    gem_set_line(446);
     GemVal _t9652 = gem_eq(gem_v_node, GEM_NIL);
     GemVal _t9653;
     if (gem_truthy(_t9652)) {
@@ -44341,20 +44344,20 @@ static GemVal __anon_150(void *_env, GemVal *args, int argc) {
         _t9653 = gem_neq(gem_type_1(gem_v_node), GEM_STR_LIT("table", 5));
     }
     if (gem_truthy(_t9653)) {
-#line 446 "compiler/codegen.gem"
-        gem_set_line(446);
+#line 447 "compiler/codegen.gem"
+        gem_set_line(447);
         GemVal _t9654 = gem_bool(0);
         if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t9654, 1);
         gem_pop_frame();
         return _t9654;
     }
-#line 448 "compiler/codegen.gem"
-    gem_set_line(448);
+#line 449 "compiler/codegen.gem"
+    gem_set_line(449);
     GemVal _t9655 = gem_v_node;
     static GemICacheSlot _ic_1662 = {0};
     GemVal gem_v_tag = gem_table_get_cached(_t9655, "tag", &_ic_1662);
-#line 449 "compiler/codegen.gem"
-    gem_set_line(449);
+#line 450 "compiler/codegen.gem"
+    gem_set_line(450);
     GemVal _t9656 = gem_eq(gem_v_tag, GEM_STR_LIT("anon_fn", 7));
     GemVal _t9657;
     if (gem_truthy(_t9656)) {
@@ -44363,26 +44366,26 @@ static GemVal __anon_150(void *_env, GemVal *args, int argc) {
         _t9657 = gem_eq(gem_v_tag, GEM_STR_LIT("fn_def", 6));
     }
     if (gem_truthy(_t9657)) {
-#line 450 "compiler/codegen.gem"
-        gem_set_line(450);
+#line 451 "compiler/codegen.gem"
+        gem_set_line(451);
         GemVal _t9658 = gem_bool(0);
         if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t9658, 1);
         gem_pop_frame();
         return _t9658;
     }
-#line 452 "compiler/codegen.gem"
-    gem_set_line(452);
-    if (gem_truthy(gem_eq(gem_v_tag, GEM_STR_LIT("call", 4)))) {
 #line 453 "compiler/codegen.gem"
-        gem_set_line(453);
+    gem_set_line(453);
+    if (gem_truthy(gem_eq(gem_v_tag, GEM_STR_LIT("call", 4)))) {
+#line 454 "compiler/codegen.gem"
+        gem_set_line(454);
     GemVal _t9659 = gem_v_node;
     static GemICacheSlot _ic_1663 = {0};
         GemVal gem_v_callee = gem_table_get_cached(_t9659, "func", &_ic_1663);
-#line 454 "compiler/codegen.gem"
-        gem_set_line(454);
+#line 455 "compiler/codegen.gem"
+        gem_set_line(455);
     GemVal _t9661 = gem_g___mod_codegen_is_node;
     GemVal _t9660[] = {gem_v_callee, GEM_STR_LIT("var", 3)};
-    gem_check_callable(_t9661, "compiler/codegen.gem", 454);
+    gem_check_callable(_t9661, "compiler/codegen.gem", 455);
     GemVal _t9662 = gem_not(_t9661.fn(_t9661.env, _t9660, 2));
     GemVal _t9668;
     if (gem_truthy(_t9662)) {
@@ -44395,7 +44398,7 @@ static GemVal __anon_150(void *_env, GemVal *args, int argc) {
     GemVal _t9664 = gem_v_callee;
     static GemICacheSlot _ic_1665 = {0};
     GemVal _t9666[] = {_t9665, gem_table_get_cached(_t9664, "name", &_ic_1665)};
-    gem_check_callable(_t9667, "compiler/codegen.gem", 454);
+    gem_check_callable(_t9667, "compiler/codegen.gem", 455);
         _t9668 = _t9667.fn(_t9667.env, _t9666, 2);
     }
     GemVal _t9672;
@@ -44419,20 +44422,20 @@ static GemVal __anon_150(void *_env, GemVal *args, int argc) {
         _t9676 = gem_has_key_fn(NULL, _t9675, 2);
     }
         if (gem_truthy(_t9676)) {
-#line 455 "compiler/codegen.gem"
-            gem_set_line(455);
+#line 456 "compiler/codegen.gem"
+            gem_set_line(456);
             GemVal _t9677 = gem_bool(1);
             if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t9677, 1);
             gem_pop_frame();
             return _t9677;
         }
     }
-#line 458 "compiler/codegen.gem"
-    gem_set_line(458);
+#line 459 "compiler/codegen.gem"
+    gem_set_line(459);
     GemVal _t9680 = gem_g___mod_codegen_any_child;
     GemVal _t9678 = gem_v_node;
     GemVal _t9679[] = {_t9678, (*gem_v_node_may_read_slots)};
-    gem_check_callable(_t9680, "compiler/codegen.gem", 458);
+    gem_check_callable(_t9680, "compiler/codegen.gem", 459);
     GemVal _t9681 = _t9680.fn(_t9680.env, _t9679, 2);
     if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t9681, 1);
     gem_pop_frame();
@@ -44460,53 +44463,53 @@ static GemVal __anon_151(void *_env, GemVal *args, int argc) {
     GemVal *gem_v_scc_id_max_params = _cls->gem_v_scc_id_max_params;
     GemVal *gem_v_scc_member_to_id = _cls->gem_v_scc_member_to_id;
     GemVal *gem_v_source_name = _cls->gem_v_source_name;
-    gem_push_frame("anonymous fn", "compiler/codegen.gem", 462);
+    gem_push_frame("anonymous fn", "compiler/codegen.gem", 463);
     GemVal gem_v_fn_defs = (argc > 0) ? args[0] : GEM_NIL;
     GemVal gem_v_top_stmts = (argc > 1) ? args[1] : GEM_NIL;
     GemVal gem_v_extern_names = (argc > 2) ? args[2] : GEM_NIL;
     GemArenaPoint _ret_pt;
     gem_arena_point(&_ret_pt);
-#line 463 "compiler/codegen.gem"
-    gem_set_line(463);
+#line 464 "compiler/codegen.gem"
+    gem_set_line(464);
     GemVal _t9689 = gem_g___mod_codegen_build_call_graph;
     GemVal _t9687 = gem_v_fn_defs;
     GemVal _t9686 = gem_v_top_stmts;
     GemVal _t9685 = (*gem_v_builtin_fns);
     GemVal _t9688[] = {_t9687, _t9686, _t9685, gem_v_extern_names};
-    gem_check_callable(_t9689, "compiler/codegen.gem", 463);
+    gem_check_callable(_t9689, "compiler/codegen.gem", 464);
     GemVal gem_v_graph = _t9689.fn(_t9689.env, _t9688, 4);
-#line 464 "compiler/codegen.gem"
-    gem_set_line(464);
-    GemVal _t9691 = gem_g___mod_codegen_mark_recursive_fns;
-    GemVal _t9690[] = {gem_v_graph};
-    gem_check_callable(_t9691, "compiler/codegen.gem", 464);
-    (void)(_t9691.fn(_t9691.env, _t9690, 1));
 #line 465 "compiler/codegen.gem"
     gem_set_line(465);
+    GemVal _t9691 = gem_g___mod_codegen_mark_recursive_fns;
+    GemVal _t9690[] = {gem_v_graph};
+    gem_check_callable(_t9691, "compiler/codegen.gem", 465);
+    (void)(_t9691.fn(_t9691.env, _t9690, 1));
+#line 466 "compiler/codegen.gem"
+    gem_set_line(466);
     GemVal _t9692 = gem_v_graph;
     static GemICacheSlot _ic_1668 = {0};
     GemVal gem_v_caller_records = gem_table_get_cached(_t9692, "caller_records", &_ic_1668);
-#line 466 "compiler/codegen.gem"
-    gem_set_line(466);
+#line 467 "compiler/codegen.gem"
+    gem_set_line(467);
     GemVal _t9693 = gem_v_graph;
     static GemICacheSlot _ic_1669 = {0};
     GemVal gem_v_name_to_fn = gem_table_get_cached(_t9693, "name_to_fn", &_ic_1669);
-#line 468 "compiler/codegen.gem"
-    gem_set_line(468);
+#line 469 "compiler/codegen.gem"
+    gem_set_line(469);
     GemVal _t9697 = gem_g___mod_codegen_tag_process_tail_while_loops;
     GemVal _t9695 = gem_v_fn_defs;
     GemVal _t9694 = gem_v_top_stmts;
     GemVal _t9696[] = {_t9695, _t9694, (*gem_v_source_name)};
-    gem_check_callable(_t9697, "compiler/codegen.gem", 468);
+    gem_check_callable(_t9697, "compiler/codegen.gem", 469);
     (void)(_t9697.fn(_t9697.env, _t9696, 3));
-#line 471 "compiler/codegen.gem"
-    gem_set_line(471);
+#line 472 "compiler/codegen.gem"
+    gem_set_line(472);
     GemVal gem_v___for_items_245 = gem_for_items_1(gem_v_fn_defs);
-#line 471 "compiler/codegen.gem"
-    gem_set_line(471);
+#line 472 "compiler/codegen.gem"
+    gem_set_line(472);
     GemVal gem_v___for_i_245 = gem_int(0);
-#line 471 "compiler/codegen.gem"
-    gem_set_line(471);
+#line 472 "compiler/codegen.gem"
+    gem_set_line(472);
     GemArenaMark _mk275;
     gem_arena_mark(&_mk275);
     while (1) {
@@ -44517,36 +44520,36 @@ static GemVal __anon_151(void *_env, GemVal *args, int argc) {
         }
     GemVal _t9698 = gem_v___for_i_245;
         if (!gem_truthy(gem_lt(_t9698, gem_for_len_1(gem_v___for_items_245)))) break;
-#line 471 "compiler/codegen.gem"
-        gem_set_line(471);
-    GemVal _t9699 = gem_v___for_items_245;
-        GemVal gem_v_fd = gem_table_get(_t9699, gem_v___for_i_245);
-#line 471 "compiler/codegen.gem"
-        gem_set_line(471);
-        gem_v___for_i_245 = gem_add(gem_v___for_i_245, gem_int(1));
 #line 472 "compiler/codegen.gem"
         gem_set_line(472);
+    GemVal _t9699 = gem_v___for_items_245;
+        GemVal gem_v_fd = gem_table_get(_t9699, gem_v___for_i_245);
+#line 472 "compiler/codegen.gem"
+        gem_set_line(472);
+        gem_v___for_i_245 = gem_add(gem_v___for_i_245, gem_int(1));
+#line 473 "compiler/codegen.gem"
+        gem_set_line(473);
     GemVal _t9702 = gem_g___mod_codegen_compute_live_for_pt_loops_in_stmts;
     GemVal _t9700 = gem_v_fd;
     static GemICacheSlot _ic_1670 = {0};
     GemVal _t9701[] = {gem_table_get_cached(_t9700, "body", &_ic_1670)};
-    gem_check_callable(_t9702, "compiler/codegen.gem", 472);
+    gem_check_callable(_t9702, "compiler/codegen.gem", 473);
         (void)(_t9702.fn(_t9702.env, _t9701, 1));
-#line 473 "compiler/codegen.gem"
-        gem_set_line(473);
+#line 474 "compiler/codegen.gem"
+        gem_set_line(474);
     GemVal _t9703 = gem_v_fd;
     static GemICacheSlot _ic_1671 = {0};
         if (gem_truthy(gem_neq(gem_table_get_cached(_t9703, "defaults", &_ic_1671), GEM_NIL))) {
-#line 474 "compiler/codegen.gem"
-            gem_set_line(474);
+#line 475 "compiler/codegen.gem"
+            gem_set_line(475);
     GemVal _t9704 = gem_v_fd;
     static GemICacheSlot _ic_1672 = {0};
             GemVal gem_v___for_items_244 = gem_for_items_1(gem_table_get_cached(_t9704, "defaults", &_ic_1672));
-#line 474 "compiler/codegen.gem"
-            gem_set_line(474);
+#line 475 "compiler/codegen.gem"
+            gem_set_line(475);
             GemVal gem_v___for_i_244 = gem_int(0);
-#line 474 "compiler/codegen.gem"
-            gem_set_line(474);
+#line 475 "compiler/codegen.gem"
+            gem_set_line(475);
             GemArenaMark _mk276;
             gem_arena_mark(&_mk276);
             while (1) {
@@ -44557,23 +44560,23 @@ static GemVal __anon_151(void *_env, GemVal *args, int argc) {
                 }
     GemVal _t9705 = gem_v___for_i_244;
                 if (!gem_truthy(gem_lt(_t9705, gem_for_len_1(gem_v___for_items_244)))) break;
-#line 474 "compiler/codegen.gem"
-                gem_set_line(474);
-    GemVal _t9706 = gem_v___for_items_244;
-                GemVal gem_v_d = gem_table_get(_t9706, gem_v___for_i_244);
-#line 474 "compiler/codegen.gem"
-                gem_set_line(474);
-                gem_v___for_i_244 = gem_add(gem_v___for_i_244, gem_int(1));
 #line 475 "compiler/codegen.gem"
                 gem_set_line(475);
-                if (gem_truthy(gem_neq(gem_v_d, GEM_NIL))) {
+    GemVal _t9706 = gem_v___for_items_244;
+                GemVal gem_v_d = gem_table_get(_t9706, gem_v___for_i_244);
+#line 475 "compiler/codegen.gem"
+                gem_set_line(475);
+                gem_v___for_i_244 = gem_add(gem_v___for_i_244, gem_int(1));
 #line 476 "compiler/codegen.gem"
-                    gem_set_line(476);
+                gem_set_line(476);
+                if (gem_truthy(gem_neq(gem_v_d, GEM_NIL))) {
+#line 477 "compiler/codegen.gem"
+                    gem_set_line(477);
     GemVal _t9709 = gem_g___mod_codegen_compute_live_for_pt_loops_in_stmts;
     GemVal _t9707 = gem_table_new();
     gem_table_set(_t9707, gem_int(0), gem_v_d);
     GemVal _t9708[] = {_t9707};
-    gem_check_callable(_t9709, "compiler/codegen.gem", 476);
+    gem_check_callable(_t9709, "compiler/codegen.gem", 477);
                     (void)(_t9709.fn(_t9709.env, _t9708, 1));
                 }
             }
@@ -44581,45 +44584,45 @@ static GemVal __anon_151(void *_env, GemVal *args, int argc) {
         }
     }
 
-#line 481 "compiler/codegen.gem"
-    gem_set_line(481);
+#line 482 "compiler/codegen.gem"
+    gem_set_line(482);
     GemVal _t9711 = gem_g___mod_codegen_compute_live_for_pt_loops_in_stmts;
     GemVal _t9710[] = {gem_v_top_stmts};
-    gem_check_callable(_t9711, "compiler/codegen.gem", 481);
+    gem_check_callable(_t9711, "compiler/codegen.gem", 482);
     (void)(_t9711.fn(_t9711.env, _t9710, 1));
-#line 484 "compiler/codegen.gem"
-    gem_set_line(484);
+#line 485 "compiler/codegen.gem"
+    gem_set_line(485);
     GemVal _t9715 = gem_g___mod_codegen_find_tail_call_sccs;
     GemVal _t9713 = gem_v_fn_defs;
     GemVal _t9712 = gem_v_caller_records;
     GemVal _t9714[] = {_t9713, _t9712, gem_v_name_to_fn};
-    gem_check_callable(_t9715, "compiler/codegen.gem", 484);
+    gem_check_callable(_t9715, "compiler/codegen.gem", 485);
     GemVal gem_v_sccs = _t9715.fn(_t9715.env, _t9714, 3);
-#line 485 "compiler/codegen.gem"
-    gem_set_line(485);
+#line 486 "compiler/codegen.gem"
+    gem_set_line(486);
     GemVal _t9716 = gem_v_sccs;
     static GemICacheSlot _ic_1673 = {0};
     (*gem_v_scc_member_to_id) = gem_table_get_cached(_t9716, "member_to_id", &_ic_1673);
-#line 486 "compiler/codegen.gem"
-    gem_set_line(486);
+#line 487 "compiler/codegen.gem"
+    gem_set_line(487);
     GemVal _t9717 = gem_v_sccs;
     static GemICacheSlot _ic_1674 = {0};
     (*gem_v_scc_id_max_params) = gem_table_get_cached(_t9717, "id_max_params", &_ic_1674);
-#line 488 "compiler/codegen.gem"
-    gem_set_line(488);
-    (*gem_v_pt_caller_records) = gem_v_caller_records;
 #line 489 "compiler/codegen.gem"
     gem_set_line(489);
+    (*gem_v_pt_caller_records) = gem_v_caller_records;
+#line 490 "compiler/codegen.gem"
+    gem_set_line(490);
     GemVal _t9718 = gem_v_graph;
     static GemICacheSlot _ic_1675 = {0};
     (*gem_v_pt_anon_parent) = gem_table_get_cached(_t9718, "anon_parent", &_ic_1675);
-#line 490 "compiler/codegen.gem"
-    gem_set_line(490);
+#line 491 "compiler/codegen.gem"
+    gem_set_line(491);
     GemVal _t9719 = gem_v_graph;
     static GemICacheSlot _ic_1676 = {0};
     (*gem_v_pt_anon_nodes) = gem_table_get_cached(_t9719, "anon_nodes", &_ic_1676);
-#line 491 "compiler/codegen.gem"
-    gem_set_line(491);
+#line 492 "compiler/codegen.gem"
+    gem_set_line(492);
     GemVal _t9720 = gem_v_name_to_fn;
     (*gem_v_pt_name_to_fn) = _t9720;
     if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, NULL, 1);
@@ -44642,28 +44645,28 @@ static GemVal __anon_153(void *_env, GemVal *args, int argc) {
     GemVal *gem_v_pt_anon_nodes = _cls->gem_v_pt_anon_nodes;
     GemVal *gem_v_pt_anon_parent = _cls->gem_v_pt_anon_parent;
     GemVal *gem_v_pt_name_to_fn = _cls->gem_v_pt_name_to_fn;
-    gem_push_frame("anonymous fn", "compiler/codegen.gem", 508);
+    gem_push_frame("anonymous fn", "compiler/codegen.gem", 509);
     GemVal gem_v_cid = (argc > 0) ? args[0] : GEM_NIL;
     GemArenaPoint _ret_pt;
     gem_arena_point(&_ret_pt);
-#line 509 "compiler/codegen.gem"
-    gem_set_line(509);
+#line 510 "compiler/codegen.gem"
+    gem_set_line(510);
     GemVal _t9736 = (*gem_v_local_cache);
     if (gem_truthy(gem_neq(gem_table_get(_t9736, gem_v_cid), GEM_NIL))) {
-#line 510 "compiler/codegen.gem"
-        gem_set_line(510);
+#line 511 "compiler/codegen.gem"
+        gem_set_line(511);
     GemVal _t9737 = (*gem_v_local_cache);
         GemVal _t9738 = gem_table_get(_t9737, gem_v_cid);
         if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t9738, 1);
         gem_pop_frame();
         return _t9738;
     }
-#line 512 "compiler/codegen.gem"
-    gem_set_line(512);
-    GemVal _t9739 = gem_table_new_braces();
-    GemVal gem_v_s = _t9739;
 #line 513 "compiler/codegen.gem"
     gem_set_line(513);
+    GemVal _t9739 = gem_table_new_braces();
+    GemVal gem_v_s = _t9739;
+#line 514 "compiler/codegen.gem"
+    gem_set_line(514);
     GemVal _t9740 = gem_ge(gem_len_1(gem_v_cid), gem_int(3));
     GemVal _t9742;
     if (!gem_truthy(_t9740)) {
@@ -44673,25 +44676,25 @@ static GemVal __anon_153(void *_env, GemVal *args, int argc) {
         _t9742 = gem_eq(gem_substr_fn(NULL, _t9741, 3), GEM_STR_LIT("fn:", 3));
     }
     if (gem_truthy(_t9742)) {
-#line 514 "compiler/codegen.gem"
-        gem_set_line(514);
+#line 515 "compiler/codegen.gem"
+        gem_set_line(515);
     GemVal _t9745 = (*gem_v_pt_name_to_fn);
     GemVal _t9743 = gem_v_cid;
     GemVal _t9744[] = {_t9743, gem_int(3), gem_sub(gem_len_1(gem_v_cid), gem_int(3))};
         GemVal gem_v_fd = gem_table_get(_t9745, gem_substr_fn(NULL, _t9744, 3));
-#line 515 "compiler/codegen.gem"
-        gem_set_line(515);
-        if (gem_truthy(gem_neq(gem_v_fd, GEM_NIL))) {
 #line 516 "compiler/codegen.gem"
-            gem_set_line(516);
+        gem_set_line(516);
+        if (gem_truthy(gem_neq(gem_v_fd, GEM_NIL))) {
+#line 517 "compiler/codegen.gem"
+            gem_set_line(517);
     GemVal _t9746 = gem_v_fd;
     static GemICacheSlot _ic_1677 = {0};
             GemVal gem_v___for_items_247 = gem_for_items_1(gem_table_get_cached(_t9746, "params", &_ic_1677));
-#line 516 "compiler/codegen.gem"
-            gem_set_line(516);
+#line 517 "compiler/codegen.gem"
+            gem_set_line(517);
             GemVal gem_v___for_i_247 = gem_int(0);
-#line 516 "compiler/codegen.gem"
-            gem_set_line(516);
+#line 517 "compiler/codegen.gem"
+            gem_set_line(517);
             GemArenaMark _mk278;
             gem_arena_mark(&_mk278);
             while (1) {
@@ -44702,68 +44705,68 @@ static GemVal __anon_153(void *_env, GemVal *args, int argc) {
                 }
     GemVal _t9747 = gem_v___for_i_247;
                 if (!gem_truthy(gem_lt(_t9747, gem_for_len_1(gem_v___for_items_247)))) break;
-#line 516 "compiler/codegen.gem"
-                gem_set_line(516);
-    GemVal _t9748 = gem_v___for_items_247;
-                GemVal gem_v_p = gem_table_get(_t9748, gem_v___for_i_247);
-#line 516 "compiler/codegen.gem"
-                gem_set_line(516);
-                gem_v___for_i_247 = gem_add(gem_v___for_i_247, gem_int(1));
 #line 517 "compiler/codegen.gem"
                 gem_set_line(517);
+    GemVal _t9748 = gem_v___for_items_247;
+                GemVal gem_v_p = gem_table_get(_t9748, gem_v___for_i_247);
+#line 517 "compiler/codegen.gem"
+                gem_set_line(517);
+                gem_v___for_i_247 = gem_add(gem_v___for_i_247, gem_int(1));
+#line 518 "compiler/codegen.gem"
+                gem_set_line(518);
     GemVal _t9751 = gem_g___mod_codegen_set_add;
     GemVal _t9749 = gem_v_s;
     GemVal _t9750[] = {_t9749, gem_v_p};
-    gem_check_callable(_t9751, "compiler/codegen.gem", 517);
+    gem_check_callable(_t9751, "compiler/codegen.gem", 518);
                 (void)(_t9751.fn(_t9751.env, _t9750, 2));
             }
 
-#line 519 "compiler/codegen.gem"
-            gem_set_line(519);
+#line 520 "compiler/codegen.gem"
+            gem_set_line(520);
     GemVal _t9752 = gem_v_fd;
     static GemICacheSlot _ic_1678 = {0};
             if (gem_truthy(gem_neq(gem_table_get_cached(_t9752, "rest_param", &_ic_1678), GEM_NIL))) {
-#line 520 "compiler/codegen.gem"
-                gem_set_line(520);
+#line 521 "compiler/codegen.gem"
+                gem_set_line(521);
     GemVal _t9756 = gem_g___mod_codegen_set_add;
     GemVal _t9754 = gem_v_s;
     GemVal _t9753 = gem_v_fd;
     static GemICacheSlot _ic_1679 = {0};
     GemVal _t9755[] = {_t9754, gem_table_get_cached(_t9753, "rest_param", &_ic_1679)};
-    gem_check_callable(_t9756, "compiler/codegen.gem", 520);
+    gem_check_callable(_t9756, "compiler/codegen.gem", 521);
                 (void)(_t9756.fn(_t9756.env, _t9755, 2));
             }
-#line 522 "compiler/codegen.gem"
-            gem_set_line(522);
+#line 523 "compiler/codegen.gem"
+            gem_set_line(523);
     GemVal _t9760 = gem_g___mod_codegen_collect_shadow_lets_in_fn;
     GemVal _t9757 = gem_v_fd;
     static GemICacheSlot _ic_1680 = {0};
     GemVal _t9758 = gem_table_get_cached(_t9757, "body", &_ic_1680);
     GemVal _t9759[] = {_t9758, gem_v_s};
-    gem_check_callable(_t9760, "compiler/codegen.gem", 522);
+    gem_check_callable(_t9760, "compiler/codegen.gem", 523);
             (void)(_t9760.fn(_t9760.env, _t9759, 2));
         }
     } else {
-#line 524 "compiler/codegen.gem"
-        gem_set_line(524);
+#line 525 "compiler/codegen.gem"
+        gem_set_line(525);
     GemVal _t9761 = (*gem_v_pt_anon_nodes);
         if (gem_truthy(gem_neq(gem_table_get(_t9761, gem_v_cid), GEM_NIL))) {
-#line 525 "compiler/codegen.gem"
-            gem_set_line(525);
+#line 526 "compiler/codegen.gem"
+            gem_set_line(526);
     GemVal _t9762 = (*gem_v_pt_anon_nodes);
     GemVal _t9763 = gem_table_get(_t9762, gem_v_cid);
     static GemICacheSlot _ic_1681 = {0};
             GemVal gem_v_an = gem_table_get_cached(_t9763, "fn", &_ic_1681);
-#line 526 "compiler/codegen.gem"
-            gem_set_line(526);
+#line 527 "compiler/codegen.gem"
+            gem_set_line(527);
     GemVal _t9764 = gem_v_an;
     static GemICacheSlot _ic_1682 = {0};
             GemVal gem_v___for_items_248 = gem_for_items_1(gem_table_get_cached(_t9764, "params", &_ic_1682));
-#line 526 "compiler/codegen.gem"
-            gem_set_line(526);
+#line 527 "compiler/codegen.gem"
+            gem_set_line(527);
             GemVal gem_v___for_i_248 = gem_int(0);
-#line 526 "compiler/codegen.gem"
-            gem_set_line(526);
+#line 527 "compiler/codegen.gem"
+            gem_set_line(527);
             GemArenaMark _mk279;
             gem_arena_mark(&_mk279);
             while (1) {
@@ -44774,52 +44777,52 @@ static GemVal __anon_153(void *_env, GemVal *args, int argc) {
                 }
     GemVal _t9765 = gem_v___for_i_248;
                 if (!gem_truthy(gem_lt(_t9765, gem_for_len_1(gem_v___for_items_248)))) break;
-#line 526 "compiler/codegen.gem"
-                gem_set_line(526);
-    GemVal _t9766 = gem_v___for_items_248;
-                GemVal gem_v_p = gem_table_get(_t9766, gem_v___for_i_248);
-#line 526 "compiler/codegen.gem"
-                gem_set_line(526);
-                gem_v___for_i_248 = gem_add(gem_v___for_i_248, gem_int(1));
 #line 527 "compiler/codegen.gem"
                 gem_set_line(527);
+    GemVal _t9766 = gem_v___for_items_248;
+                GemVal gem_v_p = gem_table_get(_t9766, gem_v___for_i_248);
+#line 527 "compiler/codegen.gem"
+                gem_set_line(527);
+                gem_v___for_i_248 = gem_add(gem_v___for_i_248, gem_int(1));
+#line 528 "compiler/codegen.gem"
+                gem_set_line(528);
     GemVal _t9769 = gem_g___mod_codegen_set_add;
     GemVal _t9767 = gem_v_s;
     GemVal _t9768[] = {_t9767, gem_v_p};
-    gem_check_callable(_t9769, "compiler/codegen.gem", 527);
+    gem_check_callable(_t9769, "compiler/codegen.gem", 528);
                 (void)(_t9769.fn(_t9769.env, _t9768, 2));
             }
 
-#line 529 "compiler/codegen.gem"
-            gem_set_line(529);
+#line 530 "compiler/codegen.gem"
+            gem_set_line(530);
     GemVal _t9770 = gem_v_an;
     static GemICacheSlot _ic_1683 = {0};
             if (gem_truthy(gem_neq(gem_table_get_cached(_t9770, "rest_param", &_ic_1683), GEM_NIL))) {
-#line 530 "compiler/codegen.gem"
-                gem_set_line(530);
+#line 531 "compiler/codegen.gem"
+                gem_set_line(531);
     GemVal _t9774 = gem_g___mod_codegen_set_add;
     GemVal _t9772 = gem_v_s;
     GemVal _t9771 = gem_v_an;
     static GemICacheSlot _ic_1684 = {0};
     GemVal _t9773[] = {_t9772, gem_table_get_cached(_t9771, "rest_param", &_ic_1684)};
-    gem_check_callable(_t9774, "compiler/codegen.gem", 530);
+    gem_check_callable(_t9774, "compiler/codegen.gem", 531);
                 (void)(_t9774.fn(_t9774.env, _t9773, 2));
             }
-#line 532 "compiler/codegen.gem"
-            gem_set_line(532);
+#line 533 "compiler/codegen.gem"
+            gem_set_line(533);
     GemVal _t9778 = gem_g___mod_codegen_collect_shadow_lets_in_fn;
     GemVal _t9775 = gem_v_an;
     static GemICacheSlot _ic_1685 = {0};
     GemVal _t9776 = gem_table_get_cached(_t9775, "body", &_ic_1685);
     GemVal _t9777[] = {_t9776, gem_v_s};
-    gem_check_callable(_t9778, "compiler/codegen.gem", 532);
+    gem_check_callable(_t9778, "compiler/codegen.gem", 533);
             (void)(_t9778.fn(_t9778.env, _t9777, 2));
-#line 533 "compiler/codegen.gem"
-            gem_set_line(533);
-    GemVal _t9779 = (*gem_v_pt_anon_parent);
-            GemVal gem_v_parent = gem_table_get(_t9779, gem_v_cid);
 #line 534 "compiler/codegen.gem"
             gem_set_line(534);
+    GemVal _t9779 = (*gem_v_pt_anon_parent);
+            GemVal gem_v_parent = gem_table_get(_t9779, gem_v_cid);
+#line 535 "compiler/codegen.gem"
+            gem_set_line(535);
     GemVal _t9780 = gem_neq(gem_v_parent, GEM_NIL);
     GemVal _t9781;
     if (!gem_truthy(_t9780)) {
@@ -44828,26 +44831,26 @@ static GemVal __anon_153(void *_env, GemVal *args, int argc) {
         _t9781 = gem_neq(gem_v_parent, GEM_STR_LIT("<top>", 5));
     }
             if (gem_truthy(_t9781)) {
-#line 535 "compiler/codegen.gem"
-                gem_set_line(535);
+#line 536 "compiler/codegen.gem"
+                gem_set_line(536);
     GemVal _t9786 = gem_g___mod_codegen_set_union;
     GemVal _t9784 = gem_v_s;
     GemVal _t9783 = (*gem_v_locals_of);
     GemVal _t9782[] = {gem_v_parent};
-    gem_check_callable(_t9783, "compiler/codegen.gem", 535);
+    gem_check_callable(_t9783, "compiler/codegen.gem", 536);
     GemVal _t9785[] = {_t9784, _t9783.fn(_t9783.env, _t9782, 1)};
-    gem_check_callable(_t9786, "compiler/codegen.gem", 535);
+    gem_check_callable(_t9786, "compiler/codegen.gem", 536);
                 gem_v_s = _t9786.fn(_t9786.env, _t9785, 2);
             }
         }
     }
-#line 538 "compiler/codegen.gem"
-    gem_set_line(538);
+#line 539 "compiler/codegen.gem"
+    gem_set_line(539);
     GemVal _t9788 = (*gem_v_local_cache);
     GemVal _t9787 = gem_v_cid;
     gem_table_set(_t9788, _t9787, gem_v_s);
-#line 539 "compiler/codegen.gem"
-    gem_set_line(539);
+#line 540 "compiler/codegen.gem"
+    gem_set_line(540);
     GemVal _t9789 = gem_v_s;
     if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t9789, 1);
     gem_pop_frame();
@@ -44879,27 +44882,27 @@ static GemVal __anon_152(void *_env, GemVal *args, int argc) {
     GemVal *gem_v_std_dir = _cls->gem_v_std_dir;
     GemVal *gem_v_top_level_vars = _cls->gem_v_top_level_vars;
     GemVal *gem_v_user_var_name = _cls->gem_v_user_var_name;
-    gem_push_frame("anonymous fn", "compiler/codegen.gem", 495);
+    gem_push_frame("anonymous fn", "compiler/codegen.gem", 496);
     GemArenaPoint _ret_pt;
     gem_arena_point(&_ret_pt);
-#line 496 "compiler/codegen.gem"
-    gem_set_line(496);
-    GemVal gem_v_records = (*gem_v_pt_caller_records);
 #line 497 "compiler/codegen.gem"
     gem_set_line(497);
+    GemVal gem_v_records = (*gem_v_pt_caller_records);
+#line 498 "compiler/codegen.gem"
+    gem_set_line(498);
     GemVal _t9724 = gem_table_new_braces();
     GemVal gem_v_children = _t9724;
-#line 498 "compiler/codegen.gem"
-    gem_set_line(498);
+#line 499 "compiler/codegen.gem"
+    gem_set_line(499);
     GemVal gem_v___for_tbl_246 = (*gem_v_pt_anon_parent);
-#line 498 "compiler/codegen.gem"
-    gem_set_line(498);
+#line 499 "compiler/codegen.gem"
+    gem_set_line(499);
     GemVal gem_v___for_len_246 = gem_for_len_1(gem_v___for_tbl_246);
-#line 498 "compiler/codegen.gem"
-    gem_set_line(498);
+#line 499 "compiler/codegen.gem"
+    gem_set_line(499);
     GemVal gem_v___for_i_246 = gem_int(0);
-#line 498 "compiler/codegen.gem"
-    gem_set_line(498);
+#line 499 "compiler/codegen.gem"
+    gem_set_line(499);
     GemArenaMark _mk277;
     gem_arena_mark(&_mk277);
     while (1) {
@@ -44910,46 +44913,46 @@ static GemVal __anon_152(void *_env, GemVal *args, int argc) {
         }
     GemVal _t9725 = gem_v___for_i_246;
         if (!gem_truthy(gem_lt(_t9725, gem_v___for_len_246))) break;
-#line 498 "compiler/codegen.gem"
-        gem_set_line(498);
-    GemVal _t9726 = gem_v___for_tbl_246;
-        GemVal gem_v_aid = gem_table_key_at_2(_t9726, gem_v___for_i_246);
-#line 498 "compiler/codegen.gem"
-        gem_set_line(498);
-    GemVal _t9727 = gem_v___for_tbl_246;
-        GemVal gem_v_parent = gem_table_val_at_2(_t9727, gem_v___for_i_246);
-#line 498 "compiler/codegen.gem"
-        gem_set_line(498);
-        gem_v___for_i_246 = gem_add(gem_v___for_i_246, gem_int(1));
 #line 499 "compiler/codegen.gem"
         gem_set_line(499);
+    GemVal _t9726 = gem_v___for_tbl_246;
+        GemVal gem_v_aid = gem_table_key_at_2(_t9726, gem_v___for_i_246);
+#line 499 "compiler/codegen.gem"
+        gem_set_line(499);
+    GemVal _t9727 = gem_v___for_tbl_246;
+        GemVal gem_v_parent = gem_table_val_at_2(_t9727, gem_v___for_i_246);
+#line 499 "compiler/codegen.gem"
+        gem_set_line(499);
+        gem_v___for_i_246 = gem_add(gem_v___for_i_246, gem_int(1));
+#line 500 "compiler/codegen.gem"
+        gem_set_line(500);
     GemVal _t9728 = gem_v_children;
         if (gem_truthy(gem_eq(gem_table_get(_t9728, gem_v_parent), GEM_NIL))) {
-#line 500 "compiler/codegen.gem"
-            gem_set_line(500);
+#line 501 "compiler/codegen.gem"
+            gem_set_line(501);
     GemVal _t9731 = gem_v_children;
     GemVal _t9730 = gem_v_parent;
     GemVal _t9729 = gem_table_new();
             gem_table_set(_t9731, _t9730, _t9729);
         }
-#line 502 "compiler/codegen.gem"
-        gem_set_line(502);
+#line 503 "compiler/codegen.gem"
+        gem_set_line(503);
     GemVal _t9732 = gem_v_children;
     GemVal _t9733 = gem_table_get(_t9732, gem_v_parent);
     GemVal _t9734[] = {_t9733, gem_v_aid};
         (void)(gem_push_fn(NULL, _t9734, 2));
     }
 
-#line 506 "compiler/codegen.gem"
-    gem_set_line(506);
-    GemVal _t9735 = gem_table_new_braces();
-    GemVal gem_v_local_cache = _t9735;
 #line 507 "compiler/codegen.gem"
     gem_set_line(507);
-    GemVal *gem_v_locals_of = gem_box_alloc();
-    *gem_v_locals_of = GEM_NIL;
+    GemVal _t9735 = gem_table_new_braces();
+    GemVal gem_v_local_cache = _t9735;
 #line 508 "compiler/codegen.gem"
     gem_set_line(508);
+    GemVal *gem_v_locals_of = gem_box_alloc();
+    *gem_v_locals_of = GEM_NIL;
+#line 509 "compiler/codegen.gem"
+    gem_set_line(509);
     struct _closure___anon_153 *_t9790 = gem_alloc(sizeof(struct _closure___anon_153));
     _t9790->_num_captures = 5;
     GemVal *_t9791 = gem_alloc(sizeof(GemVal));
@@ -44960,25 +44963,25 @@ static GemVal __anon_152(void *_env, GemVal *args, int argc) {
     _t9790->gem_v_pt_anon_parent = gem_v_pt_anon_parent;
     _t9790->gem_v_pt_name_to_fn = gem_v_pt_name_to_fn;
     (*gem_v_locals_of) = gem_make_fn(__anon_153, _t9790);
-#line 542 "compiler/codegen.gem"
-    gem_set_line(542);
-    GemVal _t9792 = gem_table_new_braces();
-    GemVal gem_v_reached = _t9792;
 #line 543 "compiler/codegen.gem"
     gem_set_line(543);
+    GemVal _t9792 = gem_table_new_braces();
+    GemVal gem_v_reached = _t9792;
+#line 544 "compiler/codegen.gem"
+    gem_set_line(544);
     GemVal _t9793 = gem_table_new();
     GemVal gem_v_queue = _t9793;
-#line 544 "compiler/codegen.gem"
-    gem_set_line(544);
+#line 545 "compiler/codegen.gem"
+    gem_set_line(545);
     GemVal gem_v___for_tbl_249 = (*gem_v_pt_anon_nodes);
-#line 544 "compiler/codegen.gem"
-    gem_set_line(544);
+#line 545 "compiler/codegen.gem"
+    gem_set_line(545);
     GemVal gem_v___for_len_249 = gem_for_len_1(gem_v___for_tbl_249);
-#line 544 "compiler/codegen.gem"
-    gem_set_line(544);
+#line 545 "compiler/codegen.gem"
+    gem_set_line(545);
     GemVal gem_v___for_i_249 = gem_int(0);
-#line 544 "compiler/codegen.gem"
-    gem_set_line(544);
+#line 545 "compiler/codegen.gem"
+    gem_set_line(545);
     GemArenaMark _mk280;
     gem_arena_mark(&_mk280);
     while (1) {
@@ -44990,19 +44993,19 @@ static GemVal __anon_152(void *_env, GemVal *args, int argc) {
         }
     GemVal _t9794 = gem_v___for_i_249;
         if (!gem_truthy(gem_lt(_t9794, gem_v___for_len_249))) break;
-#line 544 "compiler/codegen.gem"
-        gem_set_line(544);
-    GemVal _t9795 = gem_v___for_tbl_249;
-        GemVal gem_v_aid = gem_table_key_at_2(_t9795, gem_v___for_i_249);
-#line 544 "compiler/codegen.gem"
-        gem_set_line(544);
-    GemVal _t9796 = gem_v___for_tbl_249;
-        GemVal gem_v_info = gem_table_val_at_2(_t9796, gem_v___for_i_249);
-#line 544 "compiler/codegen.gem"
-        gem_set_line(544);
-        gem_v___for_i_249 = gem_add(gem_v___for_i_249, gem_int(1));
 #line 545 "compiler/codegen.gem"
         gem_set_line(545);
+    GemVal _t9795 = gem_v___for_tbl_249;
+        GemVal gem_v_aid = gem_table_key_at_2(_t9795, gem_v___for_i_249);
+#line 545 "compiler/codegen.gem"
+        gem_set_line(545);
+    GemVal _t9796 = gem_v___for_tbl_249;
+        GemVal gem_v_info = gem_table_val_at_2(_t9796, gem_v___for_i_249);
+#line 545 "compiler/codegen.gem"
+        gem_set_line(545);
+        gem_v___for_i_249 = gem_add(gem_v___for_i_249, gem_int(1));
+#line 546 "compiler/codegen.gem"
+        gem_set_line(546);
     GemVal _t9797 = gem_v_info;
     static GemICacheSlot _ic_1686 = {0};
     GemVal _t9798 = gem_neq(gem_table_get_cached(_t9797, "spawn", &_ic_1686), GEM_NIL);
@@ -45014,35 +45017,35 @@ static GemVal __anon_152(void *_env, GemVal *args, int argc) {
     GemVal _t9801 = (*gem_v_locals_of);
     GemVal _t9799 = (*gem_v_pt_anon_parent);
     GemVal _t9800[] = {gem_table_get(_t9799, gem_v_aid)};
-    gem_check_callable(_t9801, "compiler/codegen.gem", 545);
+    gem_check_callable(_t9801, "compiler/codegen.gem", 546);
     GemVal _t9803 = _t9801.fn(_t9801.env, _t9800, 1);
     GemVal _t9802 = gem_v_info;
     static GemICacheSlot _ic_1687 = {0};
     GemVal _t9804[] = {_t9803, gem_table_get_cached(_t9802, "spawn_via", &_ic_1687)};
-    gem_check_callable(_t9805, "compiler/codegen.gem", 545);
+    gem_check_callable(_t9805, "compiler/codegen.gem", 546);
         _t9806 = gem_not(_t9805.fn(_t9805.env, _t9804, 2));
     }
         if (gem_truthy(_t9806)) {
-#line 546 "compiler/codegen.gem"
-            gem_set_line(546);
+#line 547 "compiler/codegen.gem"
+            gem_set_line(547);
     GemVal _t9809 = gem_v_reached;
     GemVal _t9808 = gem_v_aid;
     GemVal _t9807 = gem_v_info;
     static GemICacheSlot _ic_1688 = {0};
             gem_table_set(_t9809, _t9808, gem_table_get_cached(_t9807, "spawn", &_ic_1688));
-#line 547 "compiler/codegen.gem"
-            gem_set_line(547);
+#line 548 "compiler/codegen.gem"
+            gem_set_line(548);
     GemVal _t9810 = gem_v_queue;
     GemVal _t9811[] = {_t9810, gem_v_aid};
             (void)(gem_push_fn(NULL, _t9811, 2));
         }
     }
 
-#line 550 "compiler/codegen.gem"
-    gem_set_line(550);
-    GemVal gem_v_qi = gem_int(0);
 #line 551 "compiler/codegen.gem"
     gem_set_line(551);
+    GemVal gem_v_qi = gem_int(0);
+#line 552 "compiler/codegen.gem"
+    gem_set_line(552);
     GemArenaMark _mk281;
     gem_arena_mark(&_mk281);
     while (1) {
@@ -45054,39 +45057,39 @@ static GemVal __anon_152(void *_env, GemVal *args, int argc) {
         }
     GemVal _t9812 = gem_v_qi;
         if (!gem_truthy(gem_lt(_t9812, gem_len_1(gem_v_queue)))) break;
-#line 552 "compiler/codegen.gem"
-        gem_set_line(552);
-    GemVal _t9813 = gem_v_queue;
-        GemVal gem_v_cid = gem_table_get(_t9813, gem_v_qi);
 #line 553 "compiler/codegen.gem"
         gem_set_line(553);
-        gem_v_qi = gem_add(gem_v_qi, gem_int(1));
+    GemVal _t9813 = gem_v_queue;
+        GemVal gem_v_cid = gem_table_get(_t9813, gem_v_qi);
 #line 554 "compiler/codegen.gem"
         gem_set_line(554);
-    GemVal _t9814 = gem_v_records;
-        GemVal gem_v_r = gem_table_get(_t9814, gem_v_cid);
+        gem_v_qi = gem_add(gem_v_qi, gem_int(1));
 #line 555 "compiler/codegen.gem"
         gem_set_line(555);
+    GemVal _t9814 = gem_v_records;
+        GemVal gem_v_r = gem_table_get(_t9814, gem_v_cid);
+#line 556 "compiler/codegen.gem"
+        gem_set_line(556);
         if (gem_truthy(gem_eq(gem_v_r, GEM_NIL))) {
             continue;
         }
-#line 558 "compiler/codegen.gem"
-        gem_set_line(558);
-    GemVal _t9815 = gem_table_new();
-        GemVal gem_v_next = _t9815;
 #line 559 "compiler/codegen.gem"
         gem_set_line(559);
+    GemVal _t9815 = gem_table_new();
+        GemVal gem_v_next = _t9815;
+#line 560 "compiler/codegen.gem"
+        gem_set_line(560);
     GemVal _t9816 = gem_v_r;
     static GemICacheSlot _ic_1689 = {0};
         GemVal gem_v___for_tbl_250 = gem_table_get_cached(_t9816, "tail_callees", &_ic_1689);
-#line 559 "compiler/codegen.gem"
-        gem_set_line(559);
+#line 560 "compiler/codegen.gem"
+        gem_set_line(560);
         GemVal gem_v___for_len_250 = gem_for_len_1(gem_v___for_tbl_250);
-#line 559 "compiler/codegen.gem"
-        gem_set_line(559);
+#line 560 "compiler/codegen.gem"
+        gem_set_line(560);
         GemVal gem_v___for_i_250 = gem_int(0);
-#line 559 "compiler/codegen.gem"
-        gem_set_line(559);
+#line 560 "compiler/codegen.gem"
+        gem_set_line(560);
         GemArenaMark _mk282;
         gem_arena_mark(&_mk282);
         while (1) {
@@ -45098,37 +45101,37 @@ static GemVal __anon_152(void *_env, GemVal *args, int argc) {
             }
     GemVal _t9817 = gem_v___for_i_250;
             if (!gem_truthy(gem_lt(_t9817, gem_v___for_len_250))) break;
-#line 559 "compiler/codegen.gem"
-            gem_set_line(559);
-    GemVal _t9818 = gem_v___for_tbl_250;
-            GemVal gem_v_callee = gem_table_key_at_2(_t9818, gem_v___for_i_250);
-#line 559 "compiler/codegen.gem"
-            gem_set_line(559);
-    GemVal _t9819 = gem_v___for_tbl_250;
-            GemVal gem_v__ = gem_table_val_at_2(_t9819, gem_v___for_i_250);
-#line 559 "compiler/codegen.gem"
-            gem_set_line(559);
-            gem_v___for_i_250 = gem_add(gem_v___for_i_250, gem_int(1));
 #line 560 "compiler/codegen.gem"
             gem_set_line(560);
+    GemVal _t9818 = gem_v___for_tbl_250;
+            GemVal gem_v_callee = gem_table_key_at_2(_t9818, gem_v___for_i_250);
+#line 560 "compiler/codegen.gem"
+            gem_set_line(560);
+    GemVal _t9819 = gem_v___for_tbl_250;
+            GemVal gem_v__ = gem_table_val_at_2(_t9819, gem_v___for_i_250);
+#line 560 "compiler/codegen.gem"
+            gem_set_line(560);
+            gem_v___for_i_250 = gem_add(gem_v___for_i_250, gem_int(1));
+#line 561 "compiler/codegen.gem"
+            gem_set_line(561);
     GemVal _t9820 = gem_v_next;
     GemVal _t9821[] = {_t9820, gem_add(GEM_STR_LIT("fn:", 3), gem_v_callee)};
             (void)(gem_push_fn(NULL, _t9821, 2));
         }
 
-#line 562 "compiler/codegen.gem"
-        gem_set_line(562);
+#line 563 "compiler/codegen.gem"
+        gem_set_line(563);
     GemVal _t9822 = gem_v_r;
     static GemICacheSlot _ic_1690 = {0};
         GemVal gem_v___for_tbl_251 = gem_table_get_cached(_t9822, "non_tail_callees", &_ic_1690);
-#line 562 "compiler/codegen.gem"
-        gem_set_line(562);
+#line 563 "compiler/codegen.gem"
+        gem_set_line(563);
         GemVal gem_v___for_len_251 = gem_for_len_1(gem_v___for_tbl_251);
-#line 562 "compiler/codegen.gem"
-        gem_set_line(562);
+#line 563 "compiler/codegen.gem"
+        gem_set_line(563);
         GemVal gem_v___for_i_251 = gem_int(0);
-#line 562 "compiler/codegen.gem"
-        gem_set_line(562);
+#line 563 "compiler/codegen.gem"
+        gem_set_line(563);
         GemArenaMark _mk283;
         gem_arena_mark(&_mk283);
         while (1) {
@@ -45140,37 +45143,37 @@ static GemVal __anon_152(void *_env, GemVal *args, int argc) {
             }
     GemVal _t9823 = gem_v___for_i_251;
             if (!gem_truthy(gem_lt(_t9823, gem_v___for_len_251))) break;
-#line 562 "compiler/codegen.gem"
-            gem_set_line(562);
-    GemVal _t9824 = gem_v___for_tbl_251;
-            GemVal gem_v_callee = gem_table_key_at_2(_t9824, gem_v___for_i_251);
-#line 562 "compiler/codegen.gem"
-            gem_set_line(562);
-    GemVal _t9825 = gem_v___for_tbl_251;
-            GemVal gem_v__ = gem_table_val_at_2(_t9825, gem_v___for_i_251);
-#line 562 "compiler/codegen.gem"
-            gem_set_line(562);
-            gem_v___for_i_251 = gem_add(gem_v___for_i_251, gem_int(1));
 #line 563 "compiler/codegen.gem"
             gem_set_line(563);
+    GemVal _t9824 = gem_v___for_tbl_251;
+            GemVal gem_v_callee = gem_table_key_at_2(_t9824, gem_v___for_i_251);
+#line 563 "compiler/codegen.gem"
+            gem_set_line(563);
+    GemVal _t9825 = gem_v___for_tbl_251;
+            GemVal gem_v__ = gem_table_val_at_2(_t9825, gem_v___for_i_251);
+#line 563 "compiler/codegen.gem"
+            gem_set_line(563);
+            gem_v___for_i_251 = gem_add(gem_v___for_i_251, gem_int(1));
+#line 564 "compiler/codegen.gem"
+            gem_set_line(564);
     GemVal _t9826 = gem_v_next;
     GemVal _t9827[] = {_t9826, gem_add(GEM_STR_LIT("fn:", 3), gem_v_callee)};
             (void)(gem_push_fn(NULL, _t9827, 2));
         }
 
-#line 565 "compiler/codegen.gem"
-        gem_set_line(565);
+#line 566 "compiler/codegen.gem"
+        gem_set_line(566);
     GemVal _t9828 = gem_v_children;
         if (gem_truthy(gem_neq(gem_table_get(_t9828, gem_v_cid), GEM_NIL))) {
-#line 566 "compiler/codegen.gem"
-            gem_set_line(566);
+#line 567 "compiler/codegen.gem"
+            gem_set_line(567);
     GemVal _t9829 = gem_v_children;
             GemVal gem_v___for_items_252 = gem_for_items_1(gem_table_get(_t9829, gem_v_cid));
-#line 566 "compiler/codegen.gem"
-            gem_set_line(566);
+#line 567 "compiler/codegen.gem"
+            gem_set_line(567);
             GemVal gem_v___for_i_252 = gem_int(0);
-#line 566 "compiler/codegen.gem"
-            gem_set_line(566);
+#line 567 "compiler/codegen.gem"
+            gem_set_line(567);
             GemArenaMark _mk284;
             gem_arena_mark(&_mk284);
             while (1) {
@@ -45182,29 +45185,29 @@ static GemVal __anon_152(void *_env, GemVal *args, int argc) {
                 }
     GemVal _t9830 = gem_v___for_i_252;
                 if (!gem_truthy(gem_lt(_t9830, gem_for_len_1(gem_v___for_items_252)))) break;
-#line 566 "compiler/codegen.gem"
-                gem_set_line(566);
-    GemVal _t9831 = gem_v___for_items_252;
-                GemVal gem_v_c = gem_table_get(_t9831, gem_v___for_i_252);
-#line 566 "compiler/codegen.gem"
-                gem_set_line(566);
-                gem_v___for_i_252 = gem_add(gem_v___for_i_252, gem_int(1));
 #line 567 "compiler/codegen.gem"
                 gem_set_line(567);
+    GemVal _t9831 = gem_v___for_items_252;
+                GemVal gem_v_c = gem_table_get(_t9831, gem_v___for_i_252);
+#line 567 "compiler/codegen.gem"
+                gem_set_line(567);
+                gem_v___for_i_252 = gem_add(gem_v___for_i_252, gem_int(1));
+#line 568 "compiler/codegen.gem"
+                gem_set_line(568);
     GemVal _t9832 = gem_v_next;
     GemVal _t9833[] = {_t9832, gem_v_c};
                 (void)(gem_push_fn(NULL, _t9833, 2));
             }
 
         }
-#line 570 "compiler/codegen.gem"
-        gem_set_line(570);
+#line 571 "compiler/codegen.gem"
+        gem_set_line(571);
         GemVal gem_v___for_items_253 = gem_for_items_1(gem_v_next);
-#line 570 "compiler/codegen.gem"
-        gem_set_line(570);
+#line 571 "compiler/codegen.gem"
+        gem_set_line(571);
         GemVal gem_v___for_i_253 = gem_int(0);
-#line 570 "compiler/codegen.gem"
-        gem_set_line(570);
+#line 571 "compiler/codegen.gem"
+        gem_set_line(571);
         GemArenaMark _mk285;
         gem_arena_mark(&_mk285);
         while (1) {
@@ -45216,25 +45219,25 @@ static GemVal __anon_152(void *_env, GemVal *args, int argc) {
             }
     GemVal _t9834 = gem_v___for_i_253;
             if (!gem_truthy(gem_lt(_t9834, gem_for_len_1(gem_v___for_items_253)))) break;
-#line 570 "compiler/codegen.gem"
-            gem_set_line(570);
-    GemVal _t9835 = gem_v___for_items_253;
-            GemVal gem_v_n = gem_table_get(_t9835, gem_v___for_i_253);
-#line 570 "compiler/codegen.gem"
-            gem_set_line(570);
-            gem_v___for_i_253 = gem_add(gem_v___for_i_253, gem_int(1));
 #line 571 "compiler/codegen.gem"
             gem_set_line(571);
+    GemVal _t9835 = gem_v___for_items_253;
+            GemVal gem_v_n = gem_table_get(_t9835, gem_v___for_i_253);
+#line 571 "compiler/codegen.gem"
+            gem_set_line(571);
+            gem_v___for_i_253 = gem_add(gem_v___for_i_253, gem_int(1));
+#line 572 "compiler/codegen.gem"
+            gem_set_line(572);
     GemVal _t9836 = gem_v_reached;
             if (gem_truthy(gem_eq(gem_table_get(_t9836, gem_v_n), GEM_NIL))) {
-#line 572 "compiler/codegen.gem"
-                gem_set_line(572);
+#line 573 "compiler/codegen.gem"
+                gem_set_line(573);
     GemVal _t9839 = gem_v_reached;
     GemVal _t9838 = gem_v_n;
     GemVal _t9837 = gem_v_reached;
                 gem_table_set(_t9839, _t9838, gem_table_get(_t9837, gem_v_cid));
-#line 573 "compiler/codegen.gem"
-                gem_set_line(573);
+#line 574 "compiler/codegen.gem"
+                gem_set_line(574);
     GemVal _t9840 = gem_v_queue;
     GemVal _t9841[] = {_t9840, gem_v_n};
                 (void)(gem_push_fn(NULL, _t9841, 2));
@@ -45242,22 +45245,22 @@ static GemVal __anon_152(void *_env, GemVal *args, int argc) {
         }
 
     }
-#line 577 "compiler/codegen.gem"
-    gem_set_line(577);
+#line 578 "compiler/codegen.gem"
+    gem_set_line(578);
     GemVal _t9842 = gem_table_new_braces();
     GemVal gem_v_seen = _t9842;
     {
-#line 578 "compiler/codegen.gem"
-        gem_set_line(578);
+#line 579 "compiler/codegen.gem"
+        gem_set_line(579);
         GemVal gem_v___for_tbl_257 = gem_v_reached;
-#line 578 "compiler/codegen.gem"
-        gem_set_line(578);
+#line 579 "compiler/codegen.gem"
+        gem_set_line(579);
         GemVal gem_v___for_len_257 = gem_for_len_1(gem_v___for_tbl_257);
-#line 578 "compiler/codegen.gem"
-        gem_set_line(578);
+#line 579 "compiler/codegen.gem"
+        gem_set_line(579);
         GemVal gem_v___for_i_257 = gem_int(0);
-#line 578 "compiler/codegen.gem"
-        gem_set_line(578);
+#line 579 "compiler/codegen.gem"
+        gem_set_line(579);
         GemArenaMark _mk286;
         gem_arena_mark(&_mk286);
         while (1) {
@@ -45269,36 +45272,36 @@ static GemVal __anon_152(void *_env, GemVal *args, int argc) {
             }
     GemVal _t9843 = gem_v___for_i_257;
             if (!gem_truthy(gem_lt(_t9843, gem_v___for_len_257))) break;
-#line 578 "compiler/codegen.gem"
-            gem_set_line(578);
-    GemVal _t9844 = gem_v___for_tbl_257;
-            GemVal gem_v_cid = gem_table_key_at_2(_t9844, gem_v___for_i_257);
-#line 578 "compiler/codegen.gem"
-            gem_set_line(578);
-    GemVal _t9845 = gem_v___for_tbl_257;
-            GemVal gem_v_spawn_node = gem_table_val_at_2(_t9845, gem_v___for_i_257);
-#line 578 "compiler/codegen.gem"
-            gem_set_line(578);
-            gem_v___for_i_257 = gem_add(gem_v___for_i_257, gem_int(1));
 #line 579 "compiler/codegen.gem"
             gem_set_line(579);
-    GemVal _t9846 = gem_v_records;
-            GemVal gem_v_r = gem_table_get(_t9846, gem_v_cid);
+    GemVal _t9844 = gem_v___for_tbl_257;
+            GemVal gem_v_cid = gem_table_key_at_2(_t9844, gem_v___for_i_257);
+#line 579 "compiler/codegen.gem"
+            gem_set_line(579);
+    GemVal _t9845 = gem_v___for_tbl_257;
+            GemVal gem_v_spawn_node = gem_table_val_at_2(_t9845, gem_v___for_i_257);
+#line 579 "compiler/codegen.gem"
+            gem_set_line(579);
+            gem_v___for_i_257 = gem_add(gem_v___for_i_257, gem_int(1));
 #line 580 "compiler/codegen.gem"
             gem_set_line(580);
+    GemVal _t9846 = gem_v_records;
+            GemVal gem_v_r = gem_table_get(_t9846, gem_v_cid);
+#line 581 "compiler/codegen.gem"
+            gem_set_line(581);
             if (gem_truthy(gem_eq(gem_v_r, GEM_NIL))) {
                 continue;
             }
-#line 583 "compiler/codegen.gem"
-            gem_set_line(583);
+#line 584 "compiler/codegen.gem"
+            gem_set_line(584);
     GemVal _t9847 = gem_v_r;
     static GemICacheSlot _ic_1691 = {0};
             GemVal gem_v___for_items_256 = gem_for_items_1(gem_table_get_cached(_t9847, "writes", &_ic_1691));
-#line 583 "compiler/codegen.gem"
-            gem_set_line(583);
+#line 584 "compiler/codegen.gem"
+            gem_set_line(584);
             GemVal gem_v___for_i_256 = gem_int(0);
-#line 583 "compiler/codegen.gem"
-            gem_set_line(583);
+#line 584 "compiler/codegen.gem"
+            gem_set_line(584);
             GemArenaMark _mk287;
             gem_arena_mark(&_mk287);
             while (1) {
@@ -45310,29 +45313,29 @@ static GemVal __anon_152(void *_env, GemVal *args, int argc) {
                 }
     GemVal _t9848 = gem_v___for_i_256;
                 if (!gem_truthy(gem_lt(_t9848, gem_for_len_1(gem_v___for_items_256)))) break;
-#line 583 "compiler/codegen.gem"
-                gem_set_line(583);
-    GemVal _t9849 = gem_v___for_items_256;
-                GemVal gem_v_w = gem_table_get(_t9849, gem_v___for_i_256);
-#line 583 "compiler/codegen.gem"
-                gem_set_line(583);
-                gem_v___for_i_256 = gem_add(gem_v___for_i_256, gem_int(1));
 #line 584 "compiler/codegen.gem"
                 gem_set_line(584);
+    GemVal _t9849 = gem_v___for_items_256;
+                GemVal gem_v_w = gem_table_get(_t9849, gem_v___for_i_256);
+#line 584 "compiler/codegen.gem"
+                gem_set_line(584);
+                gem_v___for_i_256 = gem_add(gem_v___for_i_256, gem_int(1));
+#line 585 "compiler/codegen.gem"
+                gem_set_line(585);
     GemVal _t9851 = (*gem_v_locals_of);
     GemVal _t9850[] = {gem_v_cid};
-    gem_check_callable(_t9851, "compiler/codegen.gem", 584);
+    gem_check_callable(_t9851, "compiler/codegen.gem", 585);
                 GemVal gem_v_locals = _t9851.fn(_t9851.env, _t9850, 1);
-#line 586 "compiler/codegen.gem"
-                gem_set_line(586);
+#line 587 "compiler/codegen.gem"
+                gem_set_line(587);
     GemVal _t9854 = (*gem_v_file_of);
     GemVal _t9852 = gem_v_w;
     static GemICacheSlot _ic_1692 = {0};
     GemVal _t9853[] = {gem_table_get_cached(_t9852, "node", &_ic_1692)};
-    gem_check_callable(_t9854, "compiler/codegen.gem", 586);
+    gem_check_callable(_t9854, "compiler/codegen.gem", 587);
                 GemVal gem_v_wf = _t9854.fn(_t9854.env, _t9853, 1);
-#line 587 "compiler/codegen.gem"
-                gem_set_line(587);
+#line 588 "compiler/codegen.gem"
+                gem_set_line(588);
     GemVal _t9855 = gem_neq((*gem_v_std_dir), GEM_NIL);
     GemVal _t9859;
     if (!gem_truthy(_t9855)) {
@@ -45344,8 +45347,8 @@ static GemVal __anon_152(void *_env, GemVal *args, int argc) {
         _t9859 = gem_eq(_t9858, gem_add((*gem_v_std_dir), GEM_STR_LIT("/", 1)));
     }
                 GemVal gem_v_in_std = _t9859;
-#line 588 "compiler/codegen.gem"
-                gem_set_line(588);
+#line 589 "compiler/codegen.gem"
+                gem_set_line(589);
     GemVal _t9860 = gem_not(gem_v_in_std);
     GemVal _t9865;
     if (!gem_truthy(_t9860)) {
@@ -45356,7 +45359,7 @@ static GemVal __anon_152(void *_env, GemVal *args, int argc) {
     GemVal _t9861 = gem_v_w;
     static GemICacheSlot _ic_1693 = {0};
     GemVal _t9863[] = {_t9862, gem_table_get_cached(_t9861, "name", &_ic_1693)};
-    gem_check_callable(_t9864, "compiler/codegen.gem", 588);
+    gem_check_callable(_t9864, "compiler/codegen.gem", 589);
         _t9865 = _t9864.fn(_t9864.env, _t9863, 2);
     }
     GemVal _t9870;
@@ -45368,7 +45371,7 @@ static GemVal __anon_152(void *_env, GemVal *args, int argc) {
     GemVal _t9866 = gem_v_w;
     static GemICacheSlot _ic_1694 = {0};
     GemVal _t9868[] = {_t9867, gem_table_get_cached(_t9866, "name", &_ic_1694)};
-    gem_check_callable(_t9869, "compiler/codegen.gem", 588);
+    gem_check_callable(_t9869, "compiler/codegen.gem", 589);
         _t9870 = gem_not(_t9869.fn(_t9869.env, _t9868, 2));
     }
     GemVal _t9878;
@@ -45387,88 +45390,88 @@ static GemVal __anon_152(void *_env, GemVal *args, int argc) {
     GemVal _t9873 = gem_v_w;
     static GemICacheSlot _ic_1696 = {0};
     GemVal _t9875[] = {_t9874, gem_table_get_cached(_t9873, "via", &_ic_1696)};
-    gem_check_callable(_t9876, "compiler/codegen.gem", 588);
+    gem_check_callable(_t9876, "compiler/codegen.gem", 589);
         _t9877 = gem_not(_t9876.fn(_t9876.env, _t9875, 2));
     }
         _t9878 = _t9877;
     }
                 if (gem_truthy(_t9878)) {
-#line 589 "compiler/codegen.gem"
-                    gem_set_line(589);
+#line 590 "compiler/codegen.gem"
+                    gem_set_line(590);
     GemVal _t9879 = gem_v_w;
     static GemICacheSlot _ic_1697 = {0};
                     GemVal gem_v_n = gem_table_get_cached(_t9879, "node", &_ic_1697);
-#line 590 "compiler/codegen.gem"
-                    gem_set_line(590);
+#line 591 "compiler/codegen.gem"
+                    gem_set_line(591);
                     GemVal gem_v___val_254 = GEM_NIL;
-#line 590 "compiler/codegen.gem"
-                    gem_set_line(590);
+#line 591 "compiler/codegen.gem"
+                    gem_set_line(591);
     GemVal _t9880 = gem_v_n;
     static GemICacheSlot _ic_1698 = {0};
                     if (gem_truthy(gem_neq(gem_table_get_cached(_t9880, "line", &_ic_1698), GEM_NIL))) {
-#line 590 "compiler/codegen.gem"
-                        gem_set_line(590);
+#line 591 "compiler/codegen.gem"
+                        gem_set_line(591);
     GemVal _t9881 = gem_v_n;
     static GemICacheSlot _ic_1699 = {0};
     GemVal _t9882[] = {gem_table_get_cached(_t9881, "line", &_ic_1699)};
                         gem_v___val_254 = gem_to_string_fn(NULL, _t9882, 1);
                     } else {
-#line 590 "compiler/codegen.gem"
-                        gem_set_line(590);
+#line 591 "compiler/codegen.gem"
+                        gem_set_line(591);
                         gem_v___val_254 = GEM_STR_LIT("?", 1);
                     }
-#line 590 "compiler/codegen.gem"
-                    gem_set_line(590);
-                    GemVal gem_v_line_str = gem_v___val_254;
 #line 591 "compiler/codegen.gem"
                     gem_set_line(591);
+                    GemVal gem_v_line_str = gem_v___val_254;
+#line 592 "compiler/codegen.gem"
+                    gem_set_line(592);
     GemVal _t9884 = (*gem_v_file_of);
     GemVal _t9883[] = {gem_v_n};
-    gem_check_callable(_t9884, "compiler/codegen.gem", 591);
+    gem_check_callable(_t9884, "compiler/codegen.gem", 592);
     GemVal _t9887 = _t9884.fn(_t9884.env, _t9883, 1);
     GemVal _t9886 = gem_v_line_str;
     GemVal _t9885 = gem_v_w;
     static GemICacheSlot _ic_1700 = {0};
     GemVal _t9888[] = {_t9887, GEM_STR_LIT(":", 1), _t9886, GEM_STR_LIT(":", 1), gem_table_get_cached(_t9885, "name", &_ic_1700)};
                     GemVal gem_v_key = gem_interp(5, _t9888);
-#line 592 "compiler/codegen.gem"
-                    gem_set_line(592);
+#line 593 "compiler/codegen.gem"
+                    gem_set_line(593);
     GemVal _t9889 = gem_v_seen;
                     if (gem_truthy(gem_eq(gem_table_get(_t9889, gem_v_key), GEM_NIL))) {
-#line 593 "compiler/codegen.gem"
-                        gem_set_line(593);
+#line 594 "compiler/codegen.gem"
+                        gem_set_line(594);
     GemVal _t9890 = gem_v_seen;
                         gem_table_set(_t9890, gem_v_key, gem_bool(1));
-#line 594 "compiler/codegen.gem"
-                        gem_set_line(594);
+#line 595 "compiler/codegen.gem"
+                        gem_set_line(595);
                         GemVal gem_v___val_255 = GEM_NIL;
-#line 594 "compiler/codegen.gem"
-                        gem_set_line(594);
+#line 595 "compiler/codegen.gem"
+                        gem_set_line(595);
     GemVal _t9891 = gem_v_spawn_node;
     static GemICacheSlot _ic_1701 = {0};
                         if (gem_truthy(gem_neq(gem_table_get_cached(_t9891, "line", &_ic_1701), GEM_NIL))) {
-#line 594 "compiler/codegen.gem"
-                            gem_set_line(594);
+#line 595 "compiler/codegen.gem"
+                            gem_set_line(595);
     GemVal _t9892 = gem_v_spawn_node;
     static GemICacheSlot _ic_1702 = {0};
     GemVal _t9893[] = {gem_table_get_cached(_t9892, "line", &_ic_1702)};
                             gem_v___val_255 = gem_to_string_fn(NULL, _t9893, 1);
                         } else {
-#line 594 "compiler/codegen.gem"
-                            gem_set_line(594);
+#line 595 "compiler/codegen.gem"
+                            gem_set_line(595);
                             gem_v___val_255 = GEM_STR_LIT("?", 1);
                         }
-#line 594 "compiler/codegen.gem"
-                        gem_set_line(594);
-                        GemVal gem_v_sline = gem_v___val_255;
 #line 595 "compiler/codegen.gem"
                         gem_set_line(595);
+                        GemVal gem_v_sline = gem_v___val_255;
+#line 596 "compiler/codegen.gem"
+                        gem_set_line(596);
     GemVal _t9897 = (*gem_v_rel_path);
     GemVal _t9895 = (*gem_v_file_of);
     GemVal _t9894[] = {gem_v_n};
-    gem_check_callable(_t9895, "compiler/codegen.gem", 595);
+    gem_check_callable(_t9895, "compiler/codegen.gem", 596);
     GemVal _t9896[] = {_t9895.fn(_t9895.env, _t9894, 1)};
-    gem_check_callable(_t9897, "compiler/codegen.gem", 595);
+    gem_check_callable(_t9897, "compiler/codegen.gem", 596);
     GemVal _t9910 = _t9897.fn(_t9897.env, _t9896, 1);
     GemVal _t9909 = gem_v_line_str;
     GemVal _t9902 = (*gem_v_display_name);
@@ -45476,16 +45479,16 @@ static GemVal __anon_152(void *_env, GemVal *args, int argc) {
     GemVal _t9898 = gem_v_w;
     static GemICacheSlot _ic_1703 = {0};
     GemVal _t9899[] = {gem_table_get_cached(_t9898, "name", &_ic_1703)};
-    gem_check_callable(_t9900, "compiler/codegen.gem", 595);
+    gem_check_callable(_t9900, "compiler/codegen.gem", 596);
     GemVal _t9901[] = {_t9900.fn(_t9900.env, _t9899, 1)};
-    gem_check_callable(_t9902, "compiler/codegen.gem", 595);
+    gem_check_callable(_t9902, "compiler/codegen.gem", 596);
     GemVal _t9908 = _t9902.fn(_t9902.env, _t9901, 1);
     GemVal _t9906 = (*gem_v_rel_path);
     GemVal _t9904 = (*gem_v_file_of);
     GemVal _t9903[] = {gem_v_spawn_node};
-    gem_check_callable(_t9904, "compiler/codegen.gem", 595);
+    gem_check_callable(_t9904, "compiler/codegen.gem", 596);
     GemVal _t9905[] = {_t9904.fn(_t9904.env, _t9903, 1)};
-    gem_check_callable(_t9906, "compiler/codegen.gem", 595);
+    gem_check_callable(_t9906, "compiler/codegen.gem", 596);
     GemVal _t9907 = _t9906.fn(_t9906.env, _t9905, 1);
     GemVal _t9911[] = {GEM_STR_LIT("note: ", 6), _t9910, GEM_STR_LIT(":", 1), _t9909, GEM_STR_LIT(": this changes module-level `", 29), _t9908, GEM_STR_LIT("` in code that runs in a spawned process (spawn at ", 51), _t9907, GEM_STR_LIT(":", 1), gem_v_sline, GEM_STR_LIT("); each process has its own copy of module state, so the change is visible only in that process.\n", 97)};
     GemVal _t9912[] = {gem_interp(11, _t9911)};
@@ -45510,31 +45513,31 @@ static GemVal __anon_155(void *_env, GemVal *args, int argc) {
     struct _closure___anon_155 *_cls = (struct _closure___anon_155 *)_env;
     GemVal *gem_v_assigned = _cls->gem_v_assigned;
     GemVal *gem_v_find_assigns = _cls->gem_v_find_assigns;
-    gem_push_frame("anonymous fn", "compiler/codegen.gem", 611);
+    gem_push_frame("anonymous fn", "compiler/codegen.gem", 612);
     GemVal gem_v_node = (argc > 0) ? args[0] : GEM_NIL;
     GemArenaPoint _ret_pt;
     gem_arena_point(&_ret_pt);
-#line 612 "compiler/codegen.gem"
-    gem_set_line(612);
+#line 613 "compiler/codegen.gem"
+    gem_set_line(613);
     GemVal _t9923 = gem_v_node;
     static GemICacheSlot _ic_1704 = {0};
     if (gem_truthy(gem_eq(gem_table_get_cached(_t9923, "tag", &_ic_1704), GEM_STR_LIT("assign", 6)))) {
-#line 613 "compiler/codegen.gem"
-        gem_set_line(613);
+#line 614 "compiler/codegen.gem"
+        gem_set_line(614);
     GemVal _t9927 = gem_g___mod_codegen_set_add;
     GemVal _t9925 = (*gem_v_assigned);
     GemVal _t9924 = gem_v_node;
     static GemICacheSlot _ic_1705 = {0};
     GemVal _t9926[] = {_t9925, gem_table_get_cached(_t9924, "name", &_ic_1705)};
-    gem_check_callable(_t9927, "compiler/codegen.gem", 613);
+    gem_check_callable(_t9927, "compiler/codegen.gem", 614);
         (void)(_t9927.fn(_t9927.env, _t9926, 2));
     }
-#line 615 "compiler/codegen.gem"
-    gem_set_line(615);
+#line 616 "compiler/codegen.gem"
+    gem_set_line(616);
     GemVal _t9930 = gem_g___mod_codegen_each_child;
     GemVal _t9928 = gem_v_node;
     GemVal _t9929[] = {_t9928, (*gem_v_find_assigns)};
-    gem_check_callable(_t9930, "compiler/codegen.gem", 615);
+    gem_check_callable(_t9930, "compiler/codegen.gem", 616);
     GemVal _t9931 = _t9930.fn(_t9930.env, _t9929, 2);
     if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t9931, 1);
     gem_pop_frame();
@@ -45560,7 +45563,7 @@ static GemVal __anon_156(void *_env, GemVal *args, int argc) {
     GemVal *gem_v_sink = _cls->gem_v_sink;
     GemVal *gem_v_source_of = _cls->gem_v_source_of;
     GemVal *gem_v_user_var_name = _cls->gem_v_user_var_name;
-    gem_push_frame("anonymous fn", "compiler/codegen.gem", 666);
+    gem_push_frame("anonymous fn", "compiler/codegen.gem", 667);
     GemVal gem_v_call = (argc > 0) ? args[0] : GEM_NIL;
     GemVal gem_v_name = (argc > 1) ? args[1] : GEM_NIL;
     GemVal gem_v_shown = (argc > 2) ? args[2] : GEM_NIL;
@@ -45568,17 +45571,17 @@ static GemVal __anon_156(void *_env, GemVal *args, int argc) {
     GemVal gem_v_span = (argc > 4) ? args[4] : GEM_NIL;
     GemArenaPoint _ret_pt;
     gem_arena_point(&_ret_pt);
-#line 667 "compiler/codegen.gem"
-    gem_set_line(667);
-    GemVal _t10059 = (*gem_v_arity);
-    GemVal gem_v_a = gem_table_get(_t10059, gem_v_name);
 #line 668 "compiler/codegen.gem"
     gem_set_line(668);
+    GemVal _t10059 = (*gem_v_arity);
+    GemVal gem_v_a = gem_table_get(_t10059, gem_v_name);
+#line 669 "compiler/codegen.gem"
+    gem_set_line(669);
     GemVal _t10060 = gem_v_call;
     static GemICacheSlot _ic_1748 = {0};
     GemVal gem_v_n = gem_len_1(gem_table_get_cached(_t10060, "args", &_ic_1748));
-#line 669 "compiler/codegen.gem"
-    gem_set_line(669);
+#line 670 "compiler/codegen.gem"
+    gem_set_line(670);
     GemVal _t10061 = gem_eq(gem_v_a, GEM_NIL);
     GemVal _t10071;
     if (gem_truthy(_t10061)) {
@@ -45609,18 +45612,18 @@ static GemVal __anon_156(void *_env, GemVal *args, int argc) {
         _t10071 = _t10070;
     }
     if (gem_truthy(_t10071)) {
-#line 670 "compiler/codegen.gem"
-        gem_set_line(670);
+#line 671 "compiler/codegen.gem"
+        gem_set_line(671);
         GemVal _t10072 = GEM_NIL;
         if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t10072, 1);
         gem_pop_frame();
         return _t10072;
     }
-#line 672 "compiler/codegen.gem"
-    gem_set_line(672);
+#line 673 "compiler/codegen.gem"
+    gem_set_line(673);
     GemVal _t10074 = (*gem_v_file_of);
     GemVal _t10073[] = {gem_v_loc};
-    gem_check_callable(_t10074, "compiler/codegen.gem", 672);
+    gem_check_callable(_t10074, "compiler/codegen.gem", 673);
     GemVal _t10078 = _t10074.fn(_t10074.env, _t10073, 1);
     GemVal _t10075 = gem_v_loc;
     static GemICacheSlot _ic_1752 = {0};
@@ -45629,46 +45632,46 @@ static GemVal __anon_156(void *_env, GemVal *args, int argc) {
     static GemICacheSlot _ic_1753 = {0};
     GemVal _t10079[] = {_t10078, GEM_STR_LIT(":", 1), _t10077, GEM_STR_LIT(":", 1), gem_table_get_cached(_t10076, "col", &_ic_1753)};
     GemVal gem_v_key = gem_interp(5, _t10079);
-#line 673 "compiler/codegen.gem"
-    gem_set_line(673);
+#line 674 "compiler/codegen.gem"
+    gem_set_line(674);
     GemVal _t10080 = (*gem_v_reported);
     if (gem_truthy(gem_neq(gem_table_get(_t10080, gem_v_key), GEM_NIL))) {
-#line 674 "compiler/codegen.gem"
-        gem_set_line(674);
+#line 675 "compiler/codegen.gem"
+        gem_set_line(675);
         GemVal _t10081 = GEM_NIL;
         if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t10081, 1);
         gem_pop_frame();
         return _t10081;
     }
-#line 676 "compiler/codegen.gem"
-    gem_set_line(676);
+#line 677 "compiler/codegen.gem"
+    gem_set_line(677);
     GemVal _t10082 = (*gem_v_reported);
     gem_table_set(_t10082, gem_v_key, gem_bool(1));
-#line 677 "compiler/codegen.gem"
-    gem_set_line(677);
+#line 678 "compiler/codegen.gem"
+    gem_set_line(678);
     GemVal gem_v___val_271 = GEM_NIL;
-#line 677 "compiler/codegen.gem"
-    gem_set_line(677);
+#line 678 "compiler/codegen.gem"
+    gem_set_line(678);
     GemVal _t10083 = gem_v_a;
     static GemICacheSlot _ic_1754 = {0};
     if (gem_truthy(gem_eq(gem_table_get_cached(_t10083, "max", &_ic_1754), GEM_NIL))) {
-#line 678 "compiler/codegen.gem"
-        gem_set_line(678);
+#line 679 "compiler/codegen.gem"
+        gem_set_line(679);
     GemVal _t10084 = gem_v_a;
     static GemICacheSlot _ic_1755 = {0};
     GemVal _t10085[] = {GEM_STR_LIT("at least ", 9), gem_table_get_cached(_t10084, "min", &_ic_1755)};
         gem_v___val_271 = gem_interp(2, _t10085);
     } else {
-#line 679 "compiler/codegen.gem"
-        gem_set_line(679);
+#line 680 "compiler/codegen.gem"
+        gem_set_line(680);
     GemVal _t10086 = gem_v_a;
     static GemICacheSlot _ic_1756 = {0};
     GemVal _t10088 = gem_table_get_cached(_t10086, "max", &_ic_1756);
     GemVal _t10087 = gem_v_a;
     static GemICacheSlot _ic_1757 = {0};
         if (gem_truthy(gem_neq(_t10088, gem_table_get_cached(_t10087, "min", &_ic_1757)))) {
-#line 680 "compiler/codegen.gem"
-            gem_set_line(680);
+#line 681 "compiler/codegen.gem"
+            gem_set_line(681);
     GemVal _t10089 = gem_v_a;
     static GemICacheSlot _ic_1758 = {0};
     GemVal _t10091 = gem_table_get_cached(_t10089, "min", &_ic_1758);
@@ -45677,22 +45680,22 @@ static GemVal __anon_156(void *_env, GemVal *args, int argc) {
     GemVal _t10092[] = {_t10091, GEM_STR_LIT(" to ", 4), gem_table_get_cached(_t10090, "max", &_ic_1759)};
             gem_v___val_271 = gem_interp(3, _t10092);
         } else {
-#line 682 "compiler/codegen.gem"
-            gem_set_line(682);
+#line 683 "compiler/codegen.gem"
+            gem_set_line(683);
     GemVal _t10093 = gem_v_a;
     static GemICacheSlot _ic_1760 = {0};
     GemVal _t10094[] = {gem_table_get_cached(_t10093, "min", &_ic_1760)};
             gem_v___val_271 = gem_interp(1, _t10094);
         }
     }
-#line 677 "compiler/codegen.gem"
-    gem_set_line(677);
+#line 678 "compiler/codegen.gem"
+    gem_set_line(678);
     GemVal gem_v_takes = gem_v___val_271;
-#line 684 "compiler/codegen.gem"
-    gem_set_line(684);
+#line 685 "compiler/codegen.gem"
+    gem_set_line(685);
     GemVal gem_v___val_272 = GEM_NIL;
-#line 684 "compiler/codegen.gem"
-    gem_set_line(684);
+#line 685 "compiler/codegen.gem"
+    gem_set_line(685);
     GemVal _t10095 = gem_v_a;
     static GemICacheSlot _ic_1761 = {0};
     GemVal _t10096 = gem_eq(gem_table_get_cached(_t10095, "max", &_ic_1761), gem_int(1));
@@ -45705,36 +45708,36 @@ static GemVal __anon_156(void *_env, GemVal *args, int argc) {
         _t10098 = gem_eq(gem_table_get_cached(_t10097, "min", &_ic_1762), gem_int(1));
     }
     if (gem_truthy(_t10098)) {
-#line 684 "compiler/codegen.gem"
-        gem_set_line(684);
+#line 685 "compiler/codegen.gem"
+        gem_set_line(685);
         gem_v___val_272 = GEM_STR_LIT("argument", 8);
     } else {
-#line 684 "compiler/codegen.gem"
-        gem_set_line(684);
+#line 685 "compiler/codegen.gem"
+        gem_set_line(685);
         gem_v___val_272 = GEM_STR_LIT("arguments", 9);
     }
-#line 684 "compiler/codegen.gem"
-    gem_set_line(684);
-    GemVal gem_v_noun = gem_v___val_272;
 #line 685 "compiler/codegen.gem"
     gem_set_line(685);
-    GemVal _t10099 = gem_table_new();
-    GemVal gem_v_sig = _t10099;
+    GemVal gem_v_noun = gem_v___val_272;
 #line 686 "compiler/codegen.gem"
     gem_set_line(686);
+    GemVal _t10099 = gem_table_new();
+    GemVal gem_v_sig = _t10099;
+#line 687 "compiler/codegen.gem"
+    gem_set_line(687);
     GemVal _t10100 = gem_v_a;
     static GemICacheSlot _ic_1763 = {0};
     GemVal gem_v_d = gem_table_get_cached(_t10100, "def", &_ic_1763);
-#line 687 "compiler/codegen.gem"
-    gem_set_line(687);
+#line 688 "compiler/codegen.gem"
+    gem_set_line(688);
     GemVal gem_v___for_i_273 = gem_int(0);
-#line 687 "compiler/codegen.gem"
-    gem_set_line(687);
+#line 688 "compiler/codegen.gem"
+    gem_set_line(688);
     GemVal _t10101 = gem_v_d;
     static GemICacheSlot _ic_1764 = {0};
     GemVal gem_v___for_limit_273 = gem_len_1(gem_table_get_cached(_t10101, "params", &_ic_1764));
-#line 687 "compiler/codegen.gem"
-    gem_set_line(687);
+#line 688 "compiler/codegen.gem"
+    gem_set_line(688);
     GemArenaMark _mk298;
     gem_arena_mark(&_mk298);
     while (1) {
@@ -45745,28 +45748,28 @@ static GemVal __anon_156(void *_env, GemVal *args, int argc) {
         }
     GemVal _t10102 = gem_v___for_i_273;
         if (!gem_truthy(gem_lt(_t10102, gem_v___for_limit_273))) break;
-#line 687 "compiler/codegen.gem"
-        gem_set_line(687);
-        GemVal gem_v_i = gem_v___for_i_273;
-#line 687 "compiler/codegen.gem"
-        gem_set_line(687);
-        gem_v___for_i_273 = gem_add(gem_v___for_i_273, gem_int(1));
 #line 688 "compiler/codegen.gem"
         gem_set_line(688);
+        GemVal gem_v_i = gem_v___for_i_273;
+#line 688 "compiler/codegen.gem"
+        gem_set_line(688);
+        gem_v___for_i_273 = gem_add(gem_v___for_i_273, gem_int(1));
+#line 689 "compiler/codegen.gem"
+        gem_set_line(689);
     GemVal _t10106 = (*gem_v_user_var_name);
     GemVal _t10103 = gem_v_d;
     static GemICacheSlot _ic_1765 = {0};
     GemVal _t10104 = gem_table_get_cached(_t10103, "params", &_ic_1765);
     GemVal _t10105[] = {gem_table_get(_t10104, gem_v_i)};
-    gem_check_callable(_t10106, "compiler/codegen.gem", 688);
+    gem_check_callable(_t10106, "compiler/codegen.gem", 689);
         GemVal gem_v_pname = _t10106.fn(_t10106.env, _t10105, 1);
-#line 689 "compiler/codegen.gem"
-        gem_set_line(689);
+#line 690 "compiler/codegen.gem"
+        gem_set_line(690);
     GemVal _t10107 = gem_v_d;
     static GemICacheSlot _ic_1766 = {0};
         if (gem_truthy(gem_eq(gem_table_get_cached(_t10107, "tag", &_ic_1766), GEM_STR_LIT("extern_fn", 9)))) {
-#line 690 "compiler/codegen.gem"
-            gem_set_line(690);
+#line 691 "compiler/codegen.gem"
+            gem_set_line(691);
     GemVal _t10108 = gem_v_d;
     static GemICacheSlot _ic_1767 = {0};
     GemVal _t10109 = gem_table_get_cached(_t10108, "params", &_ic_1767);
@@ -45774,8 +45777,8 @@ static GemVal __anon_156(void *_env, GemVal *args, int argc) {
     static GemICacheSlot _ic_1768 = {0};
             gem_v_pname = gem_table_get_cached(_t10110, "name", &_ic_1768);
         } else {
-#line 691 "compiler/codegen.gem"
-            gem_set_line(691);
+#line 692 "compiler/codegen.gem"
+            gem_set_line(692);
     GemVal _t10111 = gem_v_d;
     static GemICacheSlot _ic_1769 = {0};
     GemVal _t10112 = gem_neq(gem_table_get_cached(_t10111, "defaults", &_ic_1769), GEM_NIL);
@@ -45789,45 +45792,45 @@ static GemVal __anon_156(void *_env, GemVal *args, int argc) {
         _t10115 = gem_neq(gem_table_get(_t10114, gem_v_i), GEM_NIL);
     }
             if (gem_truthy(_t10115)) {
-#line 692 "compiler/codegen.gem"
-                gem_set_line(692);
+#line 693 "compiler/codegen.gem"
+                gem_set_line(693);
                 gem_v_pname = gem_add(gem_v_pname, GEM_STR_LIT(" = ...", 6));
             }
         }
-#line 694 "compiler/codegen.gem"
-        gem_set_line(694);
+#line 695 "compiler/codegen.gem"
+        gem_set_line(695);
     GemVal _t10116 = gem_v_sig;
     GemVal _t10117[] = {_t10116, gem_v_pname};
         (void)(gem_push_fn(NULL, _t10117, 2));
     }
 
-#line 696 "compiler/codegen.gem"
-    gem_set_line(696);
+#line 697 "compiler/codegen.gem"
+    gem_set_line(697);
     GemVal _t10118 = gem_v_d;
     static GemICacheSlot _ic_1771 = {0};
     if (gem_truthy(gem_neq(gem_table_get_cached(_t10118, "rest_param", &_ic_1771), GEM_NIL))) {
-#line 697 "compiler/codegen.gem"
-        gem_set_line(697);
+#line 698 "compiler/codegen.gem"
+        gem_set_line(698);
     GemVal _t10122 = gem_v_sig;
     GemVal _t10121 = (*gem_v_user_var_name);
     GemVal _t10119 = gem_v_d;
     static GemICacheSlot _ic_1772 = {0};
     GemVal _t10120[] = {gem_table_get_cached(_t10119, "rest_param", &_ic_1772)};
-    gem_check_callable(_t10121, "compiler/codegen.gem", 697);
+    gem_check_callable(_t10121, "compiler/codegen.gem", 698);
     GemVal _t10123[] = {_t10122, gem_add(GEM_STR_LIT("...", 3), _t10121.fn(_t10121.env, _t10120, 1))};
         (void)(gem_push_fn(NULL, _t10123, 2));
     }
-#line 699 "compiler/codegen.gem"
-    gem_set_line(699);
+#line 700 "compiler/codegen.gem"
+    gem_set_line(700);
     GemVal gem_v_sig_text = GEM_STR_LIT("", 0);
-#line 700 "compiler/codegen.gem"
-    gem_set_line(700);
+#line 701 "compiler/codegen.gem"
+    gem_set_line(701);
     GemVal gem_v___for_i_274 = gem_int(0);
-#line 700 "compiler/codegen.gem"
-    gem_set_line(700);
+#line 701 "compiler/codegen.gem"
+    gem_set_line(701);
     GemVal gem_v___for_limit_274 = gem_len_1(gem_v_sig);
-#line 700 "compiler/codegen.gem"
-    gem_set_line(700);
+#line 701 "compiler/codegen.gem"
+    gem_set_line(701);
     int _t10125 = 0;
     GemArenaMark _mk299;
     gem_arena_mark(&_mk299);
@@ -45839,65 +45842,65 @@ static GemVal __anon_156(void *_env, GemVal *args, int argc) {
         }
     GemVal _t10124 = gem_v___for_i_274;
         if (!gem_truthy(gem_lt(_t10124, gem_v___for_limit_274))) break;
-#line 700 "compiler/codegen.gem"
-        gem_set_line(700);
-        GemVal gem_v_i = gem_v___for_i_274;
-#line 700 "compiler/codegen.gem"
-        gem_set_line(700);
-        gem_v___for_i_274 = gem_add(gem_v___for_i_274, gem_int(1));
 #line 701 "compiler/codegen.gem"
         gem_set_line(701);
-        if (gem_truthy(gem_gt(gem_v_i, gem_int(0)))) {
+        GemVal gem_v_i = gem_v___for_i_274;
+#line 701 "compiler/codegen.gem"
+        gem_set_line(701);
+        gem_v___for_i_274 = gem_add(gem_v___for_i_274, gem_int(1));
 #line 702 "compiler/codegen.gem"
-            gem_set_line(702);
+        gem_set_line(702);
+        if (gem_truthy(gem_gt(gem_v_i, gem_int(0)))) {
+#line 703 "compiler/codegen.gem"
+            gem_set_line(703);
             gem_string_append_to(&gem_v_sig_text, GEM_STR_LIT(", ", 2), &_t10125);
 
         }
-#line 704 "compiler/codegen.gem"
-        gem_set_line(704);
+#line 705 "compiler/codegen.gem"
+        gem_set_line(705);
     GemVal _t10126 = gem_v_sig;
         gem_string_append_to(&gem_v_sig_text, gem_table_get(_t10126, gem_v_i), &_t10125);
 
     }
     if (_t10125) gem_v_sig_text = gem_string_finish(gem_v_sig_text);
 
-#line 706 "compiler/codegen.gem"
-    gem_set_line(706);
+#line 707 "compiler/codegen.gem"
+    gem_set_line(707);
     GemVal _t10127 = gem_v_shown;
     GemVal _t10128[] = {GEM_STR_LIT("it is defined as `", 18), _t10127, GEM_STR_LIT("(", 1), gem_v_sig_text, GEM_STR_LIT(")`", 2)};
     GemVal gem_v_hint = gem_interp(5, _t10128);
-#line 707 "compiler/codegen.gem"
-    gem_set_line(707);
+#line 708 "compiler/codegen.gem"
+    gem_set_line(708);
     GemVal _t10129 = gem_v_d;
     static GemICacheSlot _ic_1773 = {0};
     if (gem_truthy(gem_neq(gem_table_get_cached(_t10129, "line", &_ic_1773), GEM_NIL))) {
-#line 708 "compiler/codegen.gem"
-        gem_set_line(708);
+#line 709 "compiler/codegen.gem"
+        gem_set_line(709);
     GemVal _t10137 = gem_v_hint;
     GemVal _t10133 = (*gem_v_rel_path);
     GemVal _t10131 = (*gem_v_file_of);
     GemVal _t10130[] = {gem_v_d};
-    gem_check_callable(_t10131, "compiler/codegen.gem", 708);
+    gem_check_callable(_t10131, "compiler/codegen.gem", 709);
     GemVal _t10132[] = {_t10131.fn(_t10131.env, _t10130, 1)};
-    gem_check_callable(_t10133, "compiler/codegen.gem", 708);
+    gem_check_callable(_t10133, "compiler/codegen.gem", 709);
     GemVal _t10135 = _t10133.fn(_t10133.env, _t10132, 1);
     GemVal _t10134 = gem_v_d;
     static GemICacheSlot _ic_1774 = {0};
     GemVal _t10136[] = {GEM_STR_LIT(" at ", 4), _t10135, GEM_STR_LIT(":", 1), gem_table_get_cached(_t10134, "line", &_ic_1774)};
         gem_v_hint = gem_add(_t10137, gem_interp(4, _t10136));
     }
-#line 710 "compiler/codegen.gem"
-    gem_set_line(710);
+#line 711 "compiler/codegen.gem"
+    gem_set_line(711);
     GemVal _t10139 = gem_v_n;
     GemVal _t10138 = gem_v_a;
     static GemICacheSlot _ic_1775 = {0};
     if (gem_truthy(gem_lt(_t10139, gem_table_get_cached(_t10138, "min", &_ic_1775)))) {
-#line 711 "compiler/codegen.gem"
-        gem_set_line(711);
-        gem_v_hint = gem_add(gem_v_hint, GEM_STR_LIT("; to make a parameter optional, give it a default (`name = nil`)", 64));
-    } else {
 #line 712 "compiler/codegen.gem"
         gem_set_line(712);
+        gem_v_hint = gem_add(gem_v_hint, GEM_STR_LIT("; to make a parameter optional, give it a default (`name = nil`)", 64));
+    } else {
+#line 713 "compiler/codegen.gem"
+        gem_set_line(713);
     GemVal _t10140 = gem_gt(gem_v_n, gem_int(0));
     GemVal _t10145;
     if (!gem_truthy(_t10140)) {
@@ -45908,7 +45911,7 @@ static GemVal __anon_156(void *_env, GemVal *args, int argc) {
     static GemICacheSlot _ic_1776 = {0};
     GemVal _t10142 = gem_table_get_cached(_t10141, "args", &_ic_1776);
     GemVal _t10143[] = {gem_table_get(_t10142, gem_sub(gem_v_n, gem_int(1))), GEM_STR_LIT("anon_fn", 7)};
-    gem_check_callable(_t10144, "compiler/codegen.gem", 712);
+    gem_check_callable(_t10144, "compiler/codegen.gem", 713);
         _t10145 = _t10144.fn(_t10144.env, _t10143, 2);
     }
     GemVal _t10149;
@@ -45923,23 +45926,23 @@ static GemVal __anon_156(void *_env, GemVal *args, int argc) {
         _t10149 = gem_eq(gem_table_get_cached(_t10148, "do_block", &_ic_1778), gem_bool(1));
     }
         if (gem_truthy(_t10149)) {
-#line 713 "compiler/codegen.gem"
-            gem_set_line(713);
+#line 714 "compiler/codegen.gem"
+            gem_set_line(714);
             gem_v_hint = gem_add(gem_v_hint, GEM_STR_LIT("; the `do` block is the last argument", 37));
         }
     }
-#line 715 "compiler/codegen.gem"
-    gem_set_line(715);
+#line 716 "compiler/codegen.gem"
+    gem_set_line(716);
     GemVal _t10150 = (*gem_v_sink);
     static GemICacheSlot _ic_1779 = {0};
     GemVal _t10168 = gem_table_get_cached(_t10150, "report", &_ic_1779);
     GemVal _t10152 = (*gem_v_source_of);
     GemVal _t10151[] = {gem_v_loc};
-    gem_check_callable(_t10152, "compiler/codegen.gem", 715);
+    gem_check_callable(_t10152, "compiler/codegen.gem", 716);
     GemVal _t10166 = _t10152.fn(_t10152.env, _t10151, 1);
     GemVal _t10154 = (*gem_v_file_of);
     GemVal _t10153[] = {gem_v_loc};
-    gem_check_callable(_t10154, "compiler/codegen.gem", 715);
+    gem_check_callable(_t10154, "compiler/codegen.gem", 716);
     GemVal _t10165 = _t10154.fn(_t10154.env, _t10153, 1);
     GemVal _t10155 = gem_v_loc;
     static GemICacheSlot _ic_1780 = {0};
@@ -45954,7 +45957,7 @@ static GemVal __anon_156(void *_env, GemVal *args, int argc) {
     GemVal _t10160[] = {GEM_STR_LIT("`", 1), _t10159, GEM_STR_LIT("` takes ", 8), _t10158, GEM_STR_LIT(" ", 1), _t10157, GEM_STR_LIT(", called with ", 14), gem_v_n};
     GemVal _t10161 = gem_interp(8, _t10160);
     GemVal _t10167[] = {_t10166, _t10165, _t10164, _t10163, _t10162, _t10161, gem_v_hint};
-    gem_check_callable_field(_t10168, "report", "compiler/codegen.gem", 715);
+    gem_check_callable_field(_t10168, "report", "compiler/codegen.gem", 716);
     GemVal _t10169 = _t10168.fn(_t10168.env, _t10167, 7);
     if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t10169, 1);
     gem_pop_frame();
@@ -45970,16 +45973,16 @@ static GemVal __anon_158(void *_env, GemVal *args, int argc) {
     struct _closure___anon_158 *_cls = (struct _closure___anon_158 *)_env;
     GemVal *gem_v_params = _cls->gem_v_params;
     GemVal *gem_v_walk = _cls->gem_v_walk;
-    gem_push_frame("anonymous fn", "compiler/codegen.gem", 742);
+    gem_push_frame("anonymous fn", "compiler/codegen.gem", 743);
     GemVal gem_v_c = (argc > 0) ? args[0] : GEM_NIL;
     GemArenaPoint _ret_pt;
     gem_arena_point(&_ret_pt);
-#line 742 "compiler/codegen.gem"
-    gem_set_line(742);
+#line 743 "compiler/codegen.gem"
+    gem_set_line(743);
     GemVal _t10289 = (*gem_v_walk);
     GemVal _t10287 = gem_v_c;
     GemVal _t10288[] = {_t10287, (*gem_v_params)};
-    gem_check_callable(_t10289, "compiler/codegen.gem", 742);
+    gem_check_callable(_t10289, "compiler/codegen.gem", 743);
     GemVal _t10290 = _t10289.fn(_t10289.env, _t10288, 2);
     if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t10290, 1);
     gem_pop_frame();
@@ -46013,14 +46016,14 @@ static GemVal __anon_157(void *_env, GemVal *args, int argc) {
     GemVal *gem_v_sink = _cls->gem_v_sink;
     GemVal *gem_v_source_of = _cls->gem_v_source_of;
     GemVal *gem_v_walk = _cls->gem_v_walk;
-    gem_push_frame("anonymous fn", "compiler/codegen.gem", 720);
+    gem_push_frame("anonymous fn", "compiler/codegen.gem", 721);
     GemVal gem_v_node = (argc > 0) ? args[0] : GEM_NIL;
     GemVal *gem_v_params = gem_box_alloc();
     *gem_v_params = (argc > 1) ? args[1] : GEM_NIL;
     GemArenaPoint _ret_pt;
     gem_arena_point(&_ret_pt);
-#line 721 "compiler/codegen.gem"
-    gem_set_line(721);
+#line 722 "compiler/codegen.gem"
+    gem_set_line(722);
     GemVal _t10174 = gem_v_node;
     static GemICacheSlot _ic_1782 = {0};
     GemVal _t10175 = gem_eq(gem_table_get_cached(_t10174, "tag", &_ic_1782), GEM_STR_LIT("fn_def", 6));
@@ -46033,49 +46036,49 @@ static GemVal __anon_157(void *_env, GemVal *args, int argc) {
         _t10177 = gem_eq(gem_table_get_cached(_t10176, "tag", &_ic_1783), GEM_STR_LIT("anon_fn", 7));
     }
     if (gem_truthy(_t10177)) {
-#line 722 "compiler/codegen.gem"
-        gem_set_line(722);
+#line 723 "compiler/codegen.gem"
+        gem_set_line(723);
     GemVal _t10183 = gem_g___mod_codegen_set_union;
     GemVal _t10181 = (*gem_v_params);
     GemVal _t10180 = gem_g___mod_codegen_sorted_array_to_set;
     GemVal _t10178 = gem_v_node;
     static GemICacheSlot _ic_1784 = {0};
     GemVal _t10179[] = {gem_table_get_cached(_t10178, "params", &_ic_1784)};
-    gem_check_callable(_t10180, "compiler/codegen.gem", 722);
+    gem_check_callable(_t10180, "compiler/codegen.gem", 723);
     GemVal _t10182[] = {_t10181, _t10180.fn(_t10180.env, _t10179, 1)};
-    gem_check_callable(_t10183, "compiler/codegen.gem", 722);
+    gem_check_callable(_t10183, "compiler/codegen.gem", 723);
         (*gem_v_params) = _t10183.fn(_t10183.env, _t10182, 2);
-#line 723 "compiler/codegen.gem"
-        gem_set_line(723);
+#line 724 "compiler/codegen.gem"
+        gem_set_line(724);
     GemVal _t10184 = gem_v_node;
     static GemICacheSlot _ic_1785 = {0};
         if (gem_truthy(gem_neq(gem_table_get_cached(_t10184, "rest_param", &_ic_1785), GEM_NIL))) {
-#line 724 "compiler/codegen.gem"
-            gem_set_line(724);
+#line 725 "compiler/codegen.gem"
+            gem_set_line(725);
     GemVal _t10188 = gem_g___mod_codegen_set_add;
     GemVal _t10186 = (*gem_v_params);
     GemVal _t10185 = gem_v_node;
     static GemICacheSlot _ic_1786 = {0};
     GemVal _t10187[] = {_t10186, gem_table_get_cached(_t10185, "rest_param", &_ic_1786)};
-    gem_check_callable(_t10188, "compiler/codegen.gem", 724);
+    gem_check_callable(_t10188, "compiler/codegen.gem", 725);
             (void)(_t10188.fn(_t10188.env, _t10187, 2));
         }
     }
-#line 727 "compiler/codegen.gem"
-    gem_set_line(727);
+#line 728 "compiler/codegen.gem"
+    gem_set_line(728);
     GemVal _t10189 = gem_v_node;
     static GemICacheSlot _ic_1787 = {0};
     if (gem_truthy(gem_eq(gem_table_get_cached(_t10189, "tag", &_ic_1787), GEM_STR_LIT("call", 4)))) {
-#line 728 "compiler/codegen.gem"
-        gem_set_line(728);
+#line 729 "compiler/codegen.gem"
+        gem_set_line(729);
     GemVal _t10190 = gem_v_node;
     static GemICacheSlot _ic_1788 = {0};
         GemVal gem_v_f = gem_table_get_cached(_t10190, "func", &_ic_1788);
-#line 729 "compiler/codegen.gem"
-        gem_set_line(729);
+#line 730 "compiler/codegen.gem"
+        gem_set_line(730);
     GemVal _t10192 = gem_g___mod_codegen_is_node;
     GemVal _t10191[] = {gem_v_f, GEM_STR_LIT("var", 3)};
-    gem_check_callable(_t10192, "compiler/codegen.gem", 729);
+    gem_check_callable(_t10192, "compiler/codegen.gem", 730);
     GemVal _t10193 = _t10192.fn(_t10192.env, _t10191, 2);
     GemVal _t10197;
     if (!gem_truthy(_t10193)) {
@@ -46096,7 +46099,7 @@ static GemVal __anon_157(void *_env, GemVal *args, int argc) {
     GemVal _t10198 = gem_v_f;
     static GemICacheSlot _ic_1790 = {0};
     GemVal _t10200[] = {_t10199, gem_table_get_cached(_t10198, "name", &_ic_1790)};
-    gem_check_callable(_t10201, "compiler/codegen.gem", 729);
+    gem_check_callable(_t10201, "compiler/codegen.gem", 730);
         _t10202 = gem_not(_t10201.fn(_t10201.env, _t10200, 2));
     }
     GemVal _t10204;
@@ -46108,18 +46111,18 @@ static GemVal __anon_157(void *_env, GemVal *args, int argc) {
         _t10204 = gem_neq(gem_len_1(gem_table_get_cached(_t10203, "args", &_ic_1791)), gem_int(1));
     }
         if (gem_truthy(_t10204)) {
-#line 730 "compiler/codegen.gem"
-            gem_set_line(730);
+#line 731 "compiler/codegen.gem"
+            gem_set_line(731);
     GemVal _t10205 = (*gem_v_sink);
     static GemICacheSlot _ic_1792 = {0};
     GemVal _t10227 = gem_table_get_cached(_t10205, "report", &_ic_1792);
     GemVal _t10207 = (*gem_v_source_of);
     GemVal _t10206[] = {gem_v_f};
-    gem_check_callable(_t10207, "compiler/codegen.gem", 730);
+    gem_check_callable(_t10207, "compiler/codegen.gem", 731);
     GemVal _t10225 = _t10207.fn(_t10207.env, _t10206, 1);
     GemVal _t10209 = (*gem_v_file_of);
     GemVal _t10208[] = {gem_v_f};
-    gem_check_callable(_t10209, "compiler/codegen.gem", 730);
+    gem_check_callable(_t10209, "compiler/codegen.gem", 731);
     GemVal _t10224 = _t10209.fn(_t10209.env, _t10208, 1);
     GemVal _t10210 = gem_v_f;
     static GemICacheSlot _ic_1793 = {0};
@@ -46142,14 +46145,14 @@ static GemVal __anon_157(void *_env, GemVal *args, int argc) {
     static GemICacheSlot _ic_1798 = {0};
     GemVal _t10219[] = {GEM_STR_LIT("to pass arguments, wrap the call: `", 35), gem_table_get(_t10218, gem_table_get_cached(_t10217, "name", &_ic_1798)), GEM_STR_LIT("`", 1)};
     GemVal _t10226[] = {_t10225, _t10224, _t10223, _t10222, _t10221, _t10220, gem_interp(3, _t10219)};
-    gem_check_callable_field(_t10227, "report", "compiler/codegen.gem", 730);
+    gem_check_callable_field(_t10227, "report", "compiler/codegen.gem", 731);
             (void)(_t10227.fn(_t10227.env, _t10226, 7));
         } else {
-#line 731 "compiler/codegen.gem"
-            gem_set_line(731);
+#line 732 "compiler/codegen.gem"
+            gem_set_line(732);
     GemVal _t10229 = gem_g___mod_codegen_is_node;
     GemVal _t10228[] = {gem_v_f, GEM_STR_LIT("var", 3)};
-    gem_check_callable(_t10229, "compiler/codegen.gem", 731);
+    gem_check_callable(_t10229, "compiler/codegen.gem", 732);
     GemVal _t10230 = _t10229.fn(_t10229.env, _t10228, 2);
     GemVal _t10233;
     if (!gem_truthy(_t10230)) {
@@ -46177,22 +46180,22 @@ static GemVal __anon_157(void *_env, GemVal *args, int argc) {
     GemVal _t10237 = gem_v_f;
     static GemICacheSlot _ic_1801 = {0};
     GemVal _t10239[] = {_t10238, gem_table_get_cached(_t10237, "name", &_ic_1801)};
-    gem_check_callable(_t10240, "compiler/codegen.gem", 731);
+    gem_check_callable(_t10240, "compiler/codegen.gem", 732);
         _t10241 = _t10240.fn(_t10240.env, _t10239, 2);
     }
         _t10242 = gem_not(_t10241);
     }
             if (gem_truthy(_t10242)) {
-#line 732 "compiler/codegen.gem"
-                gem_set_line(732);
+#line 733 "compiler/codegen.gem"
+                gem_set_line(733);
     GemVal _t10245 = (*gem_v_frame_name);
     GemVal _t10243 = gem_v_f;
     static GemICacheSlot _ic_1802 = {0};
     GemVal _t10244[] = {gem_table_get_cached(_t10243, "name", &_ic_1802)};
-    gem_check_callable(_t10245, "compiler/codegen.gem", 732);
+    gem_check_callable(_t10245, "compiler/codegen.gem", 733);
                 GemVal gem_v_shown = _t10245.fn(_t10245.env, _t10244, 1);
-#line 733 "compiler/codegen.gem"
-                gem_set_line(733);
+#line 734 "compiler/codegen.gem"
+                gem_set_line(734);
     GemVal _t10252 = (*gem_v_check);
     GemVal _t10250 = gem_v_node;
     GemVal _t10246 = gem_v_f;
@@ -46201,14 +46204,14 @@ static GemVal __anon_157(void *_env, GemVal *args, int argc) {
     GemVal _t10248 = gem_v_shown;
     GemVal _t10247 = gem_v_f;
     GemVal _t10251[] = {_t10250, _t10249, _t10248, _t10247, gem_len_1(gem_v_shown)};
-    gem_check_callable(_t10252, "compiler/codegen.gem", 733);
+    gem_check_callable(_t10252, "compiler/codegen.gem", 734);
                 (void)(_t10252.fn(_t10252.env, _t10251, 5));
             } else {
-#line 734 "compiler/codegen.gem"
-                gem_set_line(734);
+#line 735 "compiler/codegen.gem"
+                gem_set_line(735);
     GemVal _t10254 = gem_g___mod_codegen_is_node;
     GemVal _t10253[] = {gem_v_f, GEM_STR_LIT("dot", 3)};
-    gem_check_callable(_t10254, "compiler/codegen.gem", 734);
+    gem_check_callable(_t10254, "compiler/codegen.gem", 735);
     GemVal _t10255 = _t10254.fn(_t10254.env, _t10253, 2);
     GemVal _t10259;
     if (!gem_truthy(_t10255)) {
@@ -46218,7 +46221,7 @@ static GemVal __anon_157(void *_env, GemVal *args, int argc) {
     GemVal _t10256 = gem_v_f;
     static GemICacheSlot _ic_1804 = {0};
     GemVal _t10257[] = {gem_table_get_cached(_t10256, "object", &_ic_1804), GEM_STR_LIT("var", 3)};
-    gem_check_callable(_t10258, "compiler/codegen.gem", 734);
+    gem_check_callable(_t10258, "compiler/codegen.gem", 735);
         _t10259 = _t10258.fn(_t10258.env, _t10257, 2);
     }
     GemVal _t10264;
@@ -46234,8 +46237,8 @@ static GemVal __anon_157(void *_env, GemVal *args, int argc) {
         _t10264 = gem_has_key_fn(NULL, _t10263, 2);
     }
                 if (gem_truthy(_t10264)) {
-#line 735 "compiler/codegen.gem"
-                    gem_set_line(735);
+#line 736 "compiler/codegen.gem"
+                    gem_set_line(736);
     GemVal _t10267 = (*gem_v_module_ns);
     GemVal _t10265 = gem_v_f;
     static GemICacheSlot _ic_1807 = {0};
@@ -46245,8 +46248,8 @@ static GemVal __anon_157(void *_env, GemVal *args, int argc) {
     GemVal _t10268 = gem_v_f;
     static GemICacheSlot _ic_1809 = {0};
                     GemVal gem_v_target = gem_table_get(_t10269, gem_table_get_cached(_t10268, "field", &_ic_1809));
-#line 736 "compiler/codegen.gem"
-                    gem_set_line(736);
+#line 737 "compiler/codegen.gem"
+                    gem_set_line(737);
     GemVal _t10270 = gem_neq(gem_v_target, GEM_NIL);
     GemVal _t10272;
     if (!gem_truthy(_t10270)) {
@@ -46256,22 +46259,22 @@ static GemVal __anon_157(void *_env, GemVal *args, int argc) {
         _t10272 = gem_neq(gem_table_get(_t10271, gem_v_target), GEM_NIL);
     }
                     if (gem_truthy(_t10272)) {
-#line 737 "compiler/codegen.gem"
-                        gem_set_line(737);
+#line 738 "compiler/codegen.gem"
+                        gem_set_line(738);
     GemVal _t10276 = (*gem_v_display_name);
     GemVal _t10273 = gem_v_f;
     static GemICacheSlot _ic_1810 = {0};
     GemVal _t10274 = gem_table_get_cached(_t10273, "object", &_ic_1810);
     static GemICacheSlot _ic_1811 = {0};
     GemVal _t10275[] = {gem_table_get_cached(_t10274, "name", &_ic_1811)};
-    gem_check_callable(_t10276, "compiler/codegen.gem", 737);
+    gem_check_callable(_t10276, "compiler/codegen.gem", 738);
     GemVal _t10278 = _t10276.fn(_t10276.env, _t10275, 1);
     GemVal _t10277 = gem_v_f;
     static GemICacheSlot _ic_1812 = {0};
     GemVal _t10279[] = {_t10278, GEM_STR_LIT(".", 1), gem_table_get_cached(_t10277, "field", &_ic_1812)};
                         GemVal gem_v_shown = gem_interp(3, _t10279);
-#line 738 "compiler/codegen.gem"
-                        gem_set_line(738);
+#line 739 "compiler/codegen.gem"
+                        gem_set_line(739);
     GemVal _t10286 = (*gem_v_check);
     GemVal _t10284 = gem_v_node;
     GemVal _t10283 = gem_v_target;
@@ -46280,15 +46283,15 @@ static GemVal __anon_157(void *_env, GemVal *args, int argc) {
     static GemICacheSlot _ic_1813 = {0};
     GemVal _t10281 = gem_table_get_cached(_t10280, "object", &_ic_1813);
     GemVal _t10285[] = {_t10284, _t10283, _t10282, _t10281, gem_len_1(gem_v_shown)};
-    gem_check_callable(_t10286, "compiler/codegen.gem", 738);
+    gem_check_callable(_t10286, "compiler/codegen.gem", 739);
                         (void)(_t10286.fn(_t10286.env, _t10285, 5));
                     }
                 }
             }
         }
     }
-#line 742 "compiler/codegen.gem"
-    gem_set_line(742);
+#line 743 "compiler/codegen.gem"
+    gem_set_line(743);
     GemVal _t10294 = gem_g___mod_codegen_each_child;
     GemVal _t10292 = gem_v_node;
     struct _closure___anon_158 *_t10291 = gem_alloc(sizeof(struct _closure___anon_158));
@@ -46296,7 +46299,7 @@ static GemVal __anon_157(void *_env, GemVal *args, int argc) {
     _t10291->gem_v_params = gem_v_params;
     _t10291->gem_v_walk = gem_v_walk;
     GemVal _t10293[] = {_t10292, gem_make_fn(__anon_158, _t10291)};
-    gem_check_callable(_t10294, "compiler/codegen.gem", 742);
+    gem_check_callable(_t10294, "compiler/codegen.gem", 743);
     GemVal _t10295 = _t10294.fn(_t10294.env, _t10293, 2);
     if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t10295, 1);
     gem_pop_frame();
@@ -46326,30 +46329,30 @@ static GemVal __anon_154(void *_env, GemVal *args, int argc) {
     GemVal *gem_v_source_of = _cls->gem_v_source_of;
     GemVal *gem_v_top_level_vars = _cls->gem_v_top_level_vars;
     GemVal *gem_v_user_var_name = _cls->gem_v_user_var_name;
-    gem_push_frame("anonymous fn", "compiler/codegen.gem", 606);
+    gem_push_frame("anonymous fn", "compiler/codegen.gem", 607);
     GemVal gem_v_fn_defs = (argc > 0) ? args[0] : GEM_NIL;
     GemVal gem_v_extern_fns_list = (argc > 1) ? args[1] : GEM_NIL;
     GemVal gem_v_top_stmts = (argc > 2) ? args[2] : GEM_NIL;
     GemArenaPoint _ret_pt;
     gem_arena_point(&_ret_pt);
-#line 607 "compiler/codegen.gem"
-    gem_set_line(607);
-    GemVal _t9920 = gem_table_new_braces();
-    GemVal gem_v_arity = _t9920;
 #line 608 "compiler/codegen.gem"
     gem_set_line(608);
-    GemVal _t9921 = gem_table_new_braces();
-    GemVal gem_v_let_fns = _t9921;
+    GemVal _t9920 = gem_table_new_braces();
+    GemVal gem_v_arity = _t9920;
 #line 609 "compiler/codegen.gem"
     gem_set_line(609);
-    GemVal _t9922 = gem_table_new_braces();
-    GemVal gem_v_assigned = _t9922;
+    GemVal _t9921 = gem_table_new_braces();
+    GemVal gem_v_let_fns = _t9921;
 #line 610 "compiler/codegen.gem"
     gem_set_line(610);
-    GemVal *gem_v_find_assigns = gem_box_alloc();
-    *gem_v_find_assigns = GEM_NIL;
+    GemVal _t9922 = gem_table_new_braces();
+    GemVal gem_v_assigned = _t9922;
 #line 611 "compiler/codegen.gem"
     gem_set_line(611);
+    GemVal *gem_v_find_assigns = gem_box_alloc();
+    *gem_v_find_assigns = GEM_NIL;
+#line 612 "compiler/codegen.gem"
+    gem_set_line(612);
     struct _closure___anon_155 *_t9932 = gem_alloc(sizeof(struct _closure___anon_155));
     _t9932->_num_captures = 2;
     GemVal *_t9933 = gem_alloc(sizeof(GemVal));
@@ -46357,14 +46360,14 @@ static GemVal __anon_154(void *_env, GemVal *args, int argc) {
     _t9932->gem_v_assigned = _t9933;
     _t9932->gem_v_find_assigns = gem_v_find_assigns;
     (*gem_v_find_assigns) = gem_make_fn(__anon_155, _t9932);
-#line 617 "compiler/codegen.gem"
-    gem_set_line(617);
+#line 618 "compiler/codegen.gem"
+    gem_set_line(618);
     GemVal gem_v___for_items_258 = gem_for_items_1(gem_v_fn_defs);
-#line 617 "compiler/codegen.gem"
-    gem_set_line(617);
+#line 618 "compiler/codegen.gem"
+    gem_set_line(618);
     GemVal gem_v___for_i_258 = gem_int(0);
-#line 617 "compiler/codegen.gem"
-    gem_set_line(617);
+#line 618 "compiler/codegen.gem"
+    gem_set_line(618);
     GemArenaMark _mk288;
     gem_arena_mark(&_mk288);
     while (1) {
@@ -46376,29 +46379,29 @@ static GemVal __anon_154(void *_env, GemVal *args, int argc) {
         }
     GemVal _t9934 = gem_v___for_i_258;
         if (!gem_truthy(gem_lt(_t9934, gem_for_len_1(gem_v___for_items_258)))) break;
-#line 617 "compiler/codegen.gem"
-        gem_set_line(617);
-    GemVal _t9935 = gem_v___for_items_258;
-        GemVal gem_v_fd = gem_table_get(_t9935, gem_v___for_i_258);
-#line 617 "compiler/codegen.gem"
-        gem_set_line(617);
-        gem_v___for_i_258 = gem_add(gem_v___for_i_258, gem_int(1));
 #line 618 "compiler/codegen.gem"
         gem_set_line(618);
+    GemVal _t9935 = gem_v___for_items_258;
+        GemVal gem_v_fd = gem_table_get(_t9935, gem_v___for_i_258);
+#line 618 "compiler/codegen.gem"
+        gem_set_line(618);
+        gem_v___for_i_258 = gem_add(gem_v___for_i_258, gem_int(1));
+#line 619 "compiler/codegen.gem"
+        gem_set_line(619);
     GemVal _t9937 = (*gem_v_find_assigns);
     GemVal _t9936[] = {gem_v_fd};
-    gem_check_callable(_t9937, "compiler/codegen.gem", 618);
+    gem_check_callable(_t9937, "compiler/codegen.gem", 619);
         (void)(_t9937.fn(_t9937.env, _t9936, 1));
     }
 
-#line 620 "compiler/codegen.gem"
-    gem_set_line(620);
+#line 621 "compiler/codegen.gem"
+    gem_set_line(621);
     GemVal gem_v___for_items_259 = gem_for_items_1(gem_v_top_stmts);
-#line 620 "compiler/codegen.gem"
-    gem_set_line(620);
+#line 621 "compiler/codegen.gem"
+    gem_set_line(621);
     GemVal gem_v___for_i_259 = gem_int(0);
-#line 620 "compiler/codegen.gem"
-    gem_set_line(620);
+#line 621 "compiler/codegen.gem"
+    gem_set_line(621);
     GemArenaMark _mk289;
     gem_arena_mark(&_mk289);
     while (1) {
@@ -46410,33 +46413,33 @@ static GemVal __anon_154(void *_env, GemVal *args, int argc) {
         }
     GemVal _t9938 = gem_v___for_i_259;
         if (!gem_truthy(gem_lt(_t9938, gem_for_len_1(gem_v___for_items_259)))) break;
-#line 620 "compiler/codegen.gem"
-        gem_set_line(620);
-    GemVal _t9939 = gem_v___for_items_259;
-        GemVal gem_v_s = gem_table_get(_t9939, gem_v___for_i_259);
-#line 620 "compiler/codegen.gem"
-        gem_set_line(620);
-        gem_v___for_i_259 = gem_add(gem_v___for_i_259, gem_int(1));
 #line 621 "compiler/codegen.gem"
         gem_set_line(621);
+    GemVal _t9939 = gem_v___for_items_259;
+        GemVal gem_v_s = gem_table_get(_t9939, gem_v___for_i_259);
+#line 621 "compiler/codegen.gem"
+        gem_set_line(621);
+        gem_v___for_i_259 = gem_add(gem_v___for_i_259, gem_int(1));
+#line 622 "compiler/codegen.gem"
+        gem_set_line(622);
     GemVal _t9941 = (*gem_v_find_assigns);
     GemVal _t9940[] = {gem_v_s};
-    gem_check_callable(_t9941, "compiler/codegen.gem", 621);
+    gem_check_callable(_t9941, "compiler/codegen.gem", 622);
         (void)(_t9941.fn(_t9941.env, _t9940, 1));
     }
 
-#line 623 "compiler/codegen.gem"
-    gem_set_line(623);
+#line 624 "compiler/codegen.gem"
+    gem_set_line(624);
     GemVal _t9942 = gem_table_new_braces();
     GemVal gem_v_top_let_count = _t9942;
-#line 624 "compiler/codegen.gem"
-    gem_set_line(624);
+#line 625 "compiler/codegen.gem"
+    gem_set_line(625);
     GemVal gem_v___for_items_262 = gem_for_items_1(gem_v_top_stmts);
-#line 624 "compiler/codegen.gem"
-    gem_set_line(624);
+#line 625 "compiler/codegen.gem"
+    gem_set_line(625);
     GemVal gem_v___for_i_262 = gem_int(0);
-#line 624 "compiler/codegen.gem"
-    gem_set_line(624);
+#line 625 "compiler/codegen.gem"
+    gem_set_line(625);
     GemArenaMark _mk290;
     gem_arena_mark(&_mk290);
     while (1) {
@@ -46447,44 +46450,44 @@ static GemVal __anon_154(void *_env, GemVal *args, int argc) {
         }
     GemVal _t9943 = gem_v___for_i_262;
         if (!gem_truthy(gem_lt(_t9943, gem_for_len_1(gem_v___for_items_262)))) break;
-#line 624 "compiler/codegen.gem"
-        gem_set_line(624);
+#line 625 "compiler/codegen.gem"
+        gem_set_line(625);
     GemVal _t9944 = gem_v___for_items_262;
         GemVal gem_v_s = gem_table_get(_t9944, gem_v___for_i_262);
-#line 624 "compiler/codegen.gem"
-        gem_set_line(624);
+#line 625 "compiler/codegen.gem"
+        gem_set_line(625);
         gem_v___for_i_262 = gem_add(gem_v___for_i_262, gem_int(1));
-#line 625 "compiler/codegen.gem"
-        gem_set_line(625);
+#line 626 "compiler/codegen.gem"
+        gem_set_line(626);
         GemVal gem_v___val_260 = GEM_NIL;
-#line 625 "compiler/codegen.gem"
-        gem_set_line(625);
+#line 626 "compiler/codegen.gem"
+        gem_set_line(626);
     GemVal _t9945 = gem_v_s;
     static GemICacheSlot _ic_1706 = {0};
         if (gem_truthy(gem_eq(gem_table_get_cached(_t9945, "tag", &_ic_1706), GEM_STR_LIT("block", 5)))) {
-#line 625 "compiler/codegen.gem"
-            gem_set_line(625);
+#line 626 "compiler/codegen.gem"
+            gem_set_line(626);
     GemVal _t9946 = gem_v_s;
     static GemICacheSlot _ic_1707 = {0};
             gem_v___val_260 = gem_table_get_cached(_t9946, "stmts", &_ic_1707);
         } else {
-#line 625 "compiler/codegen.gem"
-            gem_set_line(625);
+#line 626 "compiler/codegen.gem"
+            gem_set_line(626);
     GemVal _t9947 = gem_table_new();
     gem_table_set(_t9947, gem_int(0), gem_v_s);
             gem_v___val_260 = _t9947;
         }
-#line 625 "compiler/codegen.gem"
-        gem_set_line(625);
+#line 626 "compiler/codegen.gem"
+        gem_set_line(626);
         GemVal gem_v_lets = gem_v___val_260;
-#line 626 "compiler/codegen.gem"
-        gem_set_line(626);
+#line 627 "compiler/codegen.gem"
+        gem_set_line(627);
         GemVal gem_v___for_items_261 = gem_for_items_1(gem_v_lets);
-#line 626 "compiler/codegen.gem"
-        gem_set_line(626);
+#line 627 "compiler/codegen.gem"
+        gem_set_line(627);
         GemVal gem_v___for_i_261 = gem_int(0);
-#line 626 "compiler/codegen.gem"
-        gem_set_line(626);
+#line 627 "compiler/codegen.gem"
+        gem_set_line(627);
         GemArenaMark _mk291;
         gem_arena_mark(&_mk291);
         while (1) {
@@ -46495,20 +46498,20 @@ static GemVal __anon_154(void *_env, GemVal *args, int argc) {
             }
     GemVal _t9948 = gem_v___for_i_261;
             if (!gem_truthy(gem_lt(_t9948, gem_for_len_1(gem_v___for_items_261)))) break;
-#line 626 "compiler/codegen.gem"
-            gem_set_line(626);
-    GemVal _t9949 = gem_v___for_items_261;
-            GemVal gem_v_l = gem_table_get(_t9949, gem_v___for_i_261);
-#line 626 "compiler/codegen.gem"
-            gem_set_line(626);
-            gem_v___for_i_261 = gem_add(gem_v___for_i_261, gem_int(1));
 #line 627 "compiler/codegen.gem"
             gem_set_line(627);
+    GemVal _t9949 = gem_v___for_items_261;
+            GemVal gem_v_l = gem_table_get(_t9949, gem_v___for_i_261);
+#line 627 "compiler/codegen.gem"
+            gem_set_line(627);
+            gem_v___for_i_261 = gem_add(gem_v___for_i_261, gem_int(1));
+#line 628 "compiler/codegen.gem"
+            gem_set_line(628);
     GemVal _t9950 = gem_v_l;
     static GemICacheSlot _ic_1708 = {0};
             if (gem_truthy(gem_eq(gem_table_get_cached(_t9950, "tag", &_ic_1708), GEM_STR_LIT("let", 3)))) {
-#line 628 "compiler/codegen.gem"
-                gem_set_line(628);
+#line 629 "compiler/codegen.gem"
+                gem_set_line(629);
     GemVal _t9957 = gem_v_top_let_count;
     GemVal _t9951 = gem_v_l;
     static GemICacheSlot _ic_1709 = {0};
@@ -46529,14 +46532,14 @@ static GemVal __anon_154(void *_env, GemVal *args, int argc) {
 
     }
 
-#line 632 "compiler/codegen.gem"
-    gem_set_line(632);
+#line 633 "compiler/codegen.gem"
+    gem_set_line(633);
     GemVal gem_v___for_items_265 = gem_for_items_1(gem_v_top_stmts);
-#line 632 "compiler/codegen.gem"
-    gem_set_line(632);
+#line 633 "compiler/codegen.gem"
+    gem_set_line(633);
     GemVal gem_v___for_i_265 = gem_int(0);
-#line 632 "compiler/codegen.gem"
-    gem_set_line(632);
+#line 633 "compiler/codegen.gem"
+    gem_set_line(633);
     GemArenaMark _mk292;
     gem_arena_mark(&_mk292);
     while (1) {
@@ -46547,15 +46550,15 @@ static GemVal __anon_154(void *_env, GemVal *args, int argc) {
         }
     GemVal _t9958 = gem_v___for_i_265;
         if (!gem_truthy(gem_lt(_t9958, gem_for_len_1(gem_v___for_items_265)))) break;
-#line 632 "compiler/codegen.gem"
-        gem_set_line(632);
-    GemVal _t9959 = gem_v___for_items_265;
-        GemVal gem_v_s = gem_table_get(_t9959, gem_v___for_i_265);
-#line 632 "compiler/codegen.gem"
-        gem_set_line(632);
-        gem_v___for_i_265 = gem_add(gem_v___for_i_265, gem_int(1));
 #line 633 "compiler/codegen.gem"
         gem_set_line(633);
+    GemVal _t9959 = gem_v___for_items_265;
+        GemVal gem_v_s = gem_table_get(_t9959, gem_v___for_i_265);
+#line 633 "compiler/codegen.gem"
+        gem_set_line(633);
+        gem_v___for_i_265 = gem_add(gem_v___for_i_265, gem_int(1));
+#line 634 "compiler/codegen.gem"
+        gem_set_line(634);
     GemVal _t9960 = gem_v_s;
     static GemICacheSlot _ic_1711 = {0};
     GemVal _t9961 = gem_eq(gem_table_get_cached(_t9960, "tag", &_ic_1711), GEM_STR_LIT("let", 3));
@@ -46567,7 +46570,7 @@ static GemVal __anon_154(void *_env, GemVal *args, int argc) {
     GemVal _t9962 = gem_v_s;
     static GemICacheSlot _ic_1712 = {0};
     GemVal _t9963[] = {gem_table_get_cached(_t9962, "value", &_ic_1712), GEM_STR_LIT("anon_fn", 7)};
-    gem_check_callable(_t9964, "compiler/codegen.gem", 633);
+    gem_check_callable(_t9964, "compiler/codegen.gem", 634);
         _t9965 = _t9964.fn(_t9964.env, _t9963, 2);
     }
     GemVal _t9968;
@@ -46588,7 +46591,7 @@ static GemVal __anon_154(void *_env, GemVal *args, int argc) {
     GemVal _t9969 = gem_v_s;
     static GemICacheSlot _ic_1714 = {0};
     GemVal _t9971[] = {_t9970, gem_table_get_cached(_t9969, "name", &_ic_1714)};
-    gem_check_callable(_t9972, "compiler/codegen.gem", 633);
+    gem_check_callable(_t9972, "compiler/codegen.gem", 634);
         _t9973 = gem_not(_t9972.fn(_t9972.env, _t9971, 2));
     }
     GemVal _t9978;
@@ -46600,28 +46603,28 @@ static GemVal __anon_154(void *_env, GemVal *args, int argc) {
     GemVal _t9974 = gem_v_s;
     static GemICacheSlot _ic_1715 = {0};
     GemVal _t9976[] = {_t9975, gem_table_get_cached(_t9974, "name", &_ic_1715)};
-    gem_check_callable(_t9977, "compiler/codegen.gem", 633);
+    gem_check_callable(_t9977, "compiler/codegen.gem", 634);
         _t9978 = _t9977.fn(_t9977.env, _t9976, 2);
     }
         if (gem_truthy(_t9978)) {
-#line 634 "compiler/codegen.gem"
-            gem_set_line(634);
+#line 635 "compiler/codegen.gem"
+            gem_set_line(635);
     GemVal _t9979 = gem_v_s;
     static GemICacheSlot _ic_1716 = {0};
             GemVal gem_v_f = gem_table_get_cached(_t9979, "value", &_ic_1716);
-#line 635 "compiler/codegen.gem"
-            gem_set_line(635);
+#line 636 "compiler/codegen.gem"
+            gem_set_line(636);
             GemVal gem_v_min = gem_int(0);
-#line 636 "compiler/codegen.gem"
-            gem_set_line(636);
+#line 637 "compiler/codegen.gem"
+            gem_set_line(637);
             GemVal gem_v___for_i_263 = gem_int(0);
-#line 636 "compiler/codegen.gem"
-            gem_set_line(636);
+#line 637 "compiler/codegen.gem"
+            gem_set_line(637);
     GemVal _t9980 = gem_v_f;
     static GemICacheSlot _ic_1717 = {0};
             GemVal gem_v___for_limit_263 = gem_len_1(gem_table_get_cached(_t9980, "params", &_ic_1717));
-#line 636 "compiler/codegen.gem"
-            gem_set_line(636);
+#line 637 "compiler/codegen.gem"
+            gem_set_line(637);
             GemArenaMark _mk293;
             gem_arena_mark(&_mk293);
             while (1) {
@@ -46632,14 +46635,14 @@ static GemVal __anon_154(void *_env, GemVal *args, int argc) {
                 }
     GemVal _t9981 = gem_v___for_i_263;
                 if (!gem_truthy(gem_lt(_t9981, gem_v___for_limit_263))) break;
-#line 636 "compiler/codegen.gem"
-                gem_set_line(636);
-                GemVal gem_v_i = gem_v___for_i_263;
-#line 636 "compiler/codegen.gem"
-                gem_set_line(636);
-                gem_v___for_i_263 = gem_add(gem_v___for_i_263, gem_int(1));
 #line 637 "compiler/codegen.gem"
                 gem_set_line(637);
+                GemVal gem_v_i = gem_v___for_i_263;
+#line 637 "compiler/codegen.gem"
+                gem_set_line(637);
+                gem_v___for_i_263 = gem_add(gem_v___for_i_263, gem_int(1));
+#line 638 "compiler/codegen.gem"
+                gem_set_line(638);
     GemVal _t9982 = gem_v_f;
     static GemICacheSlot _ic_1718 = {0};
     GemVal _t9983 = gem_eq(gem_table_get_cached(_t9982, "defaults", &_ic_1718), GEM_NIL);
@@ -46653,35 +46656,35 @@ static GemVal __anon_154(void *_env, GemVal *args, int argc) {
         _t9986 = gem_eq(gem_table_get(_t9985, gem_v_i), GEM_NIL);
     }
                 if (gem_truthy(_t9986)) {
-#line 638 "compiler/codegen.gem"
-                    gem_set_line(638);
+#line 639 "compiler/codegen.gem"
+                    gem_set_line(639);
                     gem_v_min = gem_add(gem_v_i, gem_int(1));
                 }
             }
 
-#line 641 "compiler/codegen.gem"
-            gem_set_line(641);
+#line 642 "compiler/codegen.gem"
+            gem_set_line(642);
             GemVal gem_v___val_264 = GEM_NIL;
-#line 641 "compiler/codegen.gem"
-            gem_set_line(641);
+#line 642 "compiler/codegen.gem"
+            gem_set_line(642);
     GemVal _t9987 = gem_v_f;
     static GemICacheSlot _ic_1720 = {0};
             if (gem_truthy(gem_eq(gem_table_get_cached(_t9987, "rest_param", &_ic_1720), GEM_NIL))) {
-#line 641 "compiler/codegen.gem"
-                gem_set_line(641);
+#line 642 "compiler/codegen.gem"
+                gem_set_line(642);
     GemVal _t9988 = gem_v_f;
     static GemICacheSlot _ic_1721 = {0};
                 gem_v___val_264 = gem_len_1(gem_table_get_cached(_t9988, "params", &_ic_1721));
             } else {
-#line 641 "compiler/codegen.gem"
-                gem_set_line(641);
+#line 642 "compiler/codegen.gem"
+                gem_set_line(642);
                 gem_v___val_264 = GEM_NIL;
             }
-#line 641 "compiler/codegen.gem"
-            gem_set_line(641);
-            GemVal gem_v_max = gem_v___val_264;
 #line 642 "compiler/codegen.gem"
             gem_set_line(642);
+            GemVal gem_v_max = gem_v___val_264;
+#line 643 "compiler/codegen.gem"
+            gem_set_line(643);
     GemVal _t9999 = gem_v_arity;
     GemVal _t9989 = gem_v_s;
     static GemICacheSlot _ic_1722 = {0};
@@ -46704,13 +46707,13 @@ static GemVal __anon_154(void *_env, GemVal *args, int argc) {
     gem_table_set(_t9991, GEM_STR_LIT("line", 4), gem_table_get_cached(_t9995, "line", &_ic_1726));
     GemVal _t9997 = (*gem_v_file_of);
     GemVal _t9996[] = {gem_v_s};
-    gem_check_callable(_t9997, "compiler/codegen.gem", 642);
+    gem_check_callable(_t9997, "compiler/codegen.gem", 643);
     gem_table_set(_t9991, GEM_STR_LIT("file", 4), _t9997.fn(_t9997.env, _t9996, 1));
     gem_table_set(_t9991, GEM_STR_LIT("tag", 3), GEM_STR_LIT("let", 3));
     gem_table_set(_t9990, GEM_STR_LIT("def", 3), _t9991);
             gem_table_set(_t9999, _t9998, _t9990);
-#line 643 "compiler/codegen.gem"
-            gem_set_line(643);
+#line 644 "compiler/codegen.gem"
+            gem_set_line(644);
     GemVal _t10001 = gem_v_let_fns;
     GemVal _t10000 = gem_v_s;
     static GemICacheSlot _ic_1727 = {0};
@@ -46718,14 +46721,14 @@ static GemVal __anon_154(void *_env, GemVal *args, int argc) {
         }
     }
 
-#line 646 "compiler/codegen.gem"
-    gem_set_line(646);
+#line 647 "compiler/codegen.gem"
+    gem_set_line(647);
     GemVal gem_v___for_items_268 = gem_for_items_1(gem_v_fn_defs);
-#line 646 "compiler/codegen.gem"
-    gem_set_line(646);
+#line 647 "compiler/codegen.gem"
+    gem_set_line(647);
     GemVal gem_v___for_i_268 = gem_int(0);
-#line 646 "compiler/codegen.gem"
-    gem_set_line(646);
+#line 647 "compiler/codegen.gem"
+    gem_set_line(647);
     GemArenaMark _mk294;
     gem_arena_mark(&_mk294);
     while (1) {
@@ -46736,26 +46739,26 @@ static GemVal __anon_154(void *_env, GemVal *args, int argc) {
         }
     GemVal _t10002 = gem_v___for_i_268;
         if (!gem_truthy(gem_lt(_t10002, gem_for_len_1(gem_v___for_items_268)))) break;
-#line 646 "compiler/codegen.gem"
-        gem_set_line(646);
-    GemVal _t10003 = gem_v___for_items_268;
-        GemVal gem_v_fd = gem_table_get(_t10003, gem_v___for_i_268);
-#line 646 "compiler/codegen.gem"
-        gem_set_line(646);
-        gem_v___for_i_268 = gem_add(gem_v___for_i_268, gem_int(1));
 #line 647 "compiler/codegen.gem"
         gem_set_line(647);
+    GemVal _t10003 = gem_v___for_items_268;
+        GemVal gem_v_fd = gem_table_get(_t10003, gem_v___for_i_268);
+#line 647 "compiler/codegen.gem"
+        gem_set_line(647);
+        gem_v___for_i_268 = gem_add(gem_v___for_i_268, gem_int(1));
+#line 648 "compiler/codegen.gem"
+        gem_set_line(648);
         GemVal gem_v_min = gem_int(0);
-#line 648 "compiler/codegen.gem"
-        gem_set_line(648);
+#line 649 "compiler/codegen.gem"
+        gem_set_line(649);
         GemVal gem_v___for_i_266 = gem_int(0);
-#line 648 "compiler/codegen.gem"
-        gem_set_line(648);
+#line 649 "compiler/codegen.gem"
+        gem_set_line(649);
     GemVal _t10004 = gem_v_fd;
     static GemICacheSlot _ic_1728 = {0};
         GemVal gem_v___for_limit_266 = gem_len_1(gem_table_get_cached(_t10004, "params", &_ic_1728));
-#line 648 "compiler/codegen.gem"
-        gem_set_line(648);
+#line 649 "compiler/codegen.gem"
+        gem_set_line(649);
         GemArenaMark _mk295;
         gem_arena_mark(&_mk295);
         while (1) {
@@ -46766,14 +46769,14 @@ static GemVal __anon_154(void *_env, GemVal *args, int argc) {
             }
     GemVal _t10005 = gem_v___for_i_266;
             if (!gem_truthy(gem_lt(_t10005, gem_v___for_limit_266))) break;
-#line 648 "compiler/codegen.gem"
-            gem_set_line(648);
-            GemVal gem_v_i = gem_v___for_i_266;
-#line 648 "compiler/codegen.gem"
-            gem_set_line(648);
-            gem_v___for_i_266 = gem_add(gem_v___for_i_266, gem_int(1));
 #line 649 "compiler/codegen.gem"
             gem_set_line(649);
+            GemVal gem_v_i = gem_v___for_i_266;
+#line 649 "compiler/codegen.gem"
+            gem_set_line(649);
+            gem_v___for_i_266 = gem_add(gem_v___for_i_266, gem_int(1));
+#line 650 "compiler/codegen.gem"
+            gem_set_line(650);
     GemVal _t10006 = gem_v_fd;
     static GemICacheSlot _ic_1729 = {0};
     GemVal _t10007 = gem_eq(gem_table_get_cached(_t10006, "defaults", &_ic_1729), GEM_NIL);
@@ -46787,35 +46790,35 @@ static GemVal __anon_154(void *_env, GemVal *args, int argc) {
         _t10010 = gem_eq(gem_table_get(_t10009, gem_v_i), GEM_NIL);
     }
             if (gem_truthy(_t10010)) {
-#line 650 "compiler/codegen.gem"
-                gem_set_line(650);
+#line 651 "compiler/codegen.gem"
+                gem_set_line(651);
                 gem_v_min = gem_add(gem_v_i, gem_int(1));
             }
         }
 
-#line 653 "compiler/codegen.gem"
-        gem_set_line(653);
+#line 654 "compiler/codegen.gem"
+        gem_set_line(654);
         GemVal gem_v___val_267 = GEM_NIL;
-#line 653 "compiler/codegen.gem"
-        gem_set_line(653);
+#line 654 "compiler/codegen.gem"
+        gem_set_line(654);
     GemVal _t10011 = gem_v_fd;
     static GemICacheSlot _ic_1731 = {0};
         if (gem_truthy(gem_eq(gem_table_get_cached(_t10011, "rest_param", &_ic_1731), GEM_NIL))) {
-#line 653 "compiler/codegen.gem"
-            gem_set_line(653);
+#line 654 "compiler/codegen.gem"
+            gem_set_line(654);
     GemVal _t10012 = gem_v_fd;
     static GemICacheSlot _ic_1732 = {0};
             gem_v___val_267 = gem_len_1(gem_table_get_cached(_t10012, "params", &_ic_1732));
         } else {
-#line 653 "compiler/codegen.gem"
-            gem_set_line(653);
+#line 654 "compiler/codegen.gem"
+            gem_set_line(654);
             gem_v___val_267 = GEM_NIL;
         }
-#line 653 "compiler/codegen.gem"
-        gem_set_line(653);
-        GemVal gem_v_max = gem_v___val_267;
 #line 654 "compiler/codegen.gem"
         gem_set_line(654);
+        GemVal gem_v_max = gem_v___val_267;
+#line 655 "compiler/codegen.gem"
+        gem_set_line(655);
     GemVal _t10016 = gem_v_arity;
     GemVal _t10013 = gem_v_fd;
     static GemICacheSlot _ic_1733 = {0};
@@ -46827,14 +46830,14 @@ static GemVal __anon_154(void *_env, GemVal *args, int argc) {
         gem_table_set(_t10016, _t10015, _t10014);
     }
 
-#line 656 "compiler/codegen.gem"
-    gem_set_line(656);
+#line 657 "compiler/codegen.gem"
+    gem_set_line(657);
     GemVal gem_v___for_items_269 = gem_for_items_1(gem_v_extern_fns_list);
-#line 656 "compiler/codegen.gem"
-    gem_set_line(656);
+#line 657 "compiler/codegen.gem"
+    gem_set_line(657);
     GemVal gem_v___for_i_269 = gem_int(0);
-#line 656 "compiler/codegen.gem"
-    gem_set_line(656);
+#line 657 "compiler/codegen.gem"
+    gem_set_line(657);
     GemArenaMark _mk296;
     gem_arena_mark(&_mk296);
     while (1) {
@@ -46845,15 +46848,15 @@ static GemVal __anon_154(void *_env, GemVal *args, int argc) {
         }
     GemVal _t10017 = gem_v___for_i_269;
         if (!gem_truthy(gem_lt(_t10017, gem_for_len_1(gem_v___for_items_269)))) break;
-#line 656 "compiler/codegen.gem"
-        gem_set_line(656);
-    GemVal _t10018 = gem_v___for_items_269;
-        GemVal gem_v_ef = gem_table_get(_t10018, gem_v___for_i_269);
-#line 656 "compiler/codegen.gem"
-        gem_set_line(656);
-        gem_v___for_i_269 = gem_add(gem_v___for_i_269, gem_int(1));
 #line 657 "compiler/codegen.gem"
         gem_set_line(657);
+    GemVal _t10018 = gem_v___for_items_269;
+        GemVal gem_v_ef = gem_table_get(_t10018, gem_v___for_i_269);
+#line 657 "compiler/codegen.gem"
+        gem_set_line(657);
+        gem_v___for_i_269 = gem_add(gem_v___for_i_269, gem_int(1));
+#line 658 "compiler/codegen.gem"
+        gem_set_line(658);
     GemVal _t10024 = gem_v_arity;
     GemVal _t10019 = gem_v_ef;
     static GemICacheSlot _ic_1734 = {0};
@@ -46869,14 +46872,14 @@ static GemVal __anon_154(void *_env, GemVal *args, int argc) {
         gem_table_set(_t10024, _t10023, _t10020);
     }
 
-#line 660 "compiler/codegen.gem"
-    gem_set_line(660);
+#line 661 "compiler/codegen.gem"
+    gem_set_line(661);
     GemVal gem_v___for_items_270 = gem_for_items_1(gem_v_top_stmts);
-#line 660 "compiler/codegen.gem"
-    gem_set_line(660);
+#line 661 "compiler/codegen.gem"
+    gem_set_line(661);
     GemVal gem_v___for_i_270 = gem_int(0);
-#line 660 "compiler/codegen.gem"
-    gem_set_line(660);
+#line 661 "compiler/codegen.gem"
+    gem_set_line(661);
     GemArenaMark _mk297;
     gem_arena_mark(&_mk297);
     while (1) {
@@ -46887,15 +46890,15 @@ static GemVal __anon_154(void *_env, GemVal *args, int argc) {
         }
     GemVal _t10025 = gem_v___for_i_270;
         if (!gem_truthy(gem_lt(_t10025, gem_for_len_1(gem_v___for_items_270)))) break;
-#line 660 "compiler/codegen.gem"
-        gem_set_line(660);
-    GemVal _t10026 = gem_v___for_items_270;
-        GemVal gem_v_s = gem_table_get(_t10026, gem_v___for_i_270);
-#line 660 "compiler/codegen.gem"
-        gem_set_line(660);
-        gem_v___for_i_270 = gem_add(gem_v___for_i_270, gem_int(1));
 #line 661 "compiler/codegen.gem"
         gem_set_line(661);
+    GemVal _t10026 = gem_v___for_items_270;
+        GemVal gem_v_s = gem_table_get(_t10026, gem_v___for_i_270);
+#line 661 "compiler/codegen.gem"
+        gem_set_line(661);
+        gem_v___for_i_270 = gem_add(gem_v___for_i_270, gem_int(1));
+#line 662 "compiler/codegen.gem"
+        gem_set_line(662);
     GemVal _t10027 = gem_v_s;
     static GemICacheSlot _ic_1737 = {0};
     GemVal _t10028 = gem_eq(gem_table_get_cached(_t10027, "tag", &_ic_1737), GEM_STR_LIT("let", 3));
@@ -46907,7 +46910,7 @@ static GemVal __anon_154(void *_env, GemVal *args, int argc) {
     GemVal _t10029 = gem_v_s;
     static GemICacheSlot _ic_1738 = {0};
     GemVal _t10030[] = {gem_table_get_cached(_t10029, "value", &_ic_1738), GEM_STR_LIT("var", 3)};
-    gem_check_callable(_t10031, "compiler/codegen.gem", 661);
+    gem_check_callable(_t10031, "compiler/codegen.gem", 662);
         _t10032 = _t10031.fn(_t10031.env, _t10030, 2);
     }
     GemVal _t10034;
@@ -46947,7 +46950,7 @@ static GemVal __anon_154(void *_env, GemVal *args, int argc) {
     GemVal _t10042 = gem_v_s;
     static GemICacheSlot _ic_1743 = {0};
     GemVal _t10044[] = {_t10043, gem_table_get_cached(_t10042, "name", &_ic_1743)};
-    gem_check_callable(_t10045, "compiler/codegen.gem", 661);
+    gem_check_callable(_t10045, "compiler/codegen.gem", 662);
         _t10046 = gem_not(_t10045.fn(_t10045.env, _t10044, 2));
     }
     GemVal _t10051;
@@ -46959,12 +46962,12 @@ static GemVal __anon_154(void *_env, GemVal *args, int argc) {
     GemVal _t10047 = gem_v_s;
     static GemICacheSlot _ic_1744 = {0};
     GemVal _t10049[] = {_t10048, gem_table_get_cached(_t10047, "name", &_ic_1744)};
-    gem_check_callable(_t10050, "compiler/codegen.gem", 661);
+    gem_check_callable(_t10050, "compiler/codegen.gem", 662);
         _t10051 = _t10050.fn(_t10050.env, _t10049, 2);
     }
         if (gem_truthy(_t10051)) {
-#line 662 "compiler/codegen.gem"
-            gem_set_line(662);
+#line 663 "compiler/codegen.gem"
+            gem_set_line(663);
     GemVal _t10057 = gem_v_arity;
     GemVal _t10052 = gem_v_s;
     static GemICacheSlot _ic_1745 = {0};
@@ -46978,12 +46981,12 @@ static GemVal __anon_154(void *_env, GemVal *args, int argc) {
         }
     }
 
-#line 665 "compiler/codegen.gem"
-    gem_set_line(665);
-    GemVal _t10058 = gem_table_new_braces();
-    GemVal gem_v_reported = _t10058;
 #line 666 "compiler/codegen.gem"
     gem_set_line(666);
+    GemVal _t10058 = gem_table_new_braces();
+    GemVal gem_v_reported = _t10058;
+#line 667 "compiler/codegen.gem"
+    gem_set_line(667);
     struct _closure___anon_156 *_t10170 = gem_alloc(sizeof(struct _closure___anon_156));
     _t10170->_num_captures = 7;
     GemVal *_t10171 = gem_alloc(sizeof(GemVal));
@@ -46998,20 +47001,20 @@ static GemVal __anon_154(void *_env, GemVal *args, int argc) {
     _t10170->gem_v_source_of = gem_v_source_of;
     _t10170->gem_v_user_var_name = gem_v_user_var_name;
     GemVal gem_v_check = gem_make_fn(__anon_156, _t10170);
-#line 717 "compiler/codegen.gem"
-    gem_set_line(717);
+#line 718 "compiler/codegen.gem"
+    gem_set_line(718);
     GemVal _t10173 = gem_table_new_braces();
     gem_table_set(_t10173, GEM_STR_LIT("pcall", 5), GEM_STR_LIT("pcall f(x)", 10));
     gem_table_set(_t10173, GEM_STR_LIT("spawn", 5), GEM_STR_LIT("spawn do f(x) end", 17));
     gem_table_set(_t10173, GEM_STR_LIT("spawn_link", 10), GEM_STR_LIT("spawn_link do f(x) end", 22));
     gem_table_set(_t10173, GEM_STR_LIT("spawn_monitor", 13), GEM_STR_LIT("spawn_monitor do f(x) end", 25));
     GemVal gem_v_one_fn = _t10173;
-#line 719 "compiler/codegen.gem"
-    gem_set_line(719);
-    GemVal *gem_v_walk = gem_box_alloc();
-    *gem_v_walk = GEM_NIL;
 #line 720 "compiler/codegen.gem"
     gem_set_line(720);
+    GemVal *gem_v_walk = gem_box_alloc();
+    *gem_v_walk = GEM_NIL;
+#line 721 "compiler/codegen.gem"
+    gem_set_line(721);
     struct _closure___anon_157 *_t10296 = gem_alloc(sizeof(struct _closure___anon_157));
     _t10296->_num_captures = 11;
     GemVal *_t10297 = gem_alloc(sizeof(GemVal));
@@ -47034,14 +47037,14 @@ static GemVal __anon_154(void *_env, GemVal *args, int argc) {
     _t10296->gem_v_source_of = gem_v_source_of;
     _t10296->gem_v_walk = gem_v_walk;
     (*gem_v_walk) = gem_make_fn(__anon_157, _t10296);
-#line 744 "compiler/codegen.gem"
-    gem_set_line(744);
+#line 745 "compiler/codegen.gem"
+    gem_set_line(745);
     GemVal gem_v___for_items_275 = gem_for_items_1(gem_v_fn_defs);
-#line 744 "compiler/codegen.gem"
-    gem_set_line(744);
+#line 745 "compiler/codegen.gem"
+    gem_set_line(745);
     GemVal gem_v___for_i_275 = gem_int(0);
-#line 744 "compiler/codegen.gem"
-    gem_set_line(744);
+#line 745 "compiler/codegen.gem"
+    gem_set_line(745);
     GemArenaMark _mk300;
     gem_arena_mark(&_mk300);
     while (1) {
@@ -47053,32 +47056,32 @@ static GemVal __anon_154(void *_env, GemVal *args, int argc) {
         }
     GemVal _t10301 = gem_v___for_i_275;
         if (!gem_truthy(gem_lt(_t10301, gem_for_len_1(gem_v___for_items_275)))) break;
-#line 744 "compiler/codegen.gem"
-        gem_set_line(744);
-    GemVal _t10302 = gem_v___for_items_275;
-        GemVal gem_v_fd = gem_table_get(_t10302, gem_v___for_i_275);
-#line 744 "compiler/codegen.gem"
-        gem_set_line(744);
-        gem_v___for_i_275 = gem_add(gem_v___for_i_275, gem_int(1));
 #line 745 "compiler/codegen.gem"
         gem_set_line(745);
+    GemVal _t10302 = gem_v___for_items_275;
+        GemVal gem_v_fd = gem_table_get(_t10302, gem_v___for_i_275);
+#line 745 "compiler/codegen.gem"
+        gem_set_line(745);
+        gem_v___for_i_275 = gem_add(gem_v___for_i_275, gem_int(1));
+#line 746 "compiler/codegen.gem"
+        gem_set_line(746);
     GemVal _t10306 = (*gem_v_walk);
     GemVal _t10304 = gem_v_fd;
     GemVal _t10303 = gem_table_new_braces();
     GemVal _t10305[] = {_t10304, _t10303};
-    gem_check_callable(_t10306, "compiler/codegen.gem", 745);
+    gem_check_callable(_t10306, "compiler/codegen.gem", 746);
         (void)(_t10306.fn(_t10306.env, _t10305, 2));
     }
 
     {
-#line 747 "compiler/codegen.gem"
-        gem_set_line(747);
+#line 748 "compiler/codegen.gem"
+        gem_set_line(748);
         GemVal gem_v___for_items_276 = gem_for_items_1(gem_v_top_stmts);
-#line 747 "compiler/codegen.gem"
-        gem_set_line(747);
+#line 748 "compiler/codegen.gem"
+        gem_set_line(748);
         GemVal gem_v___for_i_276 = gem_int(0);
-#line 747 "compiler/codegen.gem"
-        gem_set_line(747);
+#line 748 "compiler/codegen.gem"
+        gem_set_line(748);
         GemArenaMark _mk301;
         gem_arena_mark(&_mk301);
         while (1) {
@@ -47090,20 +47093,20 @@ static GemVal __anon_154(void *_env, GemVal *args, int argc) {
             }
     GemVal _t10307 = gem_v___for_i_276;
             if (!gem_truthy(gem_lt(_t10307, gem_for_len_1(gem_v___for_items_276)))) break;
-#line 747 "compiler/codegen.gem"
-            gem_set_line(747);
-    GemVal _t10308 = gem_v___for_items_276;
-            GemVal gem_v_s = gem_table_get(_t10308, gem_v___for_i_276);
-#line 747 "compiler/codegen.gem"
-            gem_set_line(747);
-            gem_v___for_i_276 = gem_add(gem_v___for_i_276, gem_int(1));
 #line 748 "compiler/codegen.gem"
             gem_set_line(748);
+    GemVal _t10308 = gem_v___for_items_276;
+            GemVal gem_v_s = gem_table_get(_t10308, gem_v___for_i_276);
+#line 748 "compiler/codegen.gem"
+            gem_set_line(748);
+            gem_v___for_i_276 = gem_add(gem_v___for_i_276, gem_int(1));
+#line 749 "compiler/codegen.gem"
+            gem_set_line(749);
     GemVal _t10312 = (*gem_v_walk);
     GemVal _t10310 = gem_v_s;
     GemVal _t10309 = gem_table_new_braces();
     GemVal _t10311[] = {_t10310, _t10309};
-    gem_check_callable(_t10312, "compiler/codegen.gem", 748);
+    gem_check_callable(_t10312, "compiler/codegen.gem", 749);
             (void)(_t10312.fn(_t10312.env, _t10311, 2));
         }
         if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, NULL, 1);
@@ -47127,37 +47130,37 @@ static GemVal __anon_159(void *_env, GemVal *args, int argc) {
     GemVal *gem_v_fs = _cls->gem_v_fs;
     GemVal *gem_v_mangle = _cls->gem_v_mangle;
     GemVal *gem_v_tmp = _cls->gem_v_tmp;
-    gem_push_frame("anonymous fn", "compiler/codegen.gem", 752);
+    gem_push_frame("anonymous fn", "compiler/codegen.gem", 753);
     GemVal gem_v_call_node = (argc > 0) ? args[0] : GEM_NIL;
     GemVal gem_v_indent = (argc > 1) ? args[1] : GEM_NIL;
     GemArenaPoint _ret_pt;
     gem_arena_point(&_ret_pt);
-#line 753 "compiler/codegen.gem"
-    gem_set_line(753);
-    GemVal _t10323 = gem_g___mod_codegen_pad_for;
-    GemVal _t10322[] = {gem_v_indent};
-    gem_check_callable(_t10323, "compiler/codegen.gem", 753);
-    GemVal gem_v_p = _t10323.fn(_t10323.env, _t10322, 1);
 #line 754 "compiler/codegen.gem"
     gem_set_line(754);
-    GemVal gem_v_b = gem_buf_new_fn(NULL, NULL, 0);
+    GemVal _t10323 = gem_g___mod_codegen_pad_for;
+    GemVal _t10322[] = {gem_v_indent};
+    gem_check_callable(_t10323, "compiler/codegen.gem", 754);
+    GemVal gem_v_p = _t10323.fn(_t10323.env, _t10322, 1);
 #line 755 "compiler/codegen.gem"
     gem_set_line(755);
+    GemVal gem_v_b = gem_buf_new_fn(NULL, NULL, 0);
+#line 756 "compiler/codegen.gem"
+    gem_set_line(756);
     GemVal _t10324 = gem_v_call_node;
     static GemICacheSlot _ic_1814 = {0};
     GemVal gem_v_args = gem_table_get_cached(_t10324, "args", &_ic_1814);
-#line 756 "compiler/codegen.gem"
-    gem_set_line(756);
+#line 757 "compiler/codegen.gem"
+    gem_set_line(757);
     GemVal _t10325 = gem_table_new();
     GemVal gem_v_arg_temps = _t10325;
-#line 757 "compiler/codegen.gem"
-    gem_set_line(757);
+#line 758 "compiler/codegen.gem"
+    gem_set_line(758);
     GemVal gem_v___for_i_277 = gem_int(0);
-#line 757 "compiler/codegen.gem"
-    gem_set_line(757);
+#line 758 "compiler/codegen.gem"
+    gem_set_line(758);
     GemVal gem_v___for_limit_277 = gem_len_1(gem_v_args);
-#line 757 "compiler/codegen.gem"
-    gem_set_line(757);
+#line 758 "compiler/codegen.gem"
+    gem_set_line(758);
     GemArenaMark _mk302;
     gem_arena_mark(&_mk302);
     while (1) {
@@ -47168,33 +47171,33 @@ static GemVal __anon_159(void *_env, GemVal *args, int argc) {
         }
     GemVal _t10326 = gem_v___for_i_277;
         if (!gem_truthy(gem_lt(_t10326, gem_v___for_limit_277))) break;
-#line 757 "compiler/codegen.gem"
-        gem_set_line(757);
-        GemVal gem_v_i = gem_v___for_i_277;
-#line 757 "compiler/codegen.gem"
-        gem_set_line(757);
-        gem_v___for_i_277 = gem_add(gem_v___for_i_277, gem_int(1));
 #line 758 "compiler/codegen.gem"
         gem_set_line(758);
+        GemVal gem_v_i = gem_v___for_i_277;
+#line 758 "compiler/codegen.gem"
+        gem_set_line(758);
+        gem_v___for_i_277 = gem_add(gem_v___for_i_277, gem_int(1));
+#line 759 "compiler/codegen.gem"
+        gem_set_line(759);
     GemVal _t10329 = (*gem_v_compile_expr);
     GemVal _t10327 = gem_v_args;
     GemVal _t10328[] = {gem_table_get(_t10327, gem_v_i)};
-    gem_check_callable(_t10329, "compiler/codegen.gem", 758);
+    gem_check_callable(_t10329, "compiler/codegen.gem", 759);
         GemVal gem_v_r = _t10329.fn(_t10329.env, _t10328, 1);
-#line 759 "compiler/codegen.gem"
-        gem_set_line(759);
-    GemVal _t10330 = (*gem_v_tmp);
-    gem_check_callable(_t10330, "compiler/codegen.gem", 759);
-        GemVal gem_v_t = _t10330.fn(_t10330.env, NULL, 0);
 #line 760 "compiler/codegen.gem"
         gem_set_line(760);
+    GemVal _t10330 = (*gem_v_tmp);
+    gem_check_callable(_t10330, "compiler/codegen.gem", 760);
+        GemVal gem_v_t = _t10330.fn(_t10330.env, NULL, 0);
+#line 761 "compiler/codegen.gem"
+        gem_set_line(761);
     GemVal _t10332 = gem_v_b;
     GemVal _t10331 = gem_v_r;
     static GemICacheSlot _ic_1815 = {0};
     GemVal _t10333[] = {_t10332, gem_table_get_cached(_t10331, "setup", &_ic_1815)};
         (void)(gem_buf_push_fn(NULL, _t10333, 2));
-#line 761 "compiler/codegen.gem"
-        gem_set_line(761);
+#line 762 "compiler/codegen.gem"
+        gem_set_line(762);
     GemVal _t10338 = gem_v_b;
     GemVal _t10336 = gem_v_p;
     GemVal _t10335 = gem_v_t;
@@ -47203,25 +47206,25 @@ static GemVal __anon_159(void *_env, GemVal *args, int argc) {
     GemVal _t10337[] = {_t10336, GEM_STR_LIT("GemVal ", 7), _t10335, GEM_STR_LIT(" = ", 3), gem_table_get_cached(_t10334, "expr", &_ic_1816), GEM_STR_LIT(";\n", 2)};
     GemVal _t10339[] = {_t10338, gem_interp(6, _t10337)};
         (void)(gem_buf_push_fn(NULL, _t10339, 2));
-#line 762 "compiler/codegen.gem"
-        gem_set_line(762);
+#line 763 "compiler/codegen.gem"
+        gem_set_line(763);
     GemVal _t10340 = gem_v_arg_temps;
     GemVal _t10341[] = {_t10340, gem_v_t};
         (void)(gem_push_fn(NULL, _t10341, 2));
     }
 
-#line 769 "compiler/codegen.gem"
-    gem_set_line(769);
+#line 770 "compiler/codegen.gem"
+    gem_set_line(770);
     GemVal _t10342 = gem_table_new();
     GemVal gem_v_tco_roots = _t10342;
-#line 770 "compiler/codegen.gem"
-    gem_set_line(770);
+#line 771 "compiler/codegen.gem"
+    gem_set_line(771);
     GemVal gem_v___for_items_278 = gem_for_items_1(gem_v_arg_temps);
-#line 770 "compiler/codegen.gem"
-    gem_set_line(770);
+#line 771 "compiler/codegen.gem"
+    gem_set_line(771);
     GemVal gem_v___for_i_278 = gem_int(0);
-#line 770 "compiler/codegen.gem"
-    gem_set_line(770);
+#line 771 "compiler/codegen.gem"
+    gem_set_line(771);
     GemArenaMark _mk303;
     gem_arena_mark(&_mk303);
     while (1) {
@@ -47232,56 +47235,56 @@ static GemVal __anon_159(void *_env, GemVal *args, int argc) {
         }
     GemVal _t10343 = gem_v___for_i_278;
         if (!gem_truthy(gem_lt(_t10343, gem_for_len_1(gem_v___for_items_278)))) break;
-#line 770 "compiler/codegen.gem"
-        gem_set_line(770);
-    GemVal _t10344 = gem_v___for_items_278;
-        GemVal gem_v_t = gem_table_get(_t10344, gem_v___for_i_278);
-#line 770 "compiler/codegen.gem"
-        gem_set_line(770);
-        gem_v___for_i_278 = gem_add(gem_v___for_i_278, gem_int(1));
 #line 771 "compiler/codegen.gem"
         gem_set_line(771);
+    GemVal _t10344 = gem_v___for_items_278;
+        GemVal gem_v_t = gem_table_get(_t10344, gem_v___for_i_278);
+#line 771 "compiler/codegen.gem"
+        gem_set_line(771);
+        gem_v___for_i_278 = gem_add(gem_v___for_i_278, gem_int(1));
+#line 772 "compiler/codegen.gem"
+        gem_set_line(772);
     GemVal _t10346 = gem_v_tco_roots;
     GemVal _t10345[] = {GEM_STR_LIT("&", 1), gem_v_t};
     GemVal _t10347[] = {_t10346, gem_interp(2, _t10345)};
         (void)(gem_push_fn(NULL, _t10347, 2));
     }
 
-#line 773 "compiler/codegen.gem"
-    gem_set_line(773);
+#line 774 "compiler/codegen.gem"
+    gem_set_line(774);
     GemVal _t10353 = gem_v_b;
     GemVal _t10352 = (*gem_v_emit_region_reset);
     GemVal _t10350 = gem_v_p;
     GemVal _t10349 = gem_v_tco_roots;
     GemVal _t10348 = gem_table_new();
     GemVal _t10351[] = {_t10350, GEM_STR_LIT("_tco_mk", 7), _t10349, _t10348};
-    gem_check_callable(_t10352, "compiler/codegen.gem", 773);
+    gem_check_callable(_t10352, "compiler/codegen.gem", 774);
     GemVal _t10354[] = {_t10353, _t10352.fn(_t10352.env, _t10351, 4)};
     (void)(gem_buf_push_fn(NULL, _t10354, 2));
-#line 775 "compiler/codegen.gem"
-    gem_set_line(775);
+#line 776 "compiler/codegen.gem"
+    gem_set_line(776);
     GemVal _t10355 = (*gem_v_fs);
     static GemICacheSlot _ic_1817 = {0};
     if (gem_truthy(gem_table_get_cached(_t10355, "tco_rebind", &_ic_1817))) {
-#line 777 "compiler/codegen.gem"
-        gem_set_line(777);
+#line 778 "compiler/codegen.gem"
+        gem_set_line(778);
     GemVal _t10357 = gem_len_1(gem_v_arg_temps);
     GemVal _t10356 = (*gem_v_fs);
     static GemICacheSlot _ic_1818 = {0};
         if (gem_truthy(gem_gt(_t10357, gem_table_get_cached(_t10356, "tco_argv_max", &_ic_1818)))) {
-#line 778 "compiler/codegen.gem"
-            gem_set_line(778);
+#line 779 "compiler/codegen.gem"
+            gem_set_line(779);
     GemVal _t10358 = (*gem_v_fs);
             gem_table_set(_t10358, GEM_STR_LIT("tco_argv_max", 12), gem_len_1(gem_v_arg_temps));
         }
-#line 780 "compiler/codegen.gem"
-        gem_set_line(780);
+#line 781 "compiler/codegen.gem"
+        gem_set_line(781);
         GemVal gem_v___for_i_279 = gem_int(0);
-#line 780 "compiler/codegen.gem"
-        gem_set_line(780);
+#line 781 "compiler/codegen.gem"
+        gem_set_line(781);
         GemVal gem_v___for_limit_279 = gem_len_1(gem_v_arg_temps);
-#line 780 "compiler/codegen.gem"
-        gem_set_line(780);
+#line 781 "compiler/codegen.gem"
+        gem_set_line(781);
         GemArenaMark _mk304;
         gem_arena_mark(&_mk304);
         while (1) {
@@ -47292,14 +47295,14 @@ static GemVal __anon_159(void *_env, GemVal *args, int argc) {
             }
     GemVal _t10359 = gem_v___for_i_279;
             if (!gem_truthy(gem_lt(_t10359, gem_v___for_limit_279))) break;
-#line 780 "compiler/codegen.gem"
-            gem_set_line(780);
-            GemVal gem_v_i = gem_v___for_i_279;
-#line 780 "compiler/codegen.gem"
-            gem_set_line(780);
-            gem_v___for_i_279 = gem_add(gem_v___for_i_279, gem_int(1));
 #line 781 "compiler/codegen.gem"
             gem_set_line(781);
+            GemVal gem_v_i = gem_v___for_i_279;
+#line 781 "compiler/codegen.gem"
+            gem_set_line(781);
+            gem_v___for_i_279 = gem_add(gem_v___for_i_279, gem_int(1));
+#line 782 "compiler/codegen.gem"
+            gem_set_line(782);
     GemVal _t10364 = gem_v_b;
     GemVal _t10362 = gem_v_p;
     GemVal _t10361 = gem_v_i;
@@ -47309,43 +47312,43 @@ static GemVal __anon_159(void *_env, GemVal *args, int argc) {
             (void)(gem_buf_push_fn(NULL, _t10365, 2));
         }
 
-#line 783 "compiler/codegen.gem"
-        gem_set_line(783);
+#line 784 "compiler/codegen.gem"
+        gem_set_line(784);
     GemVal _t10367 = gem_v_b;
     GemVal _t10366[] = {gem_v_p, GEM_STR_LIT("args = _tco_argv;\n", 18)};
     GemVal _t10368[] = {_t10367, gem_interp(2, _t10366)};
         (void)(gem_buf_push_fn(NULL, _t10368, 2));
-#line 784 "compiler/codegen.gem"
-        gem_set_line(784);
+#line 785 "compiler/codegen.gem"
+        gem_set_line(785);
     GemVal _t10371 = gem_v_b;
     GemVal _t10369 = gem_v_p;
     GemVal _t10370[] = {_t10369, GEM_STR_LIT("argc = ", 7), gem_len_1(gem_v_arg_temps), GEM_STR_LIT(";\n", 2)};
     GemVal _t10372[] = {_t10371, gem_interp(4, _t10370)};
         (void)(gem_buf_push_fn(NULL, _t10372, 2));
-#line 785 "compiler/codegen.gem"
-        gem_set_line(785);
+#line 786 "compiler/codegen.gem"
+        gem_set_line(786);
     GemVal _t10374 = gem_v_b;
     GemVal _t10373[] = {gem_v_p, GEM_STR_LIT("goto _tco_rebind;", 17)};
     GemVal _t10375[] = {_t10374, gem_interp(2, _t10373)};
         (void)(gem_buf_push_fn(NULL, _t10375, 2));
-#line 786 "compiler/codegen.gem"
-        gem_set_line(786);
+#line 787 "compiler/codegen.gem"
+        gem_set_line(787);
     GemVal _t10376[] = {gem_v_b};
         GemVal _t10377 = gem_to_string_fn(NULL, _t10376, 1);
         if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t10377, 1);
         gem_pop_frame();
         return _t10377;
     }
-#line 789 "compiler/codegen.gem"
-    gem_set_line(789);
+#line 790 "compiler/codegen.gem"
+    gem_set_line(790);
     GemVal gem_v___for_i_281 = gem_int(0);
-#line 789 "compiler/codegen.gem"
-    gem_set_line(789);
+#line 790 "compiler/codegen.gem"
+    gem_set_line(790);
     GemVal _t10378 = (*gem_v_fs);
     static GemICacheSlot _ic_1819 = {0};
     GemVal gem_v___for_limit_281 = gem_len_1(gem_table_get_cached(_t10378, "tco_params", &_ic_1819));
-#line 789 "compiler/codegen.gem"
-    gem_set_line(789);
+#line 790 "compiler/codegen.gem"
+    gem_set_line(790);
     GemArenaMark _mk305;
     gem_arena_mark(&_mk305);
     while (1) {
@@ -47356,42 +47359,42 @@ static GemVal __anon_159(void *_env, GemVal *args, int argc) {
         }
     GemVal _t10379 = gem_v___for_i_281;
         if (!gem_truthy(gem_lt(_t10379, gem_v___for_limit_281))) break;
-#line 789 "compiler/codegen.gem"
-        gem_set_line(789);
-        GemVal gem_v_i = gem_v___for_i_281;
-#line 789 "compiler/codegen.gem"
-        gem_set_line(789);
-        gem_v___for_i_281 = gem_add(gem_v___for_i_281, gem_int(1));
 #line 790 "compiler/codegen.gem"
         gem_set_line(790);
+        GemVal gem_v_i = gem_v___for_i_281;
+#line 790 "compiler/codegen.gem"
+        gem_set_line(790);
+        gem_v___for_i_281 = gem_add(gem_v___for_i_281, gem_int(1));
+#line 791 "compiler/codegen.gem"
+        gem_set_line(791);
     GemVal _t10383 = (*gem_v_mangle);
     GemVal _t10380 = (*gem_v_fs);
     static GemICacheSlot _ic_1820 = {0};
     GemVal _t10381 = gem_table_get_cached(_t10380, "tco_params", &_ic_1820);
     GemVal _t10382[] = {gem_table_get(_t10381, gem_v_i)};
-    gem_check_callable(_t10383, "compiler/codegen.gem", 790);
+    gem_check_callable(_t10383, "compiler/codegen.gem", 791);
         GemVal gem_v_mp = _t10383.fn(_t10383.env, _t10382, 1);
-#line 791 "compiler/codegen.gem"
-        gem_set_line(791);
+#line 792 "compiler/codegen.gem"
+        gem_set_line(792);
         GemVal gem_v___val_280 = GEM_NIL;
-#line 791 "compiler/codegen.gem"
-        gem_set_line(791);
+#line 792 "compiler/codegen.gem"
+        gem_set_line(792);
     GemVal _t10384 = gem_v_i;
         if (gem_truthy(gem_lt(_t10384, gem_len_1(gem_v_arg_temps)))) {
-#line 791 "compiler/codegen.gem"
-            gem_set_line(791);
+#line 792 "compiler/codegen.gem"
+            gem_set_line(792);
     GemVal _t10385 = gem_v_arg_temps;
             gem_v___val_280 = gem_table_get(_t10385, gem_v_i);
         } else {
-#line 791 "compiler/codegen.gem"
-            gem_set_line(791);
+#line 792 "compiler/codegen.gem"
+            gem_set_line(792);
             gem_v___val_280 = GEM_STR_LIT("GEM_NIL", 7);
         }
-#line 791 "compiler/codegen.gem"
-        gem_set_line(791);
-        GemVal gem_v_val = gem_v___val_280;
 #line 792 "compiler/codegen.gem"
         gem_set_line(792);
+        GemVal gem_v_val = gem_v___val_280;
+#line 793 "compiler/codegen.gem"
+        gem_set_line(793);
     GemVal _t10391 = gem_g___mod_codegen_set_contains;
     GemVal _t10386 = (*gem_v_fs);
     static GemICacheSlot _ic_1821 = {0};
@@ -47400,17 +47403,17 @@ static GemVal __anon_159(void *_env, GemVal *args, int argc) {
     static GemICacheSlot _ic_1822 = {0};
     GemVal _t10388 = gem_table_get_cached(_t10387, "tco_params", &_ic_1822);
     GemVal _t10390[] = {_t10389, gem_table_get(_t10388, gem_v_i)};
-    gem_check_callable(_t10391, "compiler/codegen.gem", 792);
+    gem_check_callable(_t10391, "compiler/codegen.gem", 793);
         if (gem_truthy(_t10391.fn(_t10391.env, _t10390, 2))) {
-#line 793 "compiler/codegen.gem"
-            gem_set_line(793);
+#line 794 "compiler/codegen.gem"
+            gem_set_line(794);
     GemVal _t10394 = gem_v_b;
     GemVal _t10392 = gem_v_p;
     GemVal _t10393[] = {_t10392, gem_v_mp, GEM_STR_LIT(" = gem_box_alloc();\n", 20)};
     GemVal _t10395[] = {_t10394, gem_interp(3, _t10393)};
             (void)(gem_buf_push_fn(NULL, _t10395, 2));
-#line 794 "compiler/codegen.gem"
-            gem_set_line(794);
+#line 795 "compiler/codegen.gem"
+            gem_set_line(795);
     GemVal _t10399 = gem_v_b;
     GemVal _t10397 = gem_v_p;
     GemVal _t10396 = gem_v_mp;
@@ -47418,8 +47421,8 @@ static GemVal __anon_159(void *_env, GemVal *args, int argc) {
     GemVal _t10400[] = {_t10399, gem_interp(6, _t10398)};
             (void)(gem_buf_push_fn(NULL, _t10400, 2));
         } else {
-#line 796 "compiler/codegen.gem"
-            gem_set_line(796);
+#line 797 "compiler/codegen.gem"
+            gem_set_line(797);
     GemVal _t10404 = gem_v_b;
     GemVal _t10402 = gem_v_p;
     GemVal _t10401 = gem_v_mp;
@@ -47429,30 +47432,30 @@ static GemVal __anon_159(void *_env, GemVal *args, int argc) {
         }
     }
 
-#line 799 "compiler/codegen.gem"
-    gem_set_line(799);
+#line 800 "compiler/codegen.gem"
+    gem_set_line(800);
     GemVal _t10406 = (*gem_v_fs);
     static GemICacheSlot _ic_1823 = {0};
     if (gem_truthy(gem_gt(gem_table_get_cached(_t10406, "c_loop_depth", &_ic_1823), gem_int(0)))) {
-#line 800 "compiler/codegen.gem"
-        gem_set_line(800);
-        gem_table_set((*gem_v_fs), GEM_STR_LIT("tco_top_used", 12), gem_bool(1));
 #line 801 "compiler/codegen.gem"
         gem_set_line(801);
+        gem_table_set((*gem_v_fs), GEM_STR_LIT("tco_top_used", 12), gem_bool(1));
+#line 802 "compiler/codegen.gem"
+        gem_set_line(802);
     GemVal _t10408 = gem_v_b;
     GemVal _t10407[] = {gem_v_p, GEM_STR_LIT("goto _tco_top;", 14)};
     GemVal _t10409[] = {_t10408, gem_interp(2, _t10407)};
         (void)(gem_buf_push_fn(NULL, _t10409, 2));
     } else {
-#line 803 "compiler/codegen.gem"
-        gem_set_line(803);
+#line 804 "compiler/codegen.gem"
+        gem_set_line(804);
     GemVal _t10411 = gem_v_b;
     GemVal _t10410[] = {gem_v_p, GEM_STR_LIT("continue;", 9)};
     GemVal _t10412[] = {_t10411, gem_interp(2, _t10410)};
         (void)(gem_buf_push_fn(NULL, _t10412, 2));
     }
-#line 805 "compiler/codegen.gem"
-    gem_set_line(805);
+#line 806 "compiler/codegen.gem"
+    gem_set_line(806);
     GemVal _t10413[] = {gem_v_b};
     GemVal _t10414 = gem_to_string_fn(NULL, _t10413, 1);
     if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t10414, 1);
@@ -47471,38 +47474,38 @@ static GemVal __anon_160(void *_env, GemVal *args, int argc) {
     GemVal *gem_v_compile_expr = _cls->gem_v_compile_expr;
     GemVal *gem_v_pop_str = _cls->gem_v_pop_str;
     GemVal *gem_v_tmp = _cls->gem_v_tmp;
-    gem_push_frame("anonymous fn", "compiler/codegen.gem", 809);
+    gem_push_frame("anonymous fn", "compiler/codegen.gem", 810);
     GemVal gem_v_call_node = (argc > 0) ? args[0] : GEM_NIL;
     GemVal gem_v_target_name = (argc > 1) ? args[1] : GEM_NIL;
     GemVal gem_v_indent = (argc > 2) ? args[2] : GEM_NIL;
     GemArenaPoint _ret_pt;
     gem_arena_point(&_ret_pt);
-#line 810 "compiler/codegen.gem"
-    gem_set_line(810);
-    GemVal _t10420 = gem_g___mod_codegen_pad_for;
-    GemVal _t10419[] = {gem_v_indent};
-    gem_check_callable(_t10420, "compiler/codegen.gem", 810);
-    GemVal gem_v_p = _t10420.fn(_t10420.env, _t10419, 1);
 #line 811 "compiler/codegen.gem"
     gem_set_line(811);
-    GemVal gem_v_b = gem_buf_new_fn(NULL, NULL, 0);
+    GemVal _t10420 = gem_g___mod_codegen_pad_for;
+    GemVal _t10419[] = {gem_v_indent};
+    gem_check_callable(_t10420, "compiler/codegen.gem", 811);
+    GemVal gem_v_p = _t10420.fn(_t10420.env, _t10419, 1);
 #line 812 "compiler/codegen.gem"
     gem_set_line(812);
+    GemVal gem_v_b = gem_buf_new_fn(NULL, NULL, 0);
+#line 813 "compiler/codegen.gem"
+    gem_set_line(813);
     GemVal _t10421 = gem_v_call_node;
     static GemICacheSlot _ic_1824 = {0};
     GemVal gem_v_args = gem_table_get_cached(_t10421, "args", &_ic_1824);
-#line 813 "compiler/codegen.gem"
-    gem_set_line(813);
+#line 814 "compiler/codegen.gem"
+    gem_set_line(814);
     GemVal _t10422 = gem_table_new();
     GemVal gem_v_arg_temps = _t10422;
-#line 814 "compiler/codegen.gem"
-    gem_set_line(814);
+#line 815 "compiler/codegen.gem"
+    gem_set_line(815);
     GemVal gem_v___for_i_282 = gem_int(0);
-#line 814 "compiler/codegen.gem"
-    gem_set_line(814);
+#line 815 "compiler/codegen.gem"
+    gem_set_line(815);
     GemVal gem_v___for_limit_282 = gem_len_1(gem_v_args);
-#line 814 "compiler/codegen.gem"
-    gem_set_line(814);
+#line 815 "compiler/codegen.gem"
+    gem_set_line(815);
     GemArenaMark _mk306;
     gem_arena_mark(&_mk306);
     while (1) {
@@ -47513,33 +47516,33 @@ static GemVal __anon_160(void *_env, GemVal *args, int argc) {
         }
     GemVal _t10423 = gem_v___for_i_282;
         if (!gem_truthy(gem_lt(_t10423, gem_v___for_limit_282))) break;
-#line 814 "compiler/codegen.gem"
-        gem_set_line(814);
-        GemVal gem_v_i = gem_v___for_i_282;
-#line 814 "compiler/codegen.gem"
-        gem_set_line(814);
-        gem_v___for_i_282 = gem_add(gem_v___for_i_282, gem_int(1));
 #line 815 "compiler/codegen.gem"
         gem_set_line(815);
+        GemVal gem_v_i = gem_v___for_i_282;
+#line 815 "compiler/codegen.gem"
+        gem_set_line(815);
+        gem_v___for_i_282 = gem_add(gem_v___for_i_282, gem_int(1));
+#line 816 "compiler/codegen.gem"
+        gem_set_line(816);
     GemVal _t10426 = (*gem_v_compile_expr);
     GemVal _t10424 = gem_v_args;
     GemVal _t10425[] = {gem_table_get(_t10424, gem_v_i)};
-    gem_check_callable(_t10426, "compiler/codegen.gem", 815);
+    gem_check_callable(_t10426, "compiler/codegen.gem", 816);
         GemVal gem_v_r = _t10426.fn(_t10426.env, _t10425, 1);
-#line 816 "compiler/codegen.gem"
-        gem_set_line(816);
-    GemVal _t10427 = (*gem_v_tmp);
-    gem_check_callable(_t10427, "compiler/codegen.gem", 816);
-        GemVal gem_v_t = _t10427.fn(_t10427.env, NULL, 0);
 #line 817 "compiler/codegen.gem"
         gem_set_line(817);
+    GemVal _t10427 = (*gem_v_tmp);
+    gem_check_callable(_t10427, "compiler/codegen.gem", 817);
+        GemVal gem_v_t = _t10427.fn(_t10427.env, NULL, 0);
+#line 818 "compiler/codegen.gem"
+        gem_set_line(818);
     GemVal _t10429 = gem_v_b;
     GemVal _t10428 = gem_v_r;
     static GemICacheSlot _ic_1825 = {0};
     GemVal _t10430[] = {_t10429, gem_table_get_cached(_t10428, "setup", &_ic_1825)};
         (void)(gem_buf_push_fn(NULL, _t10430, 2));
-#line 818 "compiler/codegen.gem"
-        gem_set_line(818);
+#line 819 "compiler/codegen.gem"
+        gem_set_line(819);
     GemVal _t10435 = gem_v_b;
     GemVal _t10433 = gem_v_p;
     GemVal _t10432 = gem_v_t;
@@ -47548,21 +47551,21 @@ static GemVal __anon_160(void *_env, GemVal *args, int argc) {
     GemVal _t10434[] = {_t10433, GEM_STR_LIT("GemVal ", 7), _t10432, GEM_STR_LIT(" = ", 3), gem_table_get_cached(_t10431, "expr", &_ic_1826), GEM_STR_LIT(";\n", 2)};
     GemVal _t10436[] = {_t10435, gem_interp(6, _t10434)};
         (void)(gem_buf_push_fn(NULL, _t10436, 2));
-#line 819 "compiler/codegen.gem"
-        gem_set_line(819);
+#line 820 "compiler/codegen.gem"
+        gem_set_line(820);
     GemVal _t10437 = gem_v_arg_temps;
     GemVal _t10438[] = {_t10437, gem_v_t};
         (void)(gem_push_fn(NULL, _t10438, 2));
     }
 
-#line 821 "compiler/codegen.gem"
-    gem_set_line(821);
+#line 822 "compiler/codegen.gem"
+    gem_set_line(822);
     GemVal gem_v___for_i_283 = gem_int(0);
-#line 821 "compiler/codegen.gem"
-    gem_set_line(821);
+#line 822 "compiler/codegen.gem"
+    gem_set_line(822);
     GemVal gem_v___for_limit_283 = gem_len_1(gem_v_arg_temps);
-#line 821 "compiler/codegen.gem"
-    gem_set_line(821);
+#line 822 "compiler/codegen.gem"
+    gem_set_line(822);
     GemArenaMark _mk307;
     gem_arena_mark(&_mk307);
     while (1) {
@@ -47573,14 +47576,14 @@ static GemVal __anon_160(void *_env, GemVal *args, int argc) {
         }
     GemVal _t10439 = gem_v___for_i_283;
         if (!gem_truthy(gem_lt(_t10439, gem_v___for_limit_283))) break;
-#line 821 "compiler/codegen.gem"
-        gem_set_line(821);
-        GemVal gem_v_i = gem_v___for_i_283;
-#line 821 "compiler/codegen.gem"
-        gem_set_line(821);
-        gem_v___for_i_283 = gem_add(gem_v___for_i_283, gem_int(1));
 #line 822 "compiler/codegen.gem"
         gem_set_line(822);
+        GemVal gem_v_i = gem_v___for_i_283;
+#line 822 "compiler/codegen.gem"
+        gem_set_line(822);
+        gem_v___for_i_283 = gem_add(gem_v___for_i_283, gem_int(1));
+#line 823 "compiler/codegen.gem"
+        gem_set_line(823);
     GemVal _t10444 = gem_v_b;
     GemVal _t10442 = gem_v_p;
     GemVal _t10441 = gem_v_i;
@@ -47590,42 +47593,42 @@ static GemVal __anon_160(void *_env, GemVal *args, int argc) {
         (void)(gem_buf_push_fn(NULL, _t10445, 2));
     }
 
-#line 824 "compiler/codegen.gem"
-    gem_set_line(824);
+#line 825 "compiler/codegen.gem"
+    gem_set_line(825);
     GemVal _t10448 = gem_v_b;
     GemVal _t10446 = gem_v_p;
     GemVal _t10447[] = {_t10446, GEM_STR_LIT("gem_tail_argc = ", 16), gem_len_1(gem_v_arg_temps), GEM_STR_LIT(";\n", 2)};
     GemVal _t10449[] = {_t10448, gem_interp(4, _t10447)};
     (void)(gem_buf_push_fn(NULL, _t10449, 2));
-#line 825 "compiler/codegen.gem"
-    gem_set_line(825);
+#line 826 "compiler/codegen.gem"
+    gem_set_line(826);
     GemVal _t10451 = gem_v_b;
     GemVal _t10450[] = {gem_v_p, GEM_STR_LIT("gem_tail_env = NULL;\n", 21)};
     GemVal _t10452[] = {_t10451, gem_interp(2, _t10450)};
     (void)(gem_buf_push_fn(NULL, _t10452, 2));
-#line 826 "compiler/codegen.gem"
-    gem_set_line(826);
+#line 827 "compiler/codegen.gem"
+    gem_set_line(827);
     GemVal _t10455 = gem_v_b;
     GemVal _t10453 = gem_v_p;
     GemVal _t10454[] = {_t10453, GEM_STR_LIT("gem_tail_fn = gem_sccbody_", 26), gem_v_target_name, GEM_STR_LIT(";\n", 2)};
     GemVal _t10456[] = {_t10455, gem_interp(4, _t10454)};
     (void)(gem_buf_push_fn(NULL, _t10456, 2));
-#line 827 "compiler/codegen.gem"
-    gem_set_line(827);
+#line 828 "compiler/codegen.gem"
+    gem_set_line(828);
     GemVal _t10459 = gem_v_b;
     GemVal _t10458 = (*gem_v_pop_str);
     GemVal _t10457[] = {gem_v_p};
-    gem_check_callable(_t10458, "compiler/codegen.gem", 827);
+    gem_check_callable(_t10458, "compiler/codegen.gem", 828);
     GemVal _t10460[] = {_t10459, _t10458.fn(_t10458.env, _t10457, 1)};
     (void)(gem_buf_push_fn(NULL, _t10460, 2));
-#line 828 "compiler/codegen.gem"
-    gem_set_line(828);
+#line 829 "compiler/codegen.gem"
+    gem_set_line(829);
     GemVal _t10462 = gem_v_b;
     GemVal _t10461[] = {gem_v_p, GEM_STR_LIT("return GEM_NIL;", 15)};
     GemVal _t10463[] = {_t10462, gem_interp(2, _t10461)};
     (void)(gem_buf_push_fn(NULL, _t10463, 2));
-#line 829 "compiler/codegen.gem"
-    gem_set_line(829);
+#line 830 "compiler/codegen.gem"
+    gem_set_line(830);
     GemVal _t10464[] = {gem_v_b};
     GemVal _t10465 = gem_to_string_fn(NULL, _t10464, 1);
     if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t10465, 1);
@@ -47644,97 +47647,97 @@ static GemVal __anon_161(void *_env, GemVal *args, int argc) {
     gem_leaf_site = &_leaf_site;
     GemVal gem_v_node = (argc > 0) ? args[0] : GEM_NIL;
     GemVal gem_v_sid = (argc > 1) ? args[1] : GEM_NIL;
-#line 834 "compiler/codegen.gem"
-    gem_leaf_line = 834;
+#line 835 "compiler/codegen.gem"
+    gem_leaf_line = 835;
     GemVal _t10469 = gem_v_node;
     static GemICacheSlot _ic_1827 = {0};
     GemVal gem_v_name = gem_table_get_cached(_t10469, "name", &_ic_1827);
-#line 835 "compiler/codegen.gem"
-    gem_leaf_line = 835;
-    GemVal gem_v_b = gem_buf_new_fn(NULL, NULL, 0);
 #line 836 "compiler/codegen.gem"
     gem_leaf_line = 836;
+    GemVal gem_v_b = gem_buf_new_fn(NULL, NULL, 0);
+#line 837 "compiler/codegen.gem"
+    gem_leaf_line = 837;
     GemVal _t10471 = gem_v_b;
     GemVal _t10470[] = {GEM_STR_LIT("static GemVal gem_fn_", 21), gem_v_name, GEM_STR_LIT("(void *_env, GemVal *args, int argc) {\n", 39)};
     GemVal _t10472[] = {_t10471, gem_interp(3, _t10470)};
     (void)(gem_buf_push_fn(NULL, _t10472, 2));
-#line 837 "compiler/codegen.gem"
-    gem_leaf_line = 837;
+#line 838 "compiler/codegen.gem"
+    gem_leaf_line = 838;
     GemVal _t10474 = gem_v_b;
     GemVal _t10473[] = {GEM_STR_LIT("    GemFnPtr _next_fn = gem_sccbody_", 36), gem_v_name, GEM_STR_LIT(";\n", 2)};
     GemVal _t10475[] = {_t10474, gem_interp(3, _t10473)};
     (void)(gem_buf_push_fn(NULL, _t10475, 2));
-#line 838 "compiler/codegen.gem"
-    gem_leaf_line = 838;
-    GemVal _t10476[] = {gem_v_b, GEM_STR_LIT("    void *_next_env = _env;\n", 28)};
-    (void)(gem_buf_push_fn(NULL, _t10476, 2));
 #line 839 "compiler/codegen.gem"
     gem_leaf_line = 839;
-    GemVal _t10477[] = {gem_v_b, GEM_STR_LIT("    GemVal *_next_args = args;\n", 31)};
-    (void)(gem_buf_push_fn(NULL, _t10477, 2));
+    GemVal _t10476[] = {gem_v_b, GEM_STR_LIT("    void *_next_env = _env;\n", 28)};
+    (void)(gem_buf_push_fn(NULL, _t10476, 2));
 #line 840 "compiler/codegen.gem"
     gem_leaf_line = 840;
-    GemVal _t10478[] = {gem_v_b, GEM_STR_LIT("    int _next_argc = argc;\n", 27)};
-    (void)(gem_buf_push_fn(NULL, _t10478, 2));
+    GemVal _t10477[] = {gem_v_b, GEM_STR_LIT("    GemVal *_next_args = args;\n", 31)};
+    (void)(gem_buf_push_fn(NULL, _t10477, 2));
 #line 841 "compiler/codegen.gem"
     gem_leaf_line = 841;
-    GemVal _t10479[] = {gem_v_b, GEM_STR_LIT("    GemVal _tail_args[GEM_MAX_TAIL_ARGS];\n", 42)};
-    (void)(gem_buf_push_fn(NULL, _t10479, 2));
+    GemVal _t10478[] = {gem_v_b, GEM_STR_LIT("    int _next_argc = argc;\n", 27)};
+    (void)(gem_buf_push_fn(NULL, _t10478, 2));
 #line 842 "compiler/codegen.gem"
     gem_leaf_line = 842;
-    GemVal _t10480[] = {gem_v_b, GEM_STR_LIT("    GemVal _result;\n", 20)};
-    (void)(gem_buf_push_fn(NULL, _t10480, 2));
+    GemVal _t10479[] = {gem_v_b, GEM_STR_LIT("    GemVal _tail_args[GEM_MAX_TAIL_ARGS];\n", 42)};
+    (void)(gem_buf_push_fn(NULL, _t10479, 2));
 #line 843 "compiler/codegen.gem"
     gem_leaf_line = 843;
-    GemVal _t10481[] = {gem_v_b, GEM_STR_LIT("    GemArenaMark _mk;\n", 22)};
-    (void)(gem_buf_push_fn(NULL, _t10481, 2));
+    GemVal _t10480[] = {gem_v_b, GEM_STR_LIT("    GemVal _result;\n", 20)};
+    (void)(gem_buf_push_fn(NULL, _t10480, 2));
 #line 844 "compiler/codegen.gem"
     gem_leaf_line = 844;
-    GemVal _t10482[] = {gem_v_b, GEM_STR_LIT("    gem_arena_mark(&_mk);\n", 26)};
-    (void)(gem_buf_push_fn(NULL, _t10482, 2));
+    GemVal _t10481[] = {gem_v_b, GEM_STR_LIT("    GemArenaMark _mk;\n", 22)};
+    (void)(gem_buf_push_fn(NULL, _t10481, 2));
 #line 845 "compiler/codegen.gem"
     gem_leaf_line = 845;
-    GemVal _t10483[] = {gem_v_b, GEM_STR_LIT("    while (1) {\n", 16)};
-    (void)(gem_buf_push_fn(NULL, _t10483, 2));
+    GemVal _t10482[] = {gem_v_b, GEM_STR_LIT("    gem_arena_mark(&_mk);\n", 26)};
+    (void)(gem_buf_push_fn(NULL, _t10482, 2));
 #line 846 "compiler/codegen.gem"
     gem_leaf_line = 846;
-    GemVal _t10484[] = {gem_v_b, GEM_STR_LIT("        _result = _next_fn(_next_env, _next_args, _next_argc);\n", 63)};
-    (void)(gem_buf_push_fn(NULL, _t10484, 2));
+    GemVal _t10483[] = {gem_v_b, GEM_STR_LIT("    while (1) {\n", 16)};
+    (void)(gem_buf_push_fn(NULL, _t10483, 2));
 #line 847 "compiler/codegen.gem"
     gem_leaf_line = 847;
+    GemVal _t10484[] = {gem_v_b, GEM_STR_LIT("        _result = _next_fn(_next_env, _next_args, _next_argc);\n", 63)};
+    (void)(gem_buf_push_fn(NULL, _t10484, 2));
+#line 848 "compiler/codegen.gem"
+    gem_leaf_line = 848;
     GemVal _t10485[] = {gem_v_b, GEM_STR_LIT("        if (gem_tail_fn == NULL) break;\n", 40)};
     (void)(gem_buf_push_fn(NULL, _t10485, 2));
-#line 849 "compiler/codegen.gem"
-    gem_leaf_line = 849;
-    GemVal _t10486[] = {gem_v_b, GEM_STR_LIT("        _next_fn = gem_tail_fn;\n", 32)};
-    (void)(gem_buf_push_fn(NULL, _t10486, 2));
 #line 850 "compiler/codegen.gem"
     gem_leaf_line = 850;
-    GemVal _t10487[] = {gem_v_b, GEM_STR_LIT("        gem_tail_fn = NULL;\n", 28)};
-    (void)(gem_buf_push_fn(NULL, _t10487, 2));
+    GemVal _t10486[] = {gem_v_b, GEM_STR_LIT("        _next_fn = gem_tail_fn;\n", 32)};
+    (void)(gem_buf_push_fn(NULL, _t10486, 2));
 #line 851 "compiler/codegen.gem"
     gem_leaf_line = 851;
+    GemVal _t10487[] = {gem_v_b, GEM_STR_LIT("        gem_tail_fn = NULL;\n", 28)};
+    (void)(gem_buf_push_fn(NULL, _t10487, 2));
+#line 852 "compiler/codegen.gem"
+    gem_leaf_line = 852;
     GemVal _t10488[] = {gem_v_b, GEM_STR_LIT("        _next_env = gem_tail_env;\n", 34)};
     (void)(gem_buf_push_fn(NULL, _t10488, 2));
-#line 853 "compiler/codegen.gem"
-    gem_leaf_line = 853;
-    GemVal _t10489 = (*gem_v_scc_id_max_params);
-    GemVal gem_v_nargs = gem_table_get(_t10489, gem_v_sid);
 #line 854 "compiler/codegen.gem"
     gem_leaf_line = 854;
+    GemVal _t10489 = (*gem_v_scc_id_max_params);
+    GemVal gem_v_nargs = gem_table_get(_t10489, gem_v_sid);
+#line 855 "compiler/codegen.gem"
+    gem_leaf_line = 855;
     GemVal _t10492 = gem_v_b;
     GemVal _t10490 = gem_v_nargs;
     GemVal _t10491[] = {GEM_STR_LIT("        _next_argc = gem_tail_argc < ", 37), _t10490, GEM_STR_LIT(" ? gem_tail_argc : ", 19), gem_v_nargs, GEM_STR_LIT(";\n", 2)};
     GemVal _t10493[] = {_t10492, gem_interp(5, _t10491)};
     (void)(gem_buf_push_fn(NULL, _t10493, 2));
-#line 855 "compiler/codegen.gem"
-    gem_leaf_line = 855;
+#line 856 "compiler/codegen.gem"
+    gem_leaf_line = 856;
     GemVal gem_v___for_i_284 = gem_int(0);
-#line 855 "compiler/codegen.gem"
-    gem_leaf_line = 855;
+#line 856 "compiler/codegen.gem"
+    gem_leaf_line = 856;
     GemVal gem_v___for_limit_284 = gem_v_nargs;
-#line 855 "compiler/codegen.gem"
-    gem_leaf_line = 855;
+#line 856 "compiler/codegen.gem"
+    gem_leaf_line = 856;
     GemArenaMark _mk308;
     gem_arena_mark(&_mk308);
     while (1) {
@@ -47745,14 +47748,14 @@ static GemVal __anon_161(void *_env, GemVal *args, int argc) {
         }
     GemVal _t10494 = gem_v___for_i_284;
         if (!gem_truthy(gem_lt(_t10494, gem_v___for_limit_284))) break;
-#line 855 "compiler/codegen.gem"
-        gem_leaf_line = 855;
-        GemVal gem_v_i = gem_v___for_i_284;
-#line 855 "compiler/codegen.gem"
-        gem_leaf_line = 855;
-        gem_v___for_i_284 = gem_add(gem_v___for_i_284, gem_int(1));
 #line 856 "compiler/codegen.gem"
         gem_leaf_line = 856;
+        GemVal gem_v_i = gem_v___for_i_284;
+#line 856 "compiler/codegen.gem"
+        gem_leaf_line = 856;
+        gem_v___for_i_284 = gem_add(gem_v___for_i_284, gem_int(1));
+#line 857 "compiler/codegen.gem"
+        gem_leaf_line = 857;
     GemVal _t10497 = gem_v_b;
     GemVal _t10495 = gem_v_i;
     GemVal _t10496[] = {GEM_STR_LIT("        _tail_args[", 19), _t10495, GEM_STR_LIT("] = gem_tail_args[", 18), gem_v_i, GEM_STR_LIT("];\n", 3)};
@@ -47760,52 +47763,52 @@ static GemVal __anon_161(void *_env, GemVal *args, int argc) {
         (void)(gem_buf_push_fn(NULL, _t10498, 2));
     }
 
-#line 858 "compiler/codegen.gem"
-    gem_leaf_line = 858;
+#line 859 "compiler/codegen.gem"
+    gem_leaf_line = 859;
     GemVal _t10499[] = {gem_v_b, GEM_STR_LIT("        _next_args = _tail_args;\n", 33)};
     (void)(gem_buf_push_fn(NULL, _t10499, 2));
-#line 860 "compiler/codegen.gem"
-    gem_leaf_line = 860;
-    GemVal _t10500[] = {gem_v_b, GEM_STR_LIT("        if (gem_arena_reset_due(&_mk)) {\n", 41)};
-    (void)(gem_buf_push_fn(NULL, _t10500, 2));
 #line 861 "compiler/codegen.gem"
     gem_leaf_line = 861;
-    GemVal _t10501[] = {gem_v_b, GEM_STR_LIT("            GemVal *_roots[GEM_MAX_TAIL_ARGS];\n", 47)};
-    (void)(gem_buf_push_fn(NULL, _t10501, 2));
+    GemVal _t10500[] = {gem_v_b, GEM_STR_LIT("        if (gem_arena_reset_due(&_mk)) {\n", 41)};
+    (void)(gem_buf_push_fn(NULL, _t10500, 2));
 #line 862 "compiler/codegen.gem"
     gem_leaf_line = 862;
-    GemVal _t10502[] = {gem_v_b, GEM_STR_LIT("            for (int _i = 0; _i < _next_argc; _i++) _roots[_i] = &_tail_args[_i];\n", 82)};
-    (void)(gem_buf_push_fn(NULL, _t10502, 2));
+    GemVal _t10501[] = {gem_v_b, GEM_STR_LIT("            GemVal *_roots[GEM_MAX_TAIL_ARGS];\n", 47)};
+    (void)(gem_buf_push_fn(NULL, _t10501, 2));
 #line 863 "compiler/codegen.gem"
     gem_leaf_line = 863;
-    GemVal _t10503[] = {gem_v_b, GEM_STR_LIT("            gem_arena_reset_region(&_mk, _roots, _next_argc, NULL, 0);\n", 71)};
-    (void)(gem_buf_push_fn(NULL, _t10503, 2));
+    GemVal _t10502[] = {gem_v_b, GEM_STR_LIT("            for (int _i = 0; _i < _next_argc; _i++) _roots[_i] = &_tail_args[_i];\n", 82)};
+    (void)(gem_buf_push_fn(NULL, _t10502, 2));
 #line 864 "compiler/codegen.gem"
     gem_leaf_line = 864;
-    GemVal _t10504[] = {gem_v_b, GEM_STR_LIT("        }\n", 10)};
-    (void)(gem_buf_push_fn(NULL, _t10504, 2));
+    GemVal _t10503[] = {gem_v_b, GEM_STR_LIT("            gem_arena_reset_region(&_mk, _roots, _next_argc, NULL, 0);\n", 71)};
+    (void)(gem_buf_push_fn(NULL, _t10503, 2));
 #line 865 "compiler/codegen.gem"
     gem_leaf_line = 865;
-    GemVal _t10505[] = {gem_v_b, GEM_STR_LIT("        gem_yield_check();\n", 27)};
-    (void)(gem_buf_push_fn(NULL, _t10505, 2));
+    GemVal _t10504[] = {gem_v_b, GEM_STR_LIT("        }\n", 10)};
+    (void)(gem_buf_push_fn(NULL, _t10504, 2));
 #line 866 "compiler/codegen.gem"
     gem_leaf_line = 866;
+    GemVal _t10505[] = {gem_v_b, GEM_STR_LIT("        gem_yield_check();\n", 27)};
+    (void)(gem_buf_push_fn(NULL, _t10505, 2));
+#line 867 "compiler/codegen.gem"
+    gem_leaf_line = 867;
     GemVal _t10506[] = {gem_v_b, GEM_STR_LIT("    }\n", 6)};
     (void)(gem_buf_push_fn(NULL, _t10506, 2));
-#line 868 "compiler/codegen.gem"
-    gem_leaf_line = 868;
-    GemVal _t10507[] = {gem_v_b, GEM_STR_LIT("    if (gem_ret_reset_due(&_mk.base)) gem_arena_reset_return(&_mk.base, &_result, 0);\n", 86)};
-    (void)(gem_buf_push_fn(NULL, _t10507, 2));
 #line 869 "compiler/codegen.gem"
     gem_leaf_line = 869;
-    GemVal _t10508[] = {gem_v_b, GEM_STR_LIT("    return _result;\n", 20)};
-    (void)(gem_buf_push_fn(NULL, _t10508, 2));
+    GemVal _t10507[] = {gem_v_b, GEM_STR_LIT("    if (gem_ret_reset_due(&_mk.base)) gem_arena_reset_return(&_mk.base, &_result, 0);\n", 86)};
+    (void)(gem_buf_push_fn(NULL, _t10507, 2));
 #line 870 "compiler/codegen.gem"
     gem_leaf_line = 870;
-    GemVal _t10509[] = {gem_v_b, GEM_STR_LIT("}", 1)};
-    (void)(gem_buf_push_fn(NULL, _t10509, 2));
+    GemVal _t10508[] = {gem_v_b, GEM_STR_LIT("    return _result;\n", 20)};
+    (void)(gem_buf_push_fn(NULL, _t10508, 2));
 #line 871 "compiler/codegen.gem"
     gem_leaf_line = 871;
+    GemVal _t10509[] = {gem_v_b, GEM_STR_LIT("}", 1)};
+    (void)(gem_buf_push_fn(NULL, _t10509, 2));
+#line 872 "compiler/codegen.gem"
+    gem_leaf_line = 872;
     GemVal _t10510[] = {gem_v_b};
     GemVal _t10511 = gem_to_string_fn(NULL, _t10510, 1);
     gem_leaf_site = NULL;
@@ -47819,22 +47822,22 @@ struct _closure___anon_162 {
 static GemVal __anon_162(void *_env, GemVal *args, int argc) {
     struct _closure___anon_162 *_cls = (struct _closure___anon_162 *)_env;
     GemVal *gem_v_loc_of = _cls->gem_v_loc_of;
-    gem_push_frame("anonymous fn", "compiler/codegen.gem", 874);
+    gem_push_frame("anonymous fn", "compiler/codegen.gem", 875);
     GemVal gem_v_node = (argc > 0) ? args[0] : GEM_NIL;
     GemVal gem_v_msg = (argc > 1) ? args[1] : GEM_NIL;
     GemArenaPoint _ret_pt;
     gem_arena_point(&_ret_pt);
-#line 875 "compiler/codegen.gem"
-    gem_set_line(875);
+#line 876 "compiler/codegen.gem"
+    gem_set_line(876);
     GemVal _t10515 = gem_v_msg;
     GemVal _t10514 = (*gem_v_loc_of);
     GemVal _t10513[] = {gem_v_node};
-    gem_check_callable(_t10514, "compiler/codegen.gem", 875);
+    gem_check_callable(_t10514, "compiler/codegen.gem", 876);
     GemVal _t10516[] = {GEM_STR_LIT("\n[Compiler Bug]: ", 17), _t10515, GEM_STR_LIT("\n  --> ", 7), _t10514.fn(_t10514.env, _t10513, 1), GEM_STR_LIT("\n  The compiler accepted source it does not know how to emit C for.\n  This is a bug in the compiler, not your code. Please file an issue with a minimal repro.\n", 159)};
     GemVal _t10517[] = {gem_interp(5, _t10516)};
     (void)(gem_eprint_fn(NULL, _t10517, 1));
-#line 876 "compiler/codegen.gem"
-    gem_set_line(876);
+#line 877 "compiler/codegen.gem"
+    gem_set_line(877);
     GemVal _t10518[] = {gem_int(1)};
     GemVal _t10519 = gem_exit_process_fn(NULL, _t10518, 1);
     if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t10519, 1);
@@ -47855,14 +47858,14 @@ static GemVal __anon_163(void *_env, GemVal *args, int argc) {
     GemVal *gem_v_defined_fns = _cls->gem_v_defined_fns;
     GemVal *gem_v_fs = _cls->gem_v_fs;
     GemVal *gem_v_top_level_vars = _cls->gem_v_top_level_vars;
-    gem_push_frame("anonymous fn", "compiler/codegen.gem", 879);
+    gem_push_frame("anonymous fn", "compiler/codegen.gem", 880);
     GemVal gem_v_name = (argc > 0) ? args[0] : GEM_NIL;
-#line 880 "compiler/codegen.gem"
-    gem_set_line(880);
-    GemVal _t10522 = gem_table_new();
-    GemVal gem_v_cands = _t10522;
 #line 881 "compiler/codegen.gem"
     gem_set_line(881);
+    GemVal _t10522 = gem_table_new();
+    GemVal gem_v_cands = _t10522;
+#line 882 "compiler/codegen.gem"
+    gem_set_line(882);
     GemVal _t10523 = gem_table_new();
     GemVal _t10524 = (*gem_v_fs);
     static GemICacheSlot _ic_1828 = {0};
@@ -47871,11 +47874,11 @@ static GemVal __anon_163(void *_env, GemVal *args, int argc) {
     gem_table_set(_t10523, gem_int(2), (*gem_v_defined_fns));
     gem_table_set(_t10523, gem_int(3), (*gem_v_builtin_fns));
     GemVal gem_v___for_items_286 = gem_for_items_1(_t10523);
-#line 881 "compiler/codegen.gem"
-    gem_set_line(881);
+#line 882 "compiler/codegen.gem"
+    gem_set_line(882);
     GemVal gem_v___for_i_286 = gem_int(0);
-#line 881 "compiler/codegen.gem"
-    gem_set_line(881);
+#line 882 "compiler/codegen.gem"
+    gem_set_line(882);
     GemArenaMark _mk309;
     gem_arena_mark(&_mk309);
     while (1) {
@@ -47886,24 +47889,24 @@ static GemVal __anon_163(void *_env, GemVal *args, int argc) {
         }
     GemVal _t10525 = gem_v___for_i_286;
         if (!gem_truthy(gem_lt(_t10525, gem_for_len_1(gem_v___for_items_286)))) break;
-#line 881 "compiler/codegen.gem"
-        gem_set_line(881);
+#line 882 "compiler/codegen.gem"
+        gem_set_line(882);
     GemVal _t10526 = gem_v___for_items_286;
         GemVal gem_v_src = gem_table_get(_t10526, gem_v___for_i_286);
-#line 881 "compiler/codegen.gem"
-        gem_set_line(881);
+#line 882 "compiler/codegen.gem"
+        gem_set_line(882);
         gem_v___for_i_286 = gem_add(gem_v___for_i_286, gem_int(1));
-#line 882 "compiler/codegen.gem"
-        gem_set_line(882);
+#line 883 "compiler/codegen.gem"
+        gem_set_line(883);
         GemVal gem_v___for_tbl_285 = gem_v_src;
-#line 882 "compiler/codegen.gem"
-        gem_set_line(882);
+#line 883 "compiler/codegen.gem"
+        gem_set_line(883);
         GemVal gem_v___for_len_285 = gem_for_len_1(gem_v___for_tbl_285);
-#line 882 "compiler/codegen.gem"
-        gem_set_line(882);
+#line 883 "compiler/codegen.gem"
+        gem_set_line(883);
         GemVal gem_v___for_i_285 = gem_int(0);
-#line 882 "compiler/codegen.gem"
-        gem_set_line(882);
+#line 883 "compiler/codegen.gem"
+        gem_set_line(883);
         GemArenaMark _mk310;
         gem_arena_mark(&_mk310);
         while (1) {
@@ -47914,19 +47917,19 @@ static GemVal __anon_163(void *_env, GemVal *args, int argc) {
             }
     GemVal _t10527 = gem_v___for_i_285;
             if (!gem_truthy(gem_lt(_t10527, gem_v___for_len_285))) break;
-#line 882 "compiler/codegen.gem"
-            gem_set_line(882);
-    GemVal _t10528 = gem_v___for_tbl_285;
-            GemVal gem_v_k = gem_table_key_at_2(_t10528, gem_v___for_i_285);
-#line 882 "compiler/codegen.gem"
-            gem_set_line(882);
-    GemVal _t10529 = gem_v___for_tbl_285;
-            GemVal gem_v__ = gem_table_val_at_2(_t10529, gem_v___for_i_285);
-#line 882 "compiler/codegen.gem"
-            gem_set_line(882);
-            gem_v___for_i_285 = gem_add(gem_v___for_i_285, gem_int(1));
 #line 883 "compiler/codegen.gem"
             gem_set_line(883);
+    GemVal _t10528 = gem_v___for_tbl_285;
+            GemVal gem_v_k = gem_table_key_at_2(_t10528, gem_v___for_i_285);
+#line 883 "compiler/codegen.gem"
+            gem_set_line(883);
+    GemVal _t10529 = gem_v___for_tbl_285;
+            GemVal gem_v__ = gem_table_val_at_2(_t10529, gem_v___for_i_285);
+#line 883 "compiler/codegen.gem"
+            gem_set_line(883);
+            gem_v___for_i_285 = gem_add(gem_v___for_i_285, gem_int(1));
+#line 884 "compiler/codegen.gem"
+            gem_set_line(884);
     GemVal _t10530 = gem_eq(gem_type_1(gem_v_k), GEM_STR_LIT("string", 6));
     GemVal _t10532;
     if (!gem_truthy(_t10530)) {
@@ -47950,8 +47953,8 @@ static GemVal __anon_163(void *_env, GemVal *args, int argc) {
         _t10536 = gem_not(_t10535);
     }
             if (gem_truthy(_t10536)) {
-#line 884 "compiler/codegen.gem"
-                gem_set_line(884);
+#line 885 "compiler/codegen.gem"
+                gem_set_line(885);
     GemVal _t10537 = gem_v_cands;
     GemVal _t10538[] = {_t10537, gem_v_k};
                 (void)(gem_push_fn(NULL, _t10538, 2));
@@ -47960,18 +47963,18 @@ static GemVal __anon_163(void *_env, GemVal *args, int argc) {
 
     }
 
-#line 888 "compiler/codegen.gem"
-    gem_set_line(888);
+#line 889 "compiler/codegen.gem"
+    gem_set_line(889);
     GemVal _t10541 = gem_g___mod_codegen_find_closest_export;
     GemVal _t10539 = gem_v_name;
     GemVal _t10540[] = {_t10539, gem_v_cands};
-    gem_check_callable(_t10541, "compiler/codegen.gem", 888);
+    gem_check_callable(_t10541, "compiler/codegen.gem", 889);
     GemVal gem_v_best = _t10541.fn(_t10541.env, _t10540, 2);
-#line 889 "compiler/codegen.gem"
-    gem_set_line(889);
+#line 890 "compiler/codegen.gem"
+    gem_set_line(890);
     if (gem_truthy(gem_neq(gem_v_best, GEM_NIL))) {
-#line 889 "compiler/codegen.gem"
-        gem_set_line(889);
+#line 890 "compiler/codegen.gem"
+        gem_set_line(890);
     GemVal _t10542[] = {GEM_STR_LIT("did you mean `", 14), gem_v_best, GEM_STR_LIT("`?", 2)};
         GemVal _t10543 = gem_interp(3, _t10542);
         gem_pop_frame();
@@ -48005,19 +48008,19 @@ static GemVal __anon_164(void *_env, GemVal *args, int argc) {
     GemVal *gem_v_source_of = _cls->gem_v_source_of;
     GemVal *gem_v_suggest_name = _cls->gem_v_suggest_name;
     GemVal *gem_v_top_level_vars = _cls->gem_v_top_level_vars;
-    gem_push_frame("anonymous fn", "compiler/codegen.gem", 893);
+    gem_push_frame("anonymous fn", "compiler/codegen.gem", 894);
     GemVal gem_v_name = (argc > 0) ? args[0] : GEM_NIL;
     GemVal gem_v_node = (argc > 1) ? args[1] : GEM_NIL;
     GemArenaPoint _ret_pt;
     gem_arena_point(&_ret_pt);
-#line 894 "compiler/codegen.gem"
-    gem_set_line(894);
+#line 895 "compiler/codegen.gem"
+    gem_set_line(895);
     GemVal _t10551 = gem_g___mod_codegen_set_contains;
     GemVal _t10548 = (*gem_v_fs);
     static GemICacheSlot _ic_1829 = {0};
     GemVal _t10549 = gem_table_get_cached(_t10548, "local_names", &_ic_1829);
     GemVal _t10550[] = {_t10549, gem_v_name};
-    gem_check_callable(_t10551, "compiler/codegen.gem", 894);
+    gem_check_callable(_t10551, "compiler/codegen.gem", 895);
     GemVal _t10552 = _t10551.fn(_t10551.env, _t10550, 2);
     GemVal _t10556;
     if (gem_truthy(_t10552)) {
@@ -48026,7 +48029,7 @@ static GemVal __anon_164(void *_env, GemVal *args, int argc) {
     GemVal _t10555 = gem_g___mod_codegen_set_contains;
     GemVal _t10553 = (*gem_v_top_level_vars);
     GemVal _t10554[] = {_t10553, gem_v_name};
-    gem_check_callable(_t10555, "compiler/codegen.gem", 894);
+    gem_check_callable(_t10555, "compiler/codegen.gem", 895);
         _t10556 = _t10555.fn(_t10555.env, _t10554, 2);
     }
     GemVal _t10561;
@@ -48038,19 +48041,19 @@ static GemVal __anon_164(void *_env, GemVal *args, int argc) {
     static GemICacheSlot _ic_1830 = {0};
     GemVal _t10558 = gem_table_get_cached(_t10557, "boxed_vars", &_ic_1830);
     GemVal _t10559[] = {_t10558, gem_v_name};
-    gem_check_callable(_t10560, "compiler/codegen.gem", 894);
+    gem_check_callable(_t10560, "compiler/codegen.gem", 895);
         _t10561 = _t10560.fn(_t10560.env, _t10559, 2);
     }
     if (gem_truthy(_t10561)) {
-#line 895 "compiler/codegen.gem"
-        gem_set_line(895);
+#line 896 "compiler/codegen.gem"
+        gem_set_line(896);
         GemVal _t10562 = GEM_NIL;
         if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t10562, 1);
         gem_pop_frame();
         return _t10562;
     }
-#line 897 "compiler/codegen.gem"
-    gem_set_line(897);
+#line 898 "compiler/codegen.gem"
+    gem_set_line(898);
     GemVal _t10563 = (*gem_v_builtin_fns);
     GemVal _t10564[] = {_t10563, gem_v_name};
     GemVal _t10565 = gem_has_key_fn(NULL, _t10564, 2);
@@ -48061,28 +48064,28 @@ static GemVal __anon_164(void *_env, GemVal *args, int argc) {
     GemVal _t10568 = gem_g___mod_codegen_set_contains;
     GemVal _t10566 = (*gem_v_defined_fns);
     GemVal _t10567[] = {_t10566, gem_v_name};
-    gem_check_callable(_t10568, "compiler/codegen.gem", 897);
+    gem_check_callable(_t10568, "compiler/codegen.gem", 898);
         _t10569 = _t10568.fn(_t10568.env, _t10567, 2);
     }
     if (gem_truthy(_t10569)) {
-#line 898 "compiler/codegen.gem"
-        gem_set_line(898);
-    GemVal _t10571 = (*gem_v_display_name);
-    GemVal _t10570[] = {gem_v_name};
-    gem_check_callable(_t10571, "compiler/codegen.gem", 898);
-        GemVal gem_v_shown = _t10571.fn(_t10571.env, _t10570, 1);
 #line 899 "compiler/codegen.gem"
         gem_set_line(899);
+    GemVal _t10571 = (*gem_v_display_name);
+    GemVal _t10570[] = {gem_v_name};
+    gem_check_callable(_t10571, "compiler/codegen.gem", 899);
+        GemVal gem_v_shown = _t10571.fn(_t10571.env, _t10570, 1);
+#line 900 "compiler/codegen.gem"
+        gem_set_line(900);
     GemVal _t10572 = (*gem_v_sink);
     static GemICacheSlot _ic_1831 = {0};
     GemVal _t10586 = gem_table_get_cached(_t10572, "report", &_ic_1831);
     GemVal _t10574 = (*gem_v_source_of);
     GemVal _t10573[] = {gem_v_node};
-    gem_check_callable(_t10574, "compiler/codegen.gem", 899);
+    gem_check_callable(_t10574, "compiler/codegen.gem", 900);
     GemVal _t10584 = _t10574.fn(_t10574.env, _t10573, 1);
     GemVal _t10576 = (*gem_v_file_of);
     GemVal _t10575[] = {gem_v_node};
-    gem_check_callable(_t10576, "compiler/codegen.gem", 899);
+    gem_check_callable(_t10576, "compiler/codegen.gem", 900);
     GemVal _t10583 = _t10576.fn(_t10576.env, _t10575, 1);
     GemVal _t10577 = gem_v_node;
     static GemICacheSlot _ic_1832 = {0};
@@ -48093,50 +48096,50 @@ static GemVal __anon_164(void *_env, GemVal *args, int argc) {
     GemVal _t10580 = gem_len_1(gem_v_shown);
     GemVal _t10579[] = {GEM_STR_LIT("cannot assign to function `", 27), gem_v_shown, GEM_STR_LIT("`", 1)};
     GemVal _t10585[] = {_t10584, _t10583, _t10582, _t10581, _t10580, gem_interp(3, _t10579), GEM_NIL};
-    gem_check_callable_field(_t10586, "report", "compiler/codegen.gem", 899);
+    gem_check_callable_field(_t10586, "report", "compiler/codegen.gem", 900);
         GemVal _t10587 = _t10586.fn(_t10586.env, _t10585, 7);
         if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t10587, 1);
         gem_pop_frame();
         return _t10587;
     } else {
-#line 901 "compiler/codegen.gem"
-        gem_set_line(901);
+#line 902 "compiler/codegen.gem"
+        gem_set_line(902);
     GemVal _t10589 = (*gem_v_suggest_name);
     GemVal _t10588[] = {gem_v_name};
-    gem_check_callable(_t10589, "compiler/codegen.gem", 901);
+    gem_check_callable(_t10589, "compiler/codegen.gem", 902);
         GemVal gem_v_near = _t10589.fn(_t10589.env, _t10588, 1);
-#line 902 "compiler/codegen.gem"
-        gem_set_line(902);
+#line 903 "compiler/codegen.gem"
+        gem_set_line(903);
         GemVal gem_v___val_287 = GEM_NIL;
-#line 902 "compiler/codegen.gem"
-        gem_set_line(902);
+#line 903 "compiler/codegen.gem"
+        gem_set_line(903);
         if (gem_truthy(gem_neq(gem_v_near, GEM_NIL))) {
-#line 902 "compiler/codegen.gem"
-            gem_set_line(902);
+#line 903 "compiler/codegen.gem"
+            gem_set_line(903);
     GemVal _t10590 = gem_v_near;
     GemVal _t10591[] = {_t10590, GEM_STR_LIT(" To declare a new variable, use `let ", 37), gem_v_name, GEM_STR_LIT(" = ...`", 7)};
             gem_v___val_287 = gem_interp(4, _t10591);
         } else {
-#line 902 "compiler/codegen.gem"
-            gem_set_line(902);
+#line 903 "compiler/codegen.gem"
+            gem_set_line(903);
     GemVal _t10592[] = {GEM_STR_LIT("use `let ", 9), gem_v_name, GEM_STR_LIT(" = ...` to declare", 18)};
             gem_v___val_287 = gem_interp(3, _t10592);
         }
-#line 902 "compiler/codegen.gem"
-        gem_set_line(902);
-        GemVal gem_v_hint = gem_v___val_287;
 #line 903 "compiler/codegen.gem"
         gem_set_line(903);
+        GemVal gem_v_hint = gem_v___val_287;
+#line 904 "compiler/codegen.gem"
+        gem_set_line(904);
     GemVal _t10593 = (*gem_v_sink);
     static GemICacheSlot _ic_1834 = {0};
     GemVal _t10608 = gem_table_get_cached(_t10593, "report", &_ic_1834);
     GemVal _t10595 = (*gem_v_source_of);
     GemVal _t10594[] = {gem_v_node};
-    gem_check_callable(_t10595, "compiler/codegen.gem", 903);
+    gem_check_callable(_t10595, "compiler/codegen.gem", 904);
     GemVal _t10606 = _t10595.fn(_t10595.env, _t10594, 1);
     GemVal _t10597 = (*gem_v_file_of);
     GemVal _t10596[] = {gem_v_node};
-    gem_check_callable(_t10597, "compiler/codegen.gem", 903);
+    gem_check_callable(_t10597, "compiler/codegen.gem", 904);
     GemVal _t10605 = _t10597.fn(_t10597.env, _t10596, 1);
     GemVal _t10598 = gem_v_node;
     static GemICacheSlot _ic_1835 = {0};
@@ -48148,7 +48151,7 @@ static GemVal __anon_164(void *_env, GemVal *args, int argc) {
     GemVal _t10600[] = {GEM_STR_LIT("undeclared identifier `", 23), gem_v_name, GEM_STR_LIT("`", 1)};
     GemVal _t10601 = gem_interp(3, _t10600);
     GemVal _t10607[] = {_t10606, _t10605, _t10604, _t10603, _t10602, _t10601, gem_v_hint};
-    gem_check_callable_field(_t10608, "report", "compiler/codegen.gem", 903);
+    gem_check_callable_field(_t10608, "report", "compiler/codegen.gem", 904);
         GemVal _t10609 = _t10608.fn(_t10608.env, _t10607, 7);
         if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t10609, 1);
         gem_pop_frame();
@@ -48213,12 +48216,12 @@ static GemVal __anon_165(void *_env, GemVal *args, int argc) {
     GemVal *gem_v_tmp = _cls->gem_v_tmp;
     GemVal *gem_v_top_level_vars = _cls->gem_v_top_level_vars;
     GemVal *gem_v_var_lvalue = _cls->gem_v_var_lvalue;
-    gem_push_frame("anonymous fn", "compiler/codegen.gem", 907);
+    gem_push_frame("anonymous fn", "compiler/codegen.gem", 908);
     GemVal gem_v_node = (argc > 0) ? args[0] : GEM_NIL;
     GemArenaPoint _ret_pt;
     gem_arena_point(&_ret_pt);
-#line 908 "compiler/codegen.gem"
-    gem_set_line(908);
+#line 909 "compiler/codegen.gem"
+    gem_set_line(909);
     GemVal gem_v___match_288 = gem_v_node;
     GemVal _t10618 = gem_eq(gem_type_1(gem_v___match_288), GEM_STR_LIT("table", 5));
     GemVal _t10620;
@@ -48242,15 +48245,15 @@ static GemVal __anon_165(void *_env, GemVal *args, int argc) {
         _t10623 = gem_has_key_fn(NULL, _t10622, 2);
     }
     if (gem_truthy(_t10623)) {
-#line 909 "compiler/codegen.gem"
-        gem_set_line(909);
-        GemVal gem_v_value = gem_table_get(gem_v___match_288, GEM_STR_LIT("value", 5));
 #line 910 "compiler/codegen.gem"
         gem_set_line(910);
+        GemVal gem_v_value = gem_table_get(gem_v___match_288, GEM_STR_LIT("value", 5));
+#line 911 "compiler/codegen.gem"
+        gem_set_line(911);
     GemVal _t10624 = gem_table_new_braces();
     GemVal _t10626 = gem_g___mod_codegen_c_int_literal;
     GemVal _t10625[] = {gem_v_value};
-    gem_check_callable(_t10626, "compiler/codegen.gem", 910);
+    gem_check_callable(_t10626, "compiler/codegen.gem", 911);
     GemVal _t10627[] = {GEM_STR_LIT("gem_int(", 8), _t10626.fn(_t10626.env, _t10625, 1), GEM_STR_LIT(")", 1)};
     gem_table_set(_t10624, GEM_STR_LIT("expr", 4), gem_interp(3, _t10627));
     gem_table_set(_t10624, GEM_STR_LIT("setup", 5), GEM_STR_LIT("", 0));
@@ -48281,15 +48284,15 @@ static GemVal __anon_165(void *_env, GemVal *args, int argc) {
         _t10634 = gem_has_key_fn(NULL, _t10633, 2);
     }
     if (gem_truthy(_t10634)) {
-#line 911 "compiler/codegen.gem"
-        gem_set_line(911);
-        GemVal gem_v_value = gem_table_get(gem_v___match_288, GEM_STR_LIT("value", 5));
 #line 912 "compiler/codegen.gem"
         gem_set_line(912);
+        GemVal gem_v_value = gem_table_get(gem_v___match_288, GEM_STR_LIT("value", 5));
+#line 913 "compiler/codegen.gem"
+        gem_set_line(913);
     GemVal _t10635 = gem_table_new_braces();
     GemVal _t10637 = gem_g___mod_codegen_format_float;
     GemVal _t10636[] = {gem_v_value};
-    gem_check_callable(_t10637, "compiler/codegen.gem", 912);
+    gem_check_callable(_t10637, "compiler/codegen.gem", 913);
     GemVal _t10638[] = {GEM_STR_LIT("gem_float(", 10), _t10637.fn(_t10637.env, _t10636, 1), GEM_STR_LIT(")", 1)};
     gem_table_set(_t10635, GEM_STR_LIT("expr", 4), gem_interp(3, _t10638));
     gem_table_set(_t10635, GEM_STR_LIT("setup", 5), GEM_STR_LIT("", 0));
@@ -48320,17 +48323,17 @@ static GemVal __anon_165(void *_env, GemVal *args, int argc) {
         _t10645 = gem_has_key_fn(NULL, _t10644, 2);
     }
     if (gem_truthy(_t10645)) {
-#line 913 "compiler/codegen.gem"
-        gem_set_line(913);
-        GemVal gem_v_value = gem_table_get(gem_v___match_288, GEM_STR_LIT("value", 5));
 #line 914 "compiler/codegen.gem"
         gem_set_line(914);
+        GemVal gem_v_value = gem_table_get(gem_v___match_288, GEM_STR_LIT("value", 5));
+#line 915 "compiler/codegen.gem"
+        gem_set_line(915);
     GemVal _t10647 = gem_g___mod_codegen_escape_c_string;
     GemVal _t10646[] = {gem_v_value};
-    gem_check_callable(_t10647, "compiler/codegen.gem", 914);
+    gem_check_callable(_t10647, "compiler/codegen.gem", 915);
         GemVal gem_v_escaped = _t10647.fn(_t10647.env, _t10646, 1);
-#line 916 "compiler/codegen.gem"
-        gem_set_line(916);
+#line 917 "compiler/codegen.gem"
+        gem_set_line(917);
     GemVal _t10648 = gem_table_new_braces();
     GemVal _t10649 = gem_v_escaped;
     GemVal _t10650[] = {GEM_STR_LIT("GEM_STR_LIT(\"", 13), _t10649, GEM_STR_LIT("\", ", 3), gem_len_1(gem_v_value), GEM_STR_LIT(")", 1)};
@@ -48363,14 +48366,14 @@ static GemVal __anon_165(void *_env, GemVal *args, int argc) {
         _t10657 = gem_has_key_fn(NULL, _t10656, 2);
     }
     if (gem_truthy(_t10657)) {
-#line 917 "compiler/codegen.gem"
-        gem_set_line(917);
-        GemVal gem_v_parts = gem_table_get(gem_v___match_288, GEM_STR_LIT("parts", 5));
 #line 918 "compiler/codegen.gem"
         gem_set_line(918);
-        if (gem_truthy(gem_eq(gem_len_1(gem_v_parts), gem_int(0)))) {
+        GemVal gem_v_parts = gem_table_get(gem_v___match_288, GEM_STR_LIT("parts", 5));
 #line 919 "compiler/codegen.gem"
-            gem_set_line(919);
+        gem_set_line(919);
+        if (gem_truthy(gem_eq(gem_len_1(gem_v_parts), gem_int(0)))) {
+#line 920 "compiler/codegen.gem"
+            gem_set_line(920);
     GemVal _t10658 = gem_table_new_braces();
     gem_table_set(_t10658, GEM_STR_LIT("expr", 4), GEM_STR_LIT("GEM_STR_LIT(\"\", 0)", 18));
     gem_table_set(_t10658, GEM_STR_LIT("setup", 5), GEM_STR_LIT("", 0));
@@ -48379,18 +48382,18 @@ static GemVal __anon_165(void *_env, GemVal *args, int argc) {
             gem_pop_frame();
             return _t10659;
         }
-#line 921 "compiler/codegen.gem"
-        gem_set_line(921);
+#line 922 "compiler/codegen.gem"
+        gem_set_line(922);
     GemVal _t10660 = gem_table_new();
         GemVal gem_v_results = _t10660;
-#line 922 "compiler/codegen.gem"
-        gem_set_line(922);
+#line 923 "compiler/codegen.gem"
+        gem_set_line(923);
         GemVal gem_v___for_items_289 = gem_for_items_1(gem_v_parts);
-#line 922 "compiler/codegen.gem"
-        gem_set_line(922);
+#line 923 "compiler/codegen.gem"
+        gem_set_line(923);
         GemVal gem_v___for_i_289 = gem_int(0);
-#line 922 "compiler/codegen.gem"
-        gem_set_line(922);
+#line 923 "compiler/codegen.gem"
+        gem_set_line(923);
         GemArenaMark _mk311;
         gem_arena_mark(&_mk311);
         while (1) {
@@ -48401,55 +48404,55 @@ static GemVal __anon_165(void *_env, GemVal *args, int argc) {
             }
     GemVal _t10661 = gem_v___for_i_289;
             if (!gem_truthy(gem_lt(_t10661, gem_for_len_1(gem_v___for_items_289)))) break;
-#line 922 "compiler/codegen.gem"
-            gem_set_line(922);
-    GemVal _t10662 = gem_v___for_items_289;
-            GemVal gem_v_part = gem_table_get(_t10662, gem_v___for_i_289);
-#line 922 "compiler/codegen.gem"
-            gem_set_line(922);
-            gem_v___for_i_289 = gem_add(gem_v___for_i_289, gem_int(1));
 #line 923 "compiler/codegen.gem"
             gem_set_line(923);
+    GemVal _t10662 = gem_v___for_items_289;
+            GemVal gem_v_part = gem_table_get(_t10662, gem_v___for_i_289);
+#line 923 "compiler/codegen.gem"
+            gem_set_line(923);
+            gem_v___for_i_289 = gem_add(gem_v___for_i_289, gem_int(1));
+#line 924 "compiler/codegen.gem"
+            gem_set_line(924);
     GemVal _t10665 = gem_v_results;
     GemVal _t10664 = (*gem_v_compile_expr);
     GemVal _t10663[] = {gem_v_part};
-    gem_check_callable(_t10664, "compiler/codegen.gem", 923);
+    gem_check_callable(_t10664, "compiler/codegen.gem", 924);
     GemVal _t10666[] = {_t10665, _t10664.fn(_t10664.env, _t10663, 1)};
             (void)(gem_push_fn(NULL, _t10666, 2));
         }
 
-#line 925 "compiler/codegen.gem"
-        gem_set_line(925);
-    GemVal _t10668 = (*gem_v_left_to_right);
-    GemVal _t10667[] = {gem_v_results};
-    gem_check_callable(_t10668, "compiler/codegen.gem", 925);
-        GemVal gem_v_ordered = _t10668.fn(_t10668.env, _t10667, 1);
 #line 926 "compiler/codegen.gem"
         gem_set_line(926);
+    GemVal _t10668 = (*gem_v_left_to_right);
+    GemVal _t10667[] = {gem_v_results};
+    gem_check_callable(_t10668, "compiler/codegen.gem", 926);
+        GemVal gem_v_ordered = _t10668.fn(_t10668.env, _t10667, 1);
+#line 927 "compiler/codegen.gem"
+        gem_set_line(927);
     GemVal _t10669 = gem_v_ordered;
     static GemICacheSlot _ic_1837 = {0};
         GemVal gem_v_setup = gem_table_get_cached(_t10669, "setup", &_ic_1837);
-#line 927 "compiler/codegen.gem"
-        gem_set_line(927);
+#line 928 "compiler/codegen.gem"
+        gem_set_line(928);
     GemVal _t10670 = gem_v_ordered;
     static GemICacheSlot _ic_1838 = {0};
         GemVal gem_v_compiled = gem_table_get_cached(_t10670, "exprs", &_ic_1838);
-#line 928 "compiler/codegen.gem"
-        gem_set_line(928);
-    GemVal _t10671 = (*gem_v_tmp);
-    gem_check_callable(_t10671, "compiler/codegen.gem", 928);
-        GemVal gem_v_arr_tmp = _t10671.fn(_t10671.env, NULL, 0);
 #line 929 "compiler/codegen.gem"
         gem_set_line(929);
+    GemVal _t10671 = (*gem_v_tmp);
+    gem_check_callable(_t10671, "compiler/codegen.gem", 929);
+        GemVal gem_v_arr_tmp = _t10671.fn(_t10671.env, NULL, 0);
+#line 930 "compiler/codegen.gem"
+        gem_set_line(930);
         GemVal gem_v_items = gem_table_get(gem_v_compiled, gem_int(0));
-#line 930 "compiler/codegen.gem"
-        gem_set_line(930);
+#line 931 "compiler/codegen.gem"
+        gem_set_line(931);
         GemVal gem_v___for_i_290 = gem_int(1);
-#line 930 "compiler/codegen.gem"
-        gem_set_line(930);
+#line 931 "compiler/codegen.gem"
+        gem_set_line(931);
         GemVal gem_v___for_limit_290 = gem_len_1(gem_v_compiled);
-#line 930 "compiler/codegen.gem"
-        gem_set_line(930);
+#line 931 "compiler/codegen.gem"
+        gem_set_line(931);
         int _t10673 = 0;
         GemArenaMark _mk312;
         gem_arena_mark(&_mk312);
@@ -48461,14 +48464,14 @@ static GemVal __anon_165(void *_env, GemVal *args, int argc) {
             }
     GemVal _t10672 = gem_v___for_i_290;
             if (!gem_truthy(gem_lt(_t10672, gem_v___for_limit_290))) break;
-#line 930 "compiler/codegen.gem"
-            gem_set_line(930);
-            GemVal gem_v_i = gem_v___for_i_290;
-#line 930 "compiler/codegen.gem"
-            gem_set_line(930);
-            gem_v___for_i_290 = gem_add(gem_v___for_i_290, gem_int(1));
 #line 931 "compiler/codegen.gem"
             gem_set_line(931);
+            GemVal gem_v_i = gem_v___for_i_290;
+#line 931 "compiler/codegen.gem"
+            gem_set_line(931);
+            gem_v___for_i_290 = gem_add(gem_v___for_i_290, gem_int(1));
+#line 932 "compiler/codegen.gem"
+            gem_set_line(932);
             gem_string_append_to(&gem_v_items, GEM_STR_LIT(", ", 2), &_t10673);
     GemVal _t10674 = gem_v_compiled;
             gem_string_append_to(&gem_v_items, gem_table_get(_t10674, gem_v_i), &_t10673);
@@ -48476,14 +48479,14 @@ static GemVal __anon_165(void *_env, GemVal *args, int argc) {
         }
         if (_t10673) gem_v_items = gem_string_finish(gem_v_items);
 
-#line 933 "compiler/codegen.gem"
-        gem_set_line(933);
+#line 934 "compiler/codegen.gem"
+        gem_set_line(934);
     GemVal _t10677 = gem_v_setup;
     GemVal _t10675 = gem_v_arr_tmp;
     GemVal _t10676[] = {GEM_STR_LIT("    GemVal ", 11), _t10675, GEM_STR_LIT("[] = {", 6), gem_v_items, GEM_STR_LIT("};\n", 3)};
         gem_v_setup = gem_add(_t10677, gem_interp(5, _t10676));
-#line 934 "compiler/codegen.gem"
-        gem_set_line(934);
+#line 935 "compiler/codegen.gem"
+        gem_set_line(935);
     GemVal _t10678 = gem_table_new_braces();
     GemVal _t10679 = gem_len_1(gem_v_compiled);
     GemVal _t10680[] = {GEM_STR_LIT("gem_interp(", 11), _t10679, GEM_STR_LIT(", ", 2), gem_v_arr_tmp, GEM_STR_LIT(")", 1)};
@@ -48516,14 +48519,14 @@ static GemVal __anon_165(void *_env, GemVal *args, int argc) {
         _t10687 = gem_has_key_fn(NULL, _t10686, 2);
     }
     if (gem_truthy(_t10687)) {
-#line 935 "compiler/codegen.gem"
-        gem_set_line(935);
-        GemVal gem_v_value = gem_table_get(gem_v___match_288, GEM_STR_LIT("value", 5));
 #line 936 "compiler/codegen.gem"
         gem_set_line(936);
-        if (gem_truthy(gem_v_value)) {
+        GemVal gem_v_value = gem_table_get(gem_v___match_288, GEM_STR_LIT("value", 5));
 #line 937 "compiler/codegen.gem"
-            gem_set_line(937);
+        gem_set_line(937);
+        if (gem_truthy(gem_v_value)) {
+#line 938 "compiler/codegen.gem"
+            gem_set_line(938);
     GemVal _t10688 = gem_table_new_braces();
     gem_table_set(_t10688, GEM_STR_LIT("expr", 4), GEM_STR_LIT("gem_bool(1)", 11));
     gem_table_set(_t10688, GEM_STR_LIT("setup", 5), GEM_STR_LIT("", 0));
@@ -48532,8 +48535,8 @@ static GemVal __anon_165(void *_env, GemVal *args, int argc) {
             gem_pop_frame();
             return _t10689;
         }
-#line 939 "compiler/codegen.gem"
-        gem_set_line(939);
+#line 940 "compiler/codegen.gem"
+        gem_set_line(940);
     GemVal _t10690 = gem_table_new_braces();
     gem_table_set(_t10690, GEM_STR_LIT("expr", 4), GEM_STR_LIT("gem_bool(0)", 11));
     gem_table_set(_t10690, GEM_STR_LIT("setup", 5), GEM_STR_LIT("", 0));
@@ -48557,8 +48560,8 @@ static GemVal __anon_165(void *_env, GemVal *args, int argc) {
         _t10695 = gem_eq(gem_table_get(gem_v___match_288, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("nil", 3));
     }
     if (gem_truthy(_t10695)) {
-#line 941 "compiler/codegen.gem"
-        gem_set_line(941);
+#line 942 "compiler/codegen.gem"
+        gem_set_line(942);
     GemVal _t10696 = gem_table_new_braces();
     gem_table_set(_t10696, GEM_STR_LIT("expr", 4), GEM_STR_LIT("GEM_NIL", 7));
     gem_table_set(_t10696, GEM_STR_LIT("setup", 5), GEM_STR_LIT("", 0));
@@ -48589,25 +48592,25 @@ static GemVal __anon_165(void *_env, GemVal *args, int argc) {
         _t10703 = gem_has_key_fn(NULL, _t10702, 2);
     }
     if (gem_truthy(_t10703)) {
-#line 942 "compiler/codegen.gem"
-        gem_set_line(942);
-        GemVal gem_v_name = gem_table_get(gem_v___match_288, GEM_STR_LIT("name", 4));
 #line 943 "compiler/codegen.gem"
         gem_set_line(943);
+        GemVal gem_v_name = gem_table_get(gem_v___match_288, GEM_STR_LIT("name", 4));
+#line 944 "compiler/codegen.gem"
+        gem_set_line(944);
     GemVal _t10707 = gem_g___mod_codegen_set_contains;
     GemVal _t10704 = (*gem_v_fs);
     static GemICacheSlot _ic_1839 = {0};
     GemVal _t10705 = gem_table_get_cached(_t10704, "local_names", &_ic_1839);
     GemVal _t10706[] = {_t10705, gem_v_name};
-    gem_check_callable(_t10707, "compiler/codegen.gem", 943);
+    gem_check_callable(_t10707, "compiler/codegen.gem", 944);
         if (gem_truthy(gem_not(_t10707.fn(_t10707.env, _t10706, 2)))) {
-#line 944 "compiler/codegen.gem"
-            gem_set_line(944);
+#line 945 "compiler/codegen.gem"
+            gem_set_line(945);
     GemVal _t10708 = (*gem_v_builtin_fns);
     GemVal _t10709[] = {_t10708, gem_v_name};
             if (gem_truthy(gem_has_key_fn(NULL, _t10709, 2))) {
-#line 945 "compiler/codegen.gem"
-                gem_set_line(945);
+#line 946 "compiler/codegen.gem"
+                gem_set_line(946);
     GemVal _t10710 = gem_table_new_braces();
     GemVal _t10711 = (*gem_v_builtin_fns);
     GemVal _t10712[] = {GEM_STR_LIT("gem_make_fn(", 12), gem_table_get(_t10711, gem_v_name), GEM_STR_LIT(", NULL)", 7)};
@@ -48618,15 +48621,15 @@ static GemVal __anon_165(void *_env, GemVal *args, int argc) {
                 gem_pop_frame();
                 return _t10713;
             } else {
-#line 946 "compiler/codegen.gem"
-                gem_set_line(946);
+#line 947 "compiler/codegen.gem"
+                gem_set_line(947);
     GemVal _t10716 = gem_g___mod_codegen_set_contains;
     GemVal _t10714 = (*gem_v_defined_fns);
     GemVal _t10715[] = {_t10714, gem_v_name};
-    gem_check_callable(_t10716, "compiler/codegen.gem", 946);
+    gem_check_callable(_t10716, "compiler/codegen.gem", 947);
                 if (gem_truthy(_t10716.fn(_t10716.env, _t10715, 2))) {
-#line 947 "compiler/codegen.gem"
-                    gem_set_line(947);
+#line 948 "compiler/codegen.gem"
+                    gem_set_line(948);
     GemVal _t10717 = gem_table_new_braces();
     GemVal _t10718[] = {GEM_STR_LIT("gem_make_fn(gem_fn_", 19), gem_v_name, GEM_STR_LIT(", NULL)", 7)};
     gem_table_set(_t10717, GEM_STR_LIT("expr", 4), gem_interp(3, _t10718));
@@ -48636,25 +48639,25 @@ static GemVal __anon_165(void *_env, GemVal *args, int argc) {
                     gem_pop_frame();
                     return _t10719;
                 } else {
-#line 948 "compiler/codegen.gem"
-                    gem_set_line(948);
+#line 949 "compiler/codegen.gem"
+                    gem_set_line(949);
     GemVal _t10722 = gem_g___mod_codegen_set_contains;
     GemVal _t10720 = (*gem_v_top_level_vars);
     GemVal _t10721[] = {_t10720, gem_v_name};
-    gem_check_callable(_t10722, "compiler/codegen.gem", 948);
+    gem_check_callable(_t10722, "compiler/codegen.gem", 949);
                     if (gem_truthy(gem_not(_t10722.fn(_t10722.env, _t10721, 2)))) {
-#line 950 "compiler/codegen.gem"
-                        gem_set_line(950);
+#line 951 "compiler/codegen.gem"
+                        gem_set_line(951);
     GemVal _t10723 = (*gem_v_sink);
     static GemICacheSlot _ic_1840 = {0};
     GemVal _t10740 = gem_table_get_cached(_t10723, "report", &_ic_1840);
     GemVal _t10725 = (*gem_v_source_of);
     GemVal _t10724[] = {gem_v_node};
-    gem_check_callable(_t10725, "compiler/codegen.gem", 950);
+    gem_check_callable(_t10725, "compiler/codegen.gem", 951);
     GemVal _t10738 = _t10725.fn(_t10725.env, _t10724, 1);
     GemVal _t10727 = (*gem_v_file_of);
     GemVal _t10726[] = {gem_v_node};
-    gem_check_callable(_t10727, "compiler/codegen.gem", 950);
+    gem_check_callable(_t10727, "compiler/codegen.gem", 951);
     GemVal _t10737 = _t10727.fn(_t10727.env, _t10726, 1);
     GemVal _t10728 = gem_v_node;
     static GemICacheSlot _ic_1841 = {0};
@@ -48667,12 +48670,12 @@ static GemVal __anon_165(void *_env, GemVal *args, int argc) {
     GemVal _t10733 = gem_interp(3, _t10730);
     GemVal _t10732 = (*gem_v_suggest_name);
     GemVal _t10731[] = {gem_v_name};
-    gem_check_callable(_t10732, "compiler/codegen.gem", 950);
+    gem_check_callable(_t10732, "compiler/codegen.gem", 951);
     GemVal _t10739[] = {_t10738, _t10737, _t10736, _t10735, _t10734, _t10733, _t10732.fn(_t10732.env, _t10731, 1)};
-    gem_check_callable_field(_t10740, "report", "compiler/codegen.gem", 950);
+    gem_check_callable_field(_t10740, "report", "compiler/codegen.gem", 951);
                         (void)(_t10740.fn(_t10740.env, _t10739, 7));
-#line 951 "compiler/codegen.gem"
-                        gem_set_line(951);
+#line 952 "compiler/codegen.gem"
+                        gem_set_line(952);
     GemVal _t10741 = gem_table_new_braces();
     gem_table_set(_t10741, GEM_STR_LIT("expr", 4), GEM_STR_LIT("GEM_NIL", 7));
     gem_table_set(_t10741, GEM_STR_LIT("setup", 5), GEM_STR_LIT("", 0));
@@ -48684,18 +48687,18 @@ static GemVal __anon_165(void *_env, GemVal *args, int argc) {
                 }
             }
         }
-#line 954 "compiler/codegen.gem"
-        gem_set_line(954);
+#line 955 "compiler/codegen.gem"
+        gem_set_line(955);
     GemVal _t10744 = (*gem_v_is_global_ref);
     GemVal _t10743[] = {gem_v_name};
-    gem_check_callable(_t10744, "compiler/codegen.gem", 954);
+    gem_check_callable(_t10744, "compiler/codegen.gem", 955);
         if (gem_truthy(_t10744.fn(_t10744.env, _t10743, 1))) {
-#line 955 "compiler/codegen.gem"
-            gem_set_line(955);
+#line 956 "compiler/codegen.gem"
+            gem_set_line(956);
     GemVal _t10745 = gem_table_new_braces();
     GemVal _t10747 = (*gem_v_gmangle);
     GemVal _t10746[] = {gem_v_name};
-    gem_check_callable(_t10747, "compiler/codegen.gem", 955);
+    gem_check_callable(_t10747, "compiler/codegen.gem", 956);
     gem_table_set(_t10745, GEM_STR_LIT("expr", 4), _t10747.fn(_t10747.env, _t10746, 1));
     gem_table_set(_t10745, GEM_STR_LIT("setup", 5), GEM_STR_LIT("", 0));
             GemVal _t10748 = _t10745;
@@ -48703,12 +48706,12 @@ static GemVal __anon_165(void *_env, GemVal *args, int argc) {
             gem_pop_frame();
             return _t10748;
         }
-#line 957 "compiler/codegen.gem"
-        gem_set_line(957);
+#line 958 "compiler/codegen.gem"
+        gem_set_line(958);
     GemVal _t10749 = gem_table_new_braces();
     GemVal _t10751 = (*gem_v_var_lvalue);
     GemVal _t10750[] = {gem_v_name};
-    gem_check_callable(_t10751, "compiler/codegen.gem", 957);
+    gem_check_callable(_t10751, "compiler/codegen.gem", 958);
     gem_table_set(_t10749, GEM_STR_LIT("expr", 4), _t10751.fn(_t10751.env, _t10750, 1));
     gem_table_set(_t10749, GEM_STR_LIT("setup", 5), GEM_STR_LIT("", 0));
         GemVal _t10752 = _t10749;
@@ -48731,11 +48734,11 @@ static GemVal __anon_165(void *_env, GemVal *args, int argc) {
         _t10756 = gem_eq(gem_table_get(gem_v___match_288, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("call", 4));
     }
     if (gem_truthy(_t10756)) {
-#line 959 "compiler/codegen.gem"
-        gem_set_line(959);
+#line 960 "compiler/codegen.gem"
+        gem_set_line(960);
     GemVal _t10758 = (*gem_v_compile_call);
     GemVal _t10757[] = {gem_v_node};
-    gem_check_callable(_t10758, "compiler/codegen.gem", 959);
+    gem_check_callable(_t10758, "compiler/codegen.gem", 960);
         GemVal _t10759 = _t10758.fn(_t10758.env, _t10757, 1);
         if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t10759, 1);
         gem_pop_frame();
@@ -48756,11 +48759,11 @@ static GemVal __anon_165(void *_env, GemVal *args, int argc) {
         _t10763 = gem_eq(gem_table_get(gem_v___match_288, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("binop", 5));
     }
     if (gem_truthy(_t10763)) {
-#line 961 "compiler/codegen.gem"
-        gem_set_line(961);
+#line 962 "compiler/codegen.gem"
+        gem_set_line(962);
     GemVal _t10765 = (*gem_v_compile_binop);
     GemVal _t10764[] = {gem_v_node};
-    gem_check_callable(_t10765, "compiler/codegen.gem", 961);
+    gem_check_callable(_t10765, "compiler/codegen.gem", 962);
         GemVal _t10766 = _t10765.fn(_t10765.env, _t10764, 1);
         if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t10766, 1);
         gem_pop_frame();
@@ -48795,23 +48798,23 @@ static GemVal __anon_165(void *_env, GemVal *args, int argc) {
         _t10774 = gem_has_key_fn(NULL, _t10773, 2);
     }
     if (gem_truthy(_t10774)) {
-#line 962 "compiler/codegen.gem"
-        gem_set_line(962);
-        GemVal gem_v_uexpr = gem_table_get(gem_v___match_288, GEM_STR_LIT("expr", 4));
-#line 962 "compiler/codegen.gem"
-        gem_set_line(962);
-        GemVal gem_v_op = gem_table_get(gem_v___match_288, GEM_STR_LIT("op", 2));
 #line 963 "compiler/codegen.gem"
         gem_set_line(963);
-    GemVal _t10776 = (*gem_v_compile_expr);
-    GemVal _t10775[] = {gem_v_uexpr};
-    gem_check_callable(_t10776, "compiler/codegen.gem", 963);
-        GemVal gem_v_r = _t10776.fn(_t10776.env, _t10775, 1);
+        GemVal gem_v_uexpr = gem_table_get(gem_v___match_288, GEM_STR_LIT("expr", 4));
+#line 963 "compiler/codegen.gem"
+        gem_set_line(963);
+        GemVal gem_v_op = gem_table_get(gem_v___match_288, GEM_STR_LIT("op", 2));
 #line 964 "compiler/codegen.gem"
         gem_set_line(964);
-        if (gem_truthy(gem_eq(gem_v_op, GEM_STR_LIT("-", 1)))) {
+    GemVal _t10776 = (*gem_v_compile_expr);
+    GemVal _t10775[] = {gem_v_uexpr};
+    gem_check_callable(_t10776, "compiler/codegen.gem", 964);
+        GemVal gem_v_r = _t10776.fn(_t10776.env, _t10775, 1);
 #line 965 "compiler/codegen.gem"
-            gem_set_line(965);
+        gem_set_line(965);
+        if (gem_truthy(gem_eq(gem_v_op, GEM_STR_LIT("-", 1)))) {
+#line 966 "compiler/codegen.gem"
+            gem_set_line(966);
     GemVal _t10777 = gem_table_new_braces();
     GemVal _t10778 = gem_v_r;
     static GemICacheSlot _ic_1843 = {0};
@@ -48825,11 +48828,11 @@ static GemVal __anon_165(void *_env, GemVal *args, int argc) {
             gem_pop_frame();
             return _t10781;
         } else {
-#line 966 "compiler/codegen.gem"
-            gem_set_line(966);
-            if (gem_truthy(gem_eq(gem_v_op, GEM_STR_LIT("not", 3)))) {
 #line 967 "compiler/codegen.gem"
-                gem_set_line(967);
+            gem_set_line(967);
+            if (gem_truthy(gem_eq(gem_v_op, GEM_STR_LIT("not", 3)))) {
+#line 968 "compiler/codegen.gem"
+                gem_set_line(968);
     GemVal _t10782 = gem_table_new_braces();
     GemVal _t10783 = gem_v_r;
     static GemICacheSlot _ic_1845 = {0};
@@ -48844,13 +48847,13 @@ static GemVal __anon_165(void *_env, GemVal *args, int argc) {
                 return _t10786;
             }
         }
-#line 969 "compiler/codegen.gem"
-        gem_set_line(969);
+#line 970 "compiler/codegen.gem"
+        gem_set_line(970);
     GemVal _t10790 = (*gem_v_codegen_error);
     GemVal _t10788 = gem_v_node;
     GemVal _t10787[] = {GEM_STR_LIT("unknown unary operator: ", 24), gem_v_op};
     GemVal _t10789[] = {_t10788, gem_interp(2, _t10787)};
-    gem_check_callable(_t10790, "compiler/codegen.gem", 969);
+    gem_check_callable(_t10790, "compiler/codegen.gem", 970);
         (void)(_t10790.fn(_t10790.env, _t10789, 2));
     } else {
     GemVal _t10791 = gem_eq(gem_type_1(gem_v___match_288), GEM_STR_LIT("table", 5));
@@ -48868,11 +48871,11 @@ static GemVal __anon_165(void *_env, GemVal *args, int argc) {
         _t10794 = gem_eq(gem_table_get(gem_v___match_288, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("anon_fn", 7));
     }
     if (gem_truthy(_t10794)) {
-#line 971 "compiler/codegen.gem"
-        gem_set_line(971);
+#line 972 "compiler/codegen.gem"
+        gem_set_line(972);
     GemVal _t10796 = (*gem_v_compile_anon_fn);
     GemVal _t10795[] = {gem_v_node};
-    gem_check_callable(_t10796, "compiler/codegen.gem", 971);
+    gem_check_callable(_t10796, "compiler/codegen.gem", 972);
         GemVal _t10797 = _t10796.fn(_t10796.env, _t10795, 1);
         if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t10797, 1);
         gem_pop_frame();
@@ -48893,11 +48896,11 @@ static GemVal __anon_165(void *_env, GemVal *args, int argc) {
         _t10801 = gem_eq(gem_table_get(gem_v___match_288, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("table", 5));
     }
     if (gem_truthy(_t10801)) {
-#line 973 "compiler/codegen.gem"
-        gem_set_line(973);
+#line 974 "compiler/codegen.gem"
+        gem_set_line(974);
     GemVal _t10803 = (*gem_v_compile_table);
     GemVal _t10802[] = {gem_v_node};
-    gem_check_callable(_t10803, "compiler/codegen.gem", 973);
+    gem_check_callable(_t10803, "compiler/codegen.gem", 974);
         GemVal _t10804 = _t10803.fn(_t10803.env, _t10802, 1);
         if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t10804, 1);
         gem_pop_frame();
@@ -48918,11 +48921,11 @@ static GemVal __anon_165(void *_env, GemVal *args, int argc) {
         _t10808 = gem_eq(gem_table_get(gem_v___match_288, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("array", 5));
     }
     if (gem_truthy(_t10808)) {
-#line 975 "compiler/codegen.gem"
-        gem_set_line(975);
+#line 976 "compiler/codegen.gem"
+        gem_set_line(976);
     GemVal _t10810 = (*gem_v_compile_array);
     GemVal _t10809[] = {gem_v_node};
-    gem_check_callable(_t10810, "compiler/codegen.gem", 975);
+    gem_check_callable(_t10810, "compiler/codegen.gem", 976);
         GemVal _t10811 = _t10810.fn(_t10810.env, _t10809, 1);
         if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t10811, 1);
         gem_pop_frame();
@@ -48957,17 +48960,17 @@ static GemVal __anon_165(void *_env, GemVal *args, int argc) {
         _t10819 = gem_has_key_fn(NULL, _t10818, 2);
     }
     if (gem_truthy(_t10819)) {
-#line 976 "compiler/codegen.gem"
-        gem_set_line(976);
+#line 977 "compiler/codegen.gem"
+        gem_set_line(977);
         GemVal gem_v_object = gem_table_get(gem_v___match_288, GEM_STR_LIT("object", 6));
-#line 976 "compiler/codegen.gem"
-        gem_set_line(976);
+#line 977 "compiler/codegen.gem"
+        gem_set_line(977);
         GemVal gem_v_field = gem_table_get(gem_v___match_288, GEM_STR_LIT("field", 5));
-#line 978 "compiler/codegen.gem"
-        gem_set_line(978);
+#line 979 "compiler/codegen.gem"
+        gem_set_line(979);
     GemVal _t10821 = gem_g___mod_codegen_is_node;
     GemVal _t10820[] = {gem_v_object, GEM_STR_LIT("var", 3)};
-    gem_check_callable(_t10821, "compiler/codegen.gem", 978);
+    gem_check_callable(_t10821, "compiler/codegen.gem", 979);
     GemVal _t10822 = _t10821.fn(_t10821.env, _t10820, 2);
     GemVal _t10826;
     if (!gem_truthy(_t10822)) {
@@ -48997,19 +49000,19 @@ static GemVal __anon_165(void *_env, GemVal *args, int argc) {
     GemVal _t10831 = gem_v_object;
     static GemICacheSlot _ic_1849 = {0};
     GemVal _t10832[] = {gem_table_get_cached(_t10831, "name", &_ic_1849)};
-    gem_check_callable(_t10833, "compiler/codegen.gem", 978);
+    gem_check_callable(_t10833, "compiler/codegen.gem", 979);
         _t10834 = _t10833.fn(_t10833.env, _t10832, 1);
     }
         if (gem_truthy(_t10834)) {
-#line 979 "compiler/codegen.gem"
-            gem_set_line(979);
+#line 980 "compiler/codegen.gem"
+            gem_set_line(980);
     GemVal _t10836 = (*gem_v_module_ns);
     GemVal _t10835 = gem_v_object;
     static GemICacheSlot _ic_1850 = {0};
     GemVal _t10837 = gem_table_get(_t10836, gem_table_get_cached(_t10835, "name", &_ic_1850));
             GemVal gem_v_target = gem_table_get(_t10837, gem_v_field);
-#line 980 "compiler/codegen.gem"
-            gem_set_line(980);
+#line 981 "compiler/codegen.gem"
+            gem_set_line(981);
     GemVal _t10838 = gem_neq(gem_v_target, GEM_NIL);
     GemVal _t10847;
     if (!gem_truthy(_t10838)) {
@@ -49018,7 +49021,7 @@ static GemVal __anon_165(void *_env, GemVal *args, int argc) {
     GemVal _t10841 = gem_g___mod_codegen_set_contains;
     GemVal _t10839 = (*gem_v_top_level_vars);
     GemVal _t10840[] = {_t10839, gem_v_target};
-    gem_check_callable(_t10841, "compiler/codegen.gem", 980);
+    gem_check_callable(_t10841, "compiler/codegen.gem", 981);
     GemVal _t10842 = _t10841.fn(_t10841.env, _t10840, 2);
     GemVal _t10846;
     if (gem_truthy(_t10842)) {
@@ -49027,14 +49030,14 @@ static GemVal __anon_165(void *_env, GemVal *args, int argc) {
     GemVal _t10845 = gem_g___mod_codegen_set_contains;
     GemVal _t10843 = (*gem_v_defined_fns);
     GemVal _t10844[] = {_t10843, gem_v_target};
-    gem_check_callable(_t10845, "compiler/codegen.gem", 980);
+    gem_check_callable(_t10845, "compiler/codegen.gem", 981);
         _t10846 = _t10845.fn(_t10845.env, _t10844, 2);
     }
         _t10847 = _t10846;
     }
             if (gem_truthy(_t10847)) {
-#line 981 "compiler/codegen.gem"
-                gem_set_line(981);
+#line 982 "compiler/codegen.gem"
+                gem_set_line(982);
     GemVal _t10853 = (*gem_v_compile_expr);
     GemVal _t10848 = gem_table_new_braces();
     gem_table_set(_t10848, GEM_STR_LIT("tag", 3), GEM_STR_LIT("var", 3));
@@ -49049,18 +49052,18 @@ static GemVal __anon_165(void *_env, GemVal *args, int argc) {
     static GemICacheSlot _ic_1853 = {0};
     gem_table_set(_t10848, GEM_STR_LIT("file", 4), gem_table_get_cached(_t10851, "file", &_ic_1853));
     GemVal _t10852[] = {_t10848};
-    gem_check_callable(_t10853, "compiler/codegen.gem", 981);
+    gem_check_callable(_t10853, "compiler/codegen.gem", 982);
                 GemVal _t10854 = _t10853.fn(_t10853.env, _t10852, 1);
                 if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t10854, 1);
                 gem_pop_frame();
                 return _t10854;
             }
         }
-#line 984 "compiler/codegen.gem"
-        gem_set_line(984);
+#line 985 "compiler/codegen.gem"
+        gem_set_line(985);
     GemVal _t10856 = gem_g___mod_codegen_is_node;
     GemVal _t10855[] = {gem_v_object, GEM_STR_LIT("var", 3)};
-    gem_check_callable(_t10856, "compiler/codegen.gem", 984);
+    gem_check_callable(_t10856, "compiler/codegen.gem", 985);
     GemVal _t10857 = _t10856.fn(_t10856.env, _t10855, 2);
     GemVal _t10861;
     if (!gem_truthy(_t10857)) {
@@ -49090,29 +49093,29 @@ static GemVal __anon_165(void *_env, GemVal *args, int argc) {
     GemVal _t10865 = gem_v_object;
     static GemICacheSlot _ic_1857 = {0};
     GemVal _t10867[] = {_t10866, gem_table_get_cached(_t10865, "name", &_ic_1857)};
-    gem_check_callable(_t10868, "compiler/codegen.gem", 984);
+    gem_check_callable(_t10868, "compiler/codegen.gem", 985);
         _t10869 = gem_not(_t10868.fn(_t10868.env, _t10867, 2));
     }
         _t10870 = _t10869;
     }
         if (gem_truthy(_t10870)) {
-#line 985 "compiler/codegen.gem"
-            gem_set_line(985);
+#line 986 "compiler/codegen.gem"
+            gem_set_line(986);
     GemVal _t10872 = (*gem_v_module_bindings);
     GemVal _t10871 = gem_v_object;
     static GemICacheSlot _ic_1858 = {0};
             GemVal gem_v_exports = gem_table_get(_t10872, gem_table_get_cached(_t10871, "name", &_ic_1858));
-#line 986 "compiler/codegen.gem"
-            gem_set_line(986);
+#line 987 "compiler/codegen.gem"
+            gem_set_line(987);
             GemVal gem_v_found = gem_bool(0);
-#line 987 "compiler/codegen.gem"
-            gem_set_line(987);
+#line 988 "compiler/codegen.gem"
+            gem_set_line(988);
             GemVal gem_v___for_items_291 = gem_for_items_1(gem_v_exports);
-#line 987 "compiler/codegen.gem"
-            gem_set_line(987);
+#line 988 "compiler/codegen.gem"
+            gem_set_line(988);
             GemVal gem_v___for_i_291 = gem_int(0);
-#line 987 "compiler/codegen.gem"
-            gem_set_line(987);
+#line 988 "compiler/codegen.gem"
+            gem_set_line(988);
             GemArenaMark _mk313;
             gem_arena_mark(&_mk313);
             while (1) {
@@ -49123,31 +49126,31 @@ static GemVal __anon_165(void *_env, GemVal *args, int argc) {
                 }
     GemVal _t10873 = gem_v___for_i_291;
                 if (!gem_truthy(gem_lt(_t10873, gem_for_len_1(gem_v___for_items_291)))) break;
-#line 987 "compiler/codegen.gem"
-                gem_set_line(987);
-    GemVal _t10874 = gem_v___for_items_291;
-                GemVal gem_v_ename = gem_table_get(_t10874, gem_v___for_i_291);
-#line 987 "compiler/codegen.gem"
-                gem_set_line(987);
-                gem_v___for_i_291 = gem_add(gem_v___for_i_291, gem_int(1));
 #line 988 "compiler/codegen.gem"
                 gem_set_line(988);
+    GemVal _t10874 = gem_v___for_items_291;
+                GemVal gem_v_ename = gem_table_get(_t10874, gem_v___for_i_291);
+#line 988 "compiler/codegen.gem"
+                gem_set_line(988);
+                gem_v___for_i_291 = gem_add(gem_v___for_i_291, gem_int(1));
+#line 989 "compiler/codegen.gem"
+                gem_set_line(989);
     GemVal _t10875 = gem_v_ename;
                 if (gem_truthy(gem_eq(_t10875, gem_v_field))) {
-#line 989 "compiler/codegen.gem"
-                    gem_set_line(989);
+#line 990 "compiler/codegen.gem"
+                    gem_set_line(990);
                     gem_v_found = gem_bool(1);
                 }
             }
 
-#line 992 "compiler/codegen.gem"
-            gem_set_line(992);
-            if (gem_truthy(gem_not(gem_v_found))) {
 #line 993 "compiler/codegen.gem"
-                gem_set_line(993);
-                GemVal gem_v_loc_node = gem_v_node;
+            gem_set_line(993);
+            if (gem_truthy(gem_not(gem_v_found))) {
 #line 994 "compiler/codegen.gem"
                 gem_set_line(994);
+                GemVal gem_v_loc_node = gem_v_node;
+#line 995 "compiler/codegen.gem"
+                gem_set_line(995);
     GemVal _t10876 = gem_v_loc_node;
     static GemICacheSlot _ic_1859 = {0};
     GemVal _t10877 = gem_eq(gem_table_get_cached(_t10876, "line", &_ic_1859), GEM_NIL);
@@ -49160,47 +49163,47 @@ static GemVal __anon_165(void *_env, GemVal *args, int argc) {
         _t10879 = gem_neq(gem_table_get_cached(_t10878, "line", &_ic_1860), GEM_NIL);
     }
                 if (gem_truthy(_t10879)) {
-#line 995 "compiler/codegen.gem"
-                    gem_set_line(995);
+#line 996 "compiler/codegen.gem"
+                    gem_set_line(996);
                     gem_v_loc_node = gem_v_object;
                 }
-#line 997 "compiler/codegen.gem"
-                gem_set_line(997);
+#line 998 "compiler/codegen.gem"
+                gem_set_line(998);
     GemVal _t10882 = gem_g___mod_codegen_find_closest_export;
     GemVal _t10880 = gem_v_field;
     GemVal _t10881[] = {_t10880, gem_v_exports};
-    gem_check_callable(_t10882, "compiler/codegen.gem", 997);
+    gem_check_callable(_t10882, "compiler/codegen.gem", 998);
                 GemVal gem_v_suggestion = _t10882.fn(_t10882.env, _t10881, 2);
-#line 998 "compiler/codegen.gem"
-                gem_set_line(998);
+#line 999 "compiler/codegen.gem"
+                gem_set_line(999);
                 GemVal gem_v___val_292 = GEM_NIL;
-#line 998 "compiler/codegen.gem"
-                gem_set_line(998);
+#line 999 "compiler/codegen.gem"
+                gem_set_line(999);
                 if (gem_truthy(gem_neq(gem_v_suggestion, GEM_NIL))) {
-#line 998 "compiler/codegen.gem"
-                    gem_set_line(998);
+#line 999 "compiler/codegen.gem"
+                    gem_set_line(999);
     GemVal _t10883[] = {GEM_STR_LIT("did you mean `", 14), gem_v_suggestion, GEM_STR_LIT("`?", 2)};
                     gem_v___val_292 = gem_interp(3, _t10883);
                 } else {
-#line 998 "compiler/codegen.gem"
-                    gem_set_line(998);
+#line 999 "compiler/codegen.gem"
+                    gem_set_line(999);
                     gem_v___val_292 = GEM_NIL;
                 }
-#line 998 "compiler/codegen.gem"
-                gem_set_line(998);
-                GemVal gem_v_hint = gem_v___val_292;
 #line 999 "compiler/codegen.gem"
                 gem_set_line(999);
+                GemVal gem_v_hint = gem_v___val_292;
+#line 1000 "compiler/codegen.gem"
+                gem_set_line(1000);
     GemVal _t10884 = (*gem_v_sink);
     static GemICacheSlot _ic_1861 = {0};
     GemVal _t10903 = gem_table_get_cached(_t10884, "report", &_ic_1861);
     GemVal _t10886 = (*gem_v_source_of);
     GemVal _t10885[] = {gem_v_loc_node};
-    gem_check_callable(_t10886, "compiler/codegen.gem", 999);
+    gem_check_callable(_t10886, "compiler/codegen.gem", 1000);
     GemVal _t10901 = _t10886.fn(_t10886.env, _t10885, 1);
     GemVal _t10888 = (*gem_v_file_of);
     GemVal _t10887[] = {gem_v_loc_node};
-    gem_check_callable(_t10888, "compiler/codegen.gem", 999);
+    gem_check_callable(_t10888, "compiler/codegen.gem", 1000);
     GemVal _t10900 = _t10888.fn(_t10888.env, _t10887, 1);
     GemVal _t10889 = gem_v_loc_node;
     static GemICacheSlot _ic_1862 = {0};
@@ -49213,40 +49216,40 @@ static GemVal __anon_165(void *_env, GemVal *args, int argc) {
     GemVal _t10891 = gem_v_object;
     static GemICacheSlot _ic_1864 = {0};
     GemVal _t10892[] = {gem_table_get_cached(_t10891, "name", &_ic_1864)};
-    gem_check_callable(_t10893, "compiler/codegen.gem", 999);
+    gem_check_callable(_t10893, "compiler/codegen.gem", 1000);
     GemVal _t10894 = _t10893.fn(_t10893.env, _t10892, 1);
     GemVal _t10895[] = {GEM_STR_LIT("module `", 8), _t10894, GEM_STR_LIT("` has no export `", 17), gem_v_field, GEM_STR_LIT("`", 1)};
     GemVal _t10896 = gem_interp(5, _t10895);
     GemVal _t10902[] = {_t10901, _t10900, _t10899, _t10898, _t10897, _t10896, gem_v_hint};
-    gem_check_callable_field(_t10903, "report", "compiler/codegen.gem", 999);
+    gem_check_callable_field(_t10903, "report", "compiler/codegen.gem", 1000);
                 (void)(_t10903.fn(_t10903.env, _t10902, 7));
             }
         }
-#line 1002 "compiler/codegen.gem"
-        gem_set_line(1002);
-    GemVal _t10905 = (*gem_v_compile_expr);
-    GemVal _t10904[] = {gem_v_object};
-    gem_check_callable(_t10905, "compiler/codegen.gem", 1002);
-        GemVal gem_v_r = _t10905.fn(_t10905.env, _t10904, 1);
 #line 1003 "compiler/codegen.gem"
         gem_set_line(1003);
-    GemVal _t10906 = (*gem_v_tmp);
-    gem_check_callable(_t10906, "compiler/codegen.gem", 1003);
-        GemVal gem_v_t = _t10906.fn(_t10906.env, NULL, 0);
+    GemVal _t10905 = (*gem_v_compile_expr);
+    GemVal _t10904[] = {gem_v_object};
+    gem_check_callable(_t10905, "compiler/codegen.gem", 1003);
+        GemVal gem_v_r = _t10905.fn(_t10905.env, _t10904, 1);
 #line 1004 "compiler/codegen.gem"
         gem_set_line(1004);
-        (*gem_v_ic_counter) = gem_add((*gem_v_ic_counter), gem_int(1));
+    GemVal _t10906 = (*gem_v_tmp);
+    gem_check_callable(_t10906, "compiler/codegen.gem", 1004);
+        GemVal gem_v_t = _t10906.fn(_t10906.env, NULL, 0);
 #line 1005 "compiler/codegen.gem"
         gem_set_line(1005);
-        GemVal gem_v_ic = (*gem_v_ic_counter);
+        (*gem_v_ic_counter) = gem_add((*gem_v_ic_counter), gem_int(1));
 #line 1006 "compiler/codegen.gem"
         gem_set_line(1006);
-    GemVal _t10908 = gem_g___mod_codegen_escape_c_string;
-    GemVal _t10907[] = {gem_v_field};
-    gem_check_callable(_t10908, "compiler/codegen.gem", 1006);
-        GemVal gem_v_escaped = _t10908.fn(_t10908.env, _t10907, 1);
+        GemVal gem_v_ic = (*gem_v_ic_counter);
 #line 1007 "compiler/codegen.gem"
         gem_set_line(1007);
+    GemVal _t10908 = gem_g___mod_codegen_escape_c_string;
+    GemVal _t10907[] = {gem_v_field};
+    gem_check_callable(_t10908, "compiler/codegen.gem", 1007);
+        GemVal gem_v_escaped = _t10908.fn(_t10908.env, _t10907, 1);
+#line 1008 "compiler/codegen.gem"
+        gem_set_line(1008);
     GemVal _t10909 = gem_v_r;
     static GemICacheSlot _ic_1865 = {0};
     GemVal _t10915 = gem_table_get_cached(_t10909, "setup", &_ic_1865);
@@ -49257,8 +49260,8 @@ static GemVal __anon_165(void *_env, GemVal *args, int argc) {
     GemVal _t10911 = gem_v_ic;
     GemVal _t10914[] = {GEM_STR_LIT("    GemVal ", 11), _t10913, GEM_STR_LIT(" = ", 3), _t10912, GEM_STR_LIT(";\n    static GemICacheSlot _ic_", 31), _t10911, GEM_STR_LIT(" = ", 3), (*gem_v_ic_init), GEM_STR_LIT(";\n", 2)};
         GemVal gem_v_setup = gem_add(_t10915, gem_interp(9, _t10914));
-#line 1008 "compiler/codegen.gem"
-        gem_set_line(1008);
+#line 1009 "compiler/codegen.gem"
+        gem_set_line(1009);
     GemVal _t10916 = gem_table_new_braces();
     GemVal _t10918 = gem_v_t;
     GemVal _t10917 = gem_v_escaped;
@@ -49299,24 +49302,24 @@ static GemVal __anon_165(void *_env, GemVal *args, int argc) {
         _t10928 = gem_has_key_fn(NULL, _t10927, 2);
     }
     if (gem_truthy(_t10928)) {
-#line 1009 "compiler/codegen.gem"
-        gem_set_line(1009);
-        GemVal gem_v_object = gem_table_get(gem_v___match_288, GEM_STR_LIT("object", 6));
-#line 1009 "compiler/codegen.gem"
-        gem_set_line(1009);
-        GemVal gem_v_key = gem_table_get(gem_v___match_288, GEM_STR_LIT("key", 3));
 #line 1010 "compiler/codegen.gem"
         gem_set_line(1010);
+        GemVal gem_v_object = gem_table_get(gem_v___match_288, GEM_STR_LIT("object", 6));
+#line 1010 "compiler/codegen.gem"
+        gem_set_line(1010);
+        GemVal gem_v_key = gem_table_get(gem_v___match_288, GEM_STR_LIT("key", 3));
+#line 1011 "compiler/codegen.gem"
+        gem_set_line(1011);
     GemVal _t10933 = (*gem_v_operands);
     GemVal _t10930 = (*gem_v_compile_expr);
     GemVal _t10929[] = {gem_v_object};
-    gem_check_callable(_t10930, "compiler/codegen.gem", 1010);
+    gem_check_callable(_t10930, "compiler/codegen.gem", 1011);
     GemVal _t10931 = _t10930.fn(_t10930.env, _t10929, 1);
     GemVal _t10932[] = {_t10931, gem_v_key};
-    gem_check_callable(_t10933, "compiler/codegen.gem", 1010);
+    gem_check_callable(_t10933, "compiler/codegen.gem", 1011);
         GemVal gem_v_o = _t10933.fn(_t10933.env, _t10932, 2);
-#line 1011 "compiler/codegen.gem"
-        gem_set_line(1011);
+#line 1012 "compiler/codegen.gem"
+        gem_set_line(1012);
     GemVal _t10934 = gem_table_new_braces();
     GemVal _t10935 = gem_v_o;
     static GemICacheSlot _ic_1867 = {0};
@@ -49333,8 +49336,8 @@ static GemVal __anon_165(void *_env, GemVal *args, int argc) {
         gem_pop_frame();
         return _t10940;
     } else {
-#line 1013 "compiler/codegen.gem"
-        gem_set_line(1013);
+#line 1014 "compiler/codegen.gem"
+        gem_set_line(1014);
         (void)(GEM_NIL);
     }
     }
@@ -49351,15 +49354,15 @@ static GemVal __anon_165(void *_env, GemVal *args, int argc) {
     }
     }
     }
-#line 1016 "compiler/codegen.gem"
-    gem_set_line(1016);
+#line 1017 "compiler/codegen.gem"
+    gem_set_line(1017);
     GemVal _t10945 = (*gem_v_codegen_error);
     GemVal _t10943 = gem_v_node;
     GemVal _t10941 = gem_v_node;
     static GemICacheSlot _ic_1870 = {0};
     GemVal _t10942[] = {GEM_STR_LIT("unknown expression node: ", 25), gem_table_get_cached(_t10941, "tag", &_ic_1870)};
     GemVal _t10944[] = {_t10943, gem_interp(2, _t10942)};
-    gem_check_callable(_t10945, "compiler/codegen.gem", 1016);
+    gem_check_callable(_t10945, "compiler/codegen.gem", 1017);
     GemVal _t10946 = _t10945.fn(_t10945.env, _t10944, 2);
     if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t10946, 1);
     gem_pop_frame();
@@ -49375,37 +49378,37 @@ static GemVal __anon_166(void *_env, GemVal *args, int argc) {
     struct _closure___anon_166 *_cls = (struct _closure___anon_166 *)_env;
     GemVal *gem_v_compile_expr = _cls->gem_v_compile_expr;
     GemVal *gem_v_tmp = _cls->gem_v_tmp;
-    gem_push_frame("anonymous fn", "compiler/codegen.gem", 1019);
+    gem_push_frame("anonymous fn", "compiler/codegen.gem", 1020);
     GemVal gem_v_node = (argc > 0) ? args[0] : GEM_NIL;
     GemArenaPoint _ret_pt;
     gem_arena_point(&_ret_pt);
-#line 1020 "compiler/codegen.gem"
-    gem_set_line(1020);
+#line 1021 "compiler/codegen.gem"
+    gem_set_line(1021);
     GemVal _t10964 = gem_v_node;
     static GemICacheSlot _ic_1871 = {0};
     GemVal gem_v_entries = gem_table_get_cached(_t10964, "entries", &_ic_1871);
-#line 1021 "compiler/codegen.gem"
-    gem_set_line(1021);
-    GemVal _t10965 = (*gem_v_tmp);
-    gem_check_callable(_t10965, "compiler/codegen.gem", 1021);
-    GemVal gem_v_t = _t10965.fn(_t10965.env, NULL, 0);
 #line 1022 "compiler/codegen.gem"
     gem_set_line(1022);
-    GemVal gem_v_b = gem_buf_new_fn(NULL, NULL, 0);
+    GemVal _t10965 = (*gem_v_tmp);
+    gem_check_callable(_t10965, "compiler/codegen.gem", 1022);
+    GemVal gem_v_t = _t10965.fn(_t10965.env, NULL, 0);
 #line 1023 "compiler/codegen.gem"
     gem_set_line(1023);
+    GemVal gem_v_b = gem_buf_new_fn(NULL, NULL, 0);
+#line 1024 "compiler/codegen.gem"
+    gem_set_line(1024);
     GemVal _t10967 = gem_v_b;
     GemVal _t10966[] = {GEM_STR_LIT("    GemVal ", 11), gem_v_t, GEM_STR_LIT(" = gem_table_new_braces();\n", 27)};
     GemVal _t10968[] = {_t10967, gem_interp(3, _t10966)};
     (void)(gem_buf_push_fn(NULL, _t10968, 2));
-#line 1024 "compiler/codegen.gem"
-    gem_set_line(1024);
+#line 1025 "compiler/codegen.gem"
+    gem_set_line(1025);
     GemVal gem_v___for_items_293 = gem_for_items_1(gem_v_entries);
-#line 1024 "compiler/codegen.gem"
-    gem_set_line(1024);
+#line 1025 "compiler/codegen.gem"
+    gem_set_line(1025);
     GemVal gem_v___for_i_293 = gem_int(0);
-#line 1024 "compiler/codegen.gem"
-    gem_set_line(1024);
+#line 1025 "compiler/codegen.gem"
+    gem_set_line(1025);
     GemArenaMark _mk314;
     gem_arena_mark(&_mk314);
     while (1) {
@@ -49416,42 +49419,42 @@ static GemVal __anon_166(void *_env, GemVal *args, int argc) {
         }
     GemVal _t10969 = gem_v___for_i_293;
         if (!gem_truthy(gem_lt(_t10969, gem_for_len_1(gem_v___for_items_293)))) break;
-#line 1024 "compiler/codegen.gem"
-        gem_set_line(1024);
-    GemVal _t10970 = gem_v___for_items_293;
-        GemVal gem_v_entry = gem_table_get(_t10970, gem_v___for_i_293);
-#line 1024 "compiler/codegen.gem"
-        gem_set_line(1024);
-        gem_v___for_i_293 = gem_add(gem_v___for_i_293, gem_int(1));
 #line 1025 "compiler/codegen.gem"
         gem_set_line(1025);
+    GemVal _t10970 = gem_v___for_items_293;
+        GemVal gem_v_entry = gem_table_get(_t10970, gem_v___for_i_293);
+#line 1025 "compiler/codegen.gem"
+        gem_set_line(1025);
+        gem_v___for_i_293 = gem_add(gem_v___for_i_293, gem_int(1));
+#line 1026 "compiler/codegen.gem"
+        gem_set_line(1026);
     GemVal _t10973 = (*gem_v_compile_expr);
     GemVal _t10971 = gem_v_entry;
     static GemICacheSlot _ic_1872 = {0};
     GemVal _t10972[] = {gem_table_get_cached(_t10971, "value", &_ic_1872)};
-    gem_check_callable(_t10973, "compiler/codegen.gem", 1025);
+    gem_check_callable(_t10973, "compiler/codegen.gem", 1026);
         GemVal gem_v_val_r = _t10973.fn(_t10973.env, _t10972, 1);
-#line 1026 "compiler/codegen.gem"
-        gem_set_line(1026);
+#line 1027 "compiler/codegen.gem"
+        gem_set_line(1027);
     GemVal _t10975 = gem_v_b;
     GemVal _t10974 = gem_v_val_r;
     static GemICacheSlot _ic_1873 = {0};
     GemVal _t10976[] = {_t10975, gem_table_get_cached(_t10974, "setup", &_ic_1873)};
         (void)(gem_buf_push_fn(NULL, _t10976, 2));
-#line 1027 "compiler/codegen.gem"
-        gem_set_line(1027);
+#line 1028 "compiler/codegen.gem"
+        gem_set_line(1028);
     GemVal _t10977 = gem_v_entry;
     static GemICacheSlot _ic_1874 = {0};
         if (gem_truthy(gem_neq(gem_table_get_cached(_t10977, "int_key", &_ic_1874), GEM_NIL))) {
-#line 1028 "compiler/codegen.gem"
-            gem_set_line(1028);
+#line 1029 "compiler/codegen.gem"
+            gem_set_line(1029);
     GemVal _t10985 = gem_v_b;
     GemVal _t10983 = gem_v_t;
     GemVal _t10980 = gem_g___mod_codegen_c_int_literal;
     GemVal _t10978 = gem_v_entry;
     static GemICacheSlot _ic_1875 = {0};
     GemVal _t10979[] = {gem_table_get_cached(_t10978, "int_key", &_ic_1875)};
-    gem_check_callable(_t10980, "compiler/codegen.gem", 1028);
+    gem_check_callable(_t10980, "compiler/codegen.gem", 1029);
     GemVal _t10982 = _t10980.fn(_t10980.env, _t10979, 1);
     GemVal _t10981 = gem_v_val_r;
     static GemICacheSlot _ic_1876 = {0};
@@ -49459,16 +49462,16 @@ static GemVal __anon_166(void *_env, GemVal *args, int argc) {
     GemVal _t10986[] = {_t10985, gem_interp(7, _t10984)};
             (void)(gem_buf_push_fn(NULL, _t10986, 2));
         } else {
-#line 1030 "compiler/codegen.gem"
-            gem_set_line(1030);
+#line 1031 "compiler/codegen.gem"
+            gem_set_line(1031);
     GemVal _t10989 = gem_g___mod_codegen_escape_c_string;
     GemVal _t10987 = gem_v_entry;
     static GemICacheSlot _ic_1877 = {0};
     GemVal _t10988[] = {gem_table_get_cached(_t10987, "key", &_ic_1877)};
-    gem_check_callable(_t10989, "compiler/codegen.gem", 1030);
+    gem_check_callable(_t10989, "compiler/codegen.gem", 1031);
             GemVal gem_v_escaped = _t10989.fn(_t10989.env, _t10988, 1);
-#line 1031 "compiler/codegen.gem"
-            gem_set_line(1031);
+#line 1032 "compiler/codegen.gem"
+            gem_set_line(1032);
     GemVal _t10996 = gem_v_b;
     GemVal _t10994 = gem_v_t;
     GemVal _t10993 = gem_v_escaped;
@@ -49483,20 +49486,20 @@ static GemVal __anon_166(void *_env, GemVal *args, int argc) {
         }
     }
 
-#line 1034 "compiler/codegen.gem"
-    gem_set_line(1034);
+#line 1035 "compiler/codegen.gem"
+    gem_set_line(1035);
     GemVal _t10998 = gem_v_node;
     static GemICacheSlot _ic_1880 = {0};
     if (gem_truthy(gem_eq(gem_table_get_cached(_t10998, "frozen", &_ic_1880), gem_bool(1)))) {
-#line 1035 "compiler/codegen.gem"
-        gem_set_line(1035);
+#line 1036 "compiler/codegen.gem"
+        gem_set_line(1036);
     GemVal _t11000 = gem_v_b;
     GemVal _t10999[] = {GEM_STR_LIT("    gem_table_freeze(", 21), gem_v_t, GEM_STR_LIT(");\n", 3)};
     GemVal _t11001[] = {_t11000, gem_interp(3, _t10999)};
         (void)(gem_buf_push_fn(NULL, _t11001, 2));
     }
-#line 1037 "compiler/codegen.gem"
-    gem_set_line(1037);
+#line 1038 "compiler/codegen.gem"
+    gem_set_line(1038);
     GemVal _t11002 = gem_table_new_braces();
     gem_table_set(_t11002, GEM_STR_LIT("expr", 4), gem_v_t);
     GemVal _t11003[] = {gem_v_b};
@@ -49516,37 +49519,37 @@ static GemVal __anon_167(void *_env, GemVal *args, int argc) {
     struct _closure___anon_167 *_cls = (struct _closure___anon_167 *)_env;
     GemVal *gem_v_compile_expr = _cls->gem_v_compile_expr;
     GemVal *gem_v_tmp = _cls->gem_v_tmp;
-    gem_push_frame("anonymous fn", "compiler/codegen.gem", 1040);
+    gem_push_frame("anonymous fn", "compiler/codegen.gem", 1041);
     GemVal gem_v_node = (argc > 0) ? args[0] : GEM_NIL;
     GemArenaPoint _ret_pt;
     gem_arena_point(&_ret_pt);
-#line 1041 "compiler/codegen.gem"
-    gem_set_line(1041);
+#line 1042 "compiler/codegen.gem"
+    gem_set_line(1042);
     GemVal _t11007 = gem_v_node;
     static GemICacheSlot _ic_1881 = {0};
     GemVal gem_v_elements = gem_table_get_cached(_t11007, "elements", &_ic_1881);
-#line 1042 "compiler/codegen.gem"
-    gem_set_line(1042);
-    GemVal _t11008 = (*gem_v_tmp);
-    gem_check_callable(_t11008, "compiler/codegen.gem", 1042);
-    GemVal gem_v_t = _t11008.fn(_t11008.env, NULL, 0);
 #line 1043 "compiler/codegen.gem"
     gem_set_line(1043);
-    GemVal gem_v_b = gem_buf_new_fn(NULL, NULL, 0);
+    GemVal _t11008 = (*gem_v_tmp);
+    gem_check_callable(_t11008, "compiler/codegen.gem", 1043);
+    GemVal gem_v_t = _t11008.fn(_t11008.env, NULL, 0);
 #line 1044 "compiler/codegen.gem"
     gem_set_line(1044);
+    GemVal gem_v_b = gem_buf_new_fn(NULL, NULL, 0);
+#line 1045 "compiler/codegen.gem"
+    gem_set_line(1045);
     GemVal _t11010 = gem_v_b;
     GemVal _t11009[] = {GEM_STR_LIT("    GemVal ", 11), gem_v_t, GEM_STR_LIT(" = gem_table_new();\n", 20)};
     GemVal _t11011[] = {_t11010, gem_interp(3, _t11009)};
     (void)(gem_buf_push_fn(NULL, _t11011, 2));
-#line 1045 "compiler/codegen.gem"
-    gem_set_line(1045);
+#line 1046 "compiler/codegen.gem"
+    gem_set_line(1046);
     GemVal gem_v___for_i_294 = gem_int(0);
-#line 1045 "compiler/codegen.gem"
-    gem_set_line(1045);
+#line 1046 "compiler/codegen.gem"
+    gem_set_line(1046);
     GemVal gem_v___for_limit_294 = gem_len_1(gem_v_elements);
-#line 1045 "compiler/codegen.gem"
-    gem_set_line(1045);
+#line 1046 "compiler/codegen.gem"
+    gem_set_line(1046);
     GemArenaMark _mk315;
     gem_arena_mark(&_mk315);
     while (1) {
@@ -49557,28 +49560,28 @@ static GemVal __anon_167(void *_env, GemVal *args, int argc) {
         }
     GemVal _t11012 = gem_v___for_i_294;
         if (!gem_truthy(gem_lt(_t11012, gem_v___for_limit_294))) break;
-#line 1045 "compiler/codegen.gem"
-        gem_set_line(1045);
-        GemVal gem_v_i = gem_v___for_i_294;
-#line 1045 "compiler/codegen.gem"
-        gem_set_line(1045);
-        gem_v___for_i_294 = gem_add(gem_v___for_i_294, gem_int(1));
 #line 1046 "compiler/codegen.gem"
         gem_set_line(1046);
+        GemVal gem_v_i = gem_v___for_i_294;
+#line 1046 "compiler/codegen.gem"
+        gem_set_line(1046);
+        gem_v___for_i_294 = gem_add(gem_v___for_i_294, gem_int(1));
+#line 1047 "compiler/codegen.gem"
+        gem_set_line(1047);
     GemVal _t11015 = (*gem_v_compile_expr);
     GemVal _t11013 = gem_v_elements;
     GemVal _t11014[] = {gem_table_get(_t11013, gem_v_i)};
-    gem_check_callable(_t11015, "compiler/codegen.gem", 1046);
+    gem_check_callable(_t11015, "compiler/codegen.gem", 1047);
         GemVal gem_v_elem_r = _t11015.fn(_t11015.env, _t11014, 1);
-#line 1047 "compiler/codegen.gem"
-        gem_set_line(1047);
+#line 1048 "compiler/codegen.gem"
+        gem_set_line(1048);
     GemVal _t11017 = gem_v_b;
     GemVal _t11016 = gem_v_elem_r;
     static GemICacheSlot _ic_1882 = {0};
     GemVal _t11018[] = {_t11017, gem_table_get_cached(_t11016, "setup", &_ic_1882)};
         (void)(gem_buf_push_fn(NULL, _t11018, 2));
-#line 1048 "compiler/codegen.gem"
-        gem_set_line(1048);
+#line 1049 "compiler/codegen.gem"
+        gem_set_line(1049);
     GemVal _t11023 = gem_v_b;
     GemVal _t11021 = gem_v_t;
     GemVal _t11020 = gem_v_i;
@@ -49589,8 +49592,8 @@ static GemVal __anon_167(void *_env, GemVal *args, int argc) {
         (void)(gem_buf_push_fn(NULL, _t11024, 2));
     }
 
-#line 1050 "compiler/codegen.gem"
-    gem_set_line(1050);
+#line 1051 "compiler/codegen.gem"
+    gem_set_line(1051);
     GemVal _t11025 = gem_table_new_braces();
     gem_table_set(_t11025, GEM_STR_LIT("expr", 4), gem_v_t);
     GemVal _t11026[] = {gem_v_b};
@@ -49618,32 +49621,32 @@ static GemVal __anon_168(void *_env, GemVal *args, int argc) {
     GemVal *gem_v_is_global_ref = _cls->gem_v_is_global_ref;
     GemVal *gem_v_mangle = _cls->gem_v_mangle;
     GemVal *gem_v_tmp = _cls->gem_v_tmp;
-    gem_push_frame("anonymous fn", "compiler/codegen.gem", 1053);
+    gem_push_frame("anonymous fn", "compiler/codegen.gem", 1054);
     GemVal gem_v_node = (argc > 0) ? args[0] : GEM_NIL;
     GemArenaPoint _ret_pt;
     gem_arena_point(&_ret_pt);
-#line 1054 "compiler/codegen.gem"
-    gem_set_line(1054);
+#line 1055 "compiler/codegen.gem"
+    gem_set_line(1055);
     GemVal _t11033 = gem_g___mod_codegen_closure_free_vars;
     GemVal _t11031 = gem_v_node;
     GemVal _t11030 = gem_table_new_braces();
     GemVal _t11032[] = {_t11031, _t11030, (*gem_v_is_global_name)};
-    gem_check_callable(_t11033, "compiler/codegen.gem", 1054);
+    gem_check_callable(_t11033, "compiler/codegen.gem", 1055);
     GemVal gem_v_free = _t11033.fn(_t11033.env, _t11032, 3);
-#line 1056 "compiler/codegen.gem"
-    gem_set_line(1056);
-    GemVal _t11034 = gem_table_new();
-    GemVal gem_v_captures = _t11034;
 #line 1057 "compiler/codegen.gem"
     gem_set_line(1057);
+    GemVal _t11034 = gem_table_new();
+    GemVal gem_v_captures = _t11034;
+#line 1058 "compiler/codegen.gem"
+    gem_set_line(1058);
     GemVal _t11035[] = {gem_v_free};
     GemVal _t11036[] = {gem_keys_fn(NULL, _t11035, 1)};
     GemVal gem_v___for_items_295 = gem_for_items_1(gem_sort_fn(NULL, _t11036, 1));
-#line 1057 "compiler/codegen.gem"
-    gem_set_line(1057);
+#line 1058 "compiler/codegen.gem"
+    gem_set_line(1058);
     GemVal gem_v___for_i_295 = gem_int(0);
-#line 1057 "compiler/codegen.gem"
-    gem_set_line(1057);
+#line 1058 "compiler/codegen.gem"
+    gem_set_line(1058);
     GemArenaMark _mk316;
     gem_arena_mark(&_mk316);
     while (1) {
@@ -49654,18 +49657,18 @@ static GemVal __anon_168(void *_env, GemVal *args, int argc) {
         }
     GemVal _t11037 = gem_v___for_i_295;
         if (!gem_truthy(gem_lt(_t11037, gem_for_len_1(gem_v___for_items_295)))) break;
-#line 1057 "compiler/codegen.gem"
-        gem_set_line(1057);
-    GemVal _t11038 = gem_v___for_items_295;
-        GemVal gem_v_cap = gem_table_get(_t11038, gem_v___for_i_295);
-#line 1057 "compiler/codegen.gem"
-        gem_set_line(1057);
-        gem_v___for_i_295 = gem_add(gem_v___for_i_295, gem_int(1));
 #line 1058 "compiler/codegen.gem"
         gem_set_line(1058);
+    GemVal _t11038 = gem_v___for_items_295;
+        GemVal gem_v_cap = gem_table_get(_t11038, gem_v___for_i_295);
+#line 1058 "compiler/codegen.gem"
+        gem_set_line(1058);
+        gem_v___for_i_295 = gem_add(gem_v___for_i_295, gem_int(1));
+#line 1059 "compiler/codegen.gem"
+        gem_set_line(1059);
     GemVal _t11040 = (*gem_v_is_global_ref);
     GemVal _t11039[] = {gem_v_cap};
-    gem_check_callable(_t11040, "compiler/codegen.gem", 1058);
+    gem_check_callable(_t11040, "compiler/codegen.gem", 1059);
     GemVal _t11041 = gem_not(_t11040.fn(_t11040.env, _t11039, 1));
     GemVal _t11046;
     if (!gem_truthy(_t11041)) {
@@ -49676,31 +49679,31 @@ static GemVal __anon_168(void *_env, GemVal *args, int argc) {
     static GemICacheSlot _ic_1884 = {0};
     GemVal _t11043 = gem_table_get_cached(_t11042, "local_names", &_ic_1884);
     GemVal _t11044[] = {_t11043, gem_v_cap};
-    gem_check_callable(_t11045, "compiler/codegen.gem", 1058);
+    gem_check_callable(_t11045, "compiler/codegen.gem", 1059);
         _t11046 = _t11045.fn(_t11045.env, _t11044, 2);
     }
         if (gem_truthy(_t11046)) {
-#line 1059 "compiler/codegen.gem"
-            gem_set_line(1059);
+#line 1060 "compiler/codegen.gem"
+            gem_set_line(1060);
     GemVal _t11047 = gem_v_captures;
     GemVal _t11048[] = {_t11047, gem_v_cap};
             (void)(gem_push_fn(NULL, _t11048, 2));
         }
     }
 
-#line 1063 "compiler/codegen.gem"
-    gem_set_line(1063);
-    if (gem_truthy(gem_eq(gem_len_1(gem_v_captures), gem_int(0)))) {
 #line 1064 "compiler/codegen.gem"
-        gem_set_line(1064);
+    gem_set_line(1064);
+    if (gem_truthy(gem_eq(gem_len_1(gem_v_captures), gem_int(0)))) {
+#line 1065 "compiler/codegen.gem"
+        gem_set_line(1065);
     GemVal _t11052 = (*gem_v_compile_closure_fn);
     GemVal _t11050 = gem_v_node;
     GemVal _t11049 = gem_table_new();
     GemVal _t11051[] = {_t11050, _t11049};
-    gem_check_callable(_t11052, "compiler/codegen.gem", 1064);
+    gem_check_callable(_t11052, "compiler/codegen.gem", 1065);
         GemVal gem_v_result = _t11052.fn(_t11052.env, _t11051, 2);
-#line 1065 "compiler/codegen.gem"
-        gem_set_line(1065);
+#line 1066 "compiler/codegen.gem"
+        gem_set_line(1066);
     GemVal _t11053 = gem_table_new_braces();
     GemVal _t11054 = gem_v_result;
     static GemICacheSlot _ic_1885 = {0};
@@ -49712,28 +49715,28 @@ static GemVal __anon_168(void *_env, GemVal *args, int argc) {
         gem_pop_frame();
         return _t11056;
     }
-#line 1068 "compiler/codegen.gem"
-    gem_set_line(1068);
+#line 1069 "compiler/codegen.gem"
+    gem_set_line(1069);
     GemVal _t11059 = (*gem_v_compile_closure_fn);
     GemVal _t11057 = gem_v_node;
     GemVal _t11058[] = {_t11057, gem_v_captures};
-    gem_check_callable(_t11059, "compiler/codegen.gem", 1068);
+    gem_check_callable(_t11059, "compiler/codegen.gem", 1069);
     GemVal gem_v_result = _t11059.fn(_t11059.env, _t11058, 2);
-#line 1070 "compiler/codegen.gem"
-    gem_set_line(1070);
-    GemVal gem_v_b = gem_buf_new_fn(NULL, NULL, 0);
 #line 1071 "compiler/codegen.gem"
     gem_set_line(1071);
-    GemVal _t11060 = (*gem_v_tmp);
-    gem_check_callable(_t11060, "compiler/codegen.gem", 1071);
-    GemVal gem_v_env_tmp = _t11060.fn(_t11060.env, NULL, 0);
+    GemVal gem_v_b = gem_buf_new_fn(NULL, NULL, 0);
 #line 1072 "compiler/codegen.gem"
     gem_set_line(1072);
+    GemVal _t11060 = (*gem_v_tmp);
+    gem_check_callable(_t11060, "compiler/codegen.gem", 1072);
+    GemVal gem_v_env_tmp = _t11060.fn(_t11060.env, NULL, 0);
+#line 1073 "compiler/codegen.gem"
+    gem_set_line(1073);
     GemVal _t11061 = gem_v_node;
     static GemICacheSlot _ic_1886 = {0};
     if (gem_truthy(gem_eq(gem_table_get_cached(_t11061, "non_escaping", &_ic_1886), gem_bool(1)))) {
-#line 1074 "compiler/codegen.gem"
-        gem_set_line(1074);
+#line 1075 "compiler/codegen.gem"
+        gem_set_line(1075);
     GemVal _t11065 = gem_v_b;
     GemVal _t11062 = gem_v_result;
     static GemICacheSlot _ic_1887 = {0};
@@ -49741,21 +49744,21 @@ static GemVal __anon_168(void *_env, GemVal *args, int argc) {
     GemVal _t11064[] = {GEM_STR_LIT("    struct ", 11), _t11063, GEM_STR_LIT(" ", 1), gem_v_env_tmp, GEM_STR_LIT(";\n", 2)};
     GemVal _t11066[] = {_t11065, gem_interp(5, _t11064)};
         (void)(gem_buf_push_fn(NULL, _t11066, 2));
-#line 1075 "compiler/codegen.gem"
-        gem_set_line(1075);
+#line 1076 "compiler/codegen.gem"
+        gem_set_line(1076);
     GemVal _t11069 = gem_v_b;
     GemVal _t11067 = gem_v_env_tmp;
     GemVal _t11068[] = {GEM_STR_LIT("    ", 4), _t11067, GEM_STR_LIT("._num_captures = ", 17), gem_len_1(gem_v_captures), GEM_STR_LIT(";\n", 2)};
     GemVal _t11070[] = {_t11069, gem_interp(5, _t11068)};
         (void)(gem_buf_push_fn(NULL, _t11070, 2));
-#line 1076 "compiler/codegen.gem"
-        gem_set_line(1076);
+#line 1077 "compiler/codegen.gem"
+        gem_set_line(1077);
         GemVal gem_v___for_items_296 = gem_for_items_1(gem_v_captures);
-#line 1076 "compiler/codegen.gem"
-        gem_set_line(1076);
+#line 1077 "compiler/codegen.gem"
+        gem_set_line(1077);
         GemVal gem_v___for_i_296 = gem_int(0);
-#line 1076 "compiler/codegen.gem"
-        gem_set_line(1076);
+#line 1077 "compiler/codegen.gem"
+        gem_set_line(1077);
         GemArenaMark _mk317;
         gem_arena_mark(&_mk317);
         while (1) {
@@ -49766,33 +49769,33 @@ static GemVal __anon_168(void *_env, GemVal *args, int argc) {
             }
     GemVal _t11071 = gem_v___for_i_296;
             if (!gem_truthy(gem_lt(_t11071, gem_for_len_1(gem_v___for_items_296)))) break;
-#line 1076 "compiler/codegen.gem"
-            gem_set_line(1076);
-    GemVal _t11072 = gem_v___for_items_296;
-            GemVal gem_v_cap = gem_table_get(_t11072, gem_v___for_i_296);
-#line 1076 "compiler/codegen.gem"
-            gem_set_line(1076);
-            gem_v___for_i_296 = gem_add(gem_v___for_i_296, gem_int(1));
 #line 1077 "compiler/codegen.gem"
             gem_set_line(1077);
-    GemVal _t11074 = (*gem_v_mangle);
-    GemVal _t11073[] = {gem_v_cap};
-    gem_check_callable(_t11074, "compiler/codegen.gem", 1077);
-            GemVal gem_v_mc = _t11074.fn(_t11074.env, _t11073, 1);
+    GemVal _t11072 = gem_v___for_items_296;
+            GemVal gem_v_cap = gem_table_get(_t11072, gem_v___for_i_296);
+#line 1077 "compiler/codegen.gem"
+            gem_set_line(1077);
+            gem_v___for_i_296 = gem_add(gem_v___for_i_296, gem_int(1));
 #line 1078 "compiler/codegen.gem"
             gem_set_line(1078);
+    GemVal _t11074 = (*gem_v_mangle);
+    GemVal _t11073[] = {gem_v_cap};
+    gem_check_callable(_t11074, "compiler/codegen.gem", 1078);
+            GemVal gem_v_mc = _t11074.fn(_t11074.env, _t11073, 1);
+#line 1079 "compiler/codegen.gem"
+            gem_set_line(1079);
     GemVal _t11078 = gem_g___mod_codegen_set_contains;
     GemVal _t11075 = (*gem_v_fs);
     static GemICacheSlot _ic_1888 = {0};
     GemVal _t11076 = gem_table_get_cached(_t11075, "boxed_vars", &_ic_1888);
     GemVal _t11077[] = {_t11076, gem_v_cap};
-    gem_check_callable(_t11078, "compiler/codegen.gem", 1078);
+    gem_check_callable(_t11078, "compiler/codegen.gem", 1079);
             GemVal gem_v_outer_is_box = _t11078.fn(_t11078.env, _t11077, 2);
-#line 1080 "compiler/codegen.gem"
-            gem_set_line(1080);
-            if (gem_truthy(gem_v_outer_is_box)) {
 #line 1081 "compiler/codegen.gem"
-                gem_set_line(1081);
+            gem_set_line(1081);
+            if (gem_truthy(gem_v_outer_is_box)) {
+#line 1082 "compiler/codegen.gem"
+                gem_set_line(1082);
     GemVal _t11082 = gem_v_b;
     GemVal _t11080 = gem_v_env_tmp;
     GemVal _t11079 = gem_v_mc;
@@ -49800,8 +49803,8 @@ static GemVal __anon_168(void *_env, GemVal *args, int argc) {
     GemVal _t11083[] = {_t11082, gem_interp(7, _t11081)};
                 (void)(gem_buf_push_fn(NULL, _t11083, 2));
             } else {
-#line 1083 "compiler/codegen.gem"
-                gem_set_line(1083);
+#line 1084 "compiler/codegen.gem"
+                gem_set_line(1084);
     GemVal _t11087 = gem_v_b;
     GemVal _t11085 = gem_v_env_tmp;
     GemVal _t11084 = gem_v_mc;
@@ -49811,8 +49814,8 @@ static GemVal __anon_168(void *_env, GemVal *args, int argc) {
             }
         }
 
-#line 1086 "compiler/codegen.gem"
-        gem_set_line(1086);
+#line 1087 "compiler/codegen.gem"
+        gem_set_line(1087);
     GemVal _t11089 = gem_table_new_braces();
     GemVal _t11090 = gem_v_result;
     static GemICacheSlot _ic_1889 = {0};
@@ -49826,8 +49829,8 @@ static GemVal __anon_168(void *_env, GemVal *args, int argc) {
         gem_pop_frame();
         return _t11094;
     }
-#line 1088 "compiler/codegen.gem"
-    gem_set_line(1088);
+#line 1089 "compiler/codegen.gem"
+    gem_set_line(1089);
     GemVal _t11100 = gem_v_b;
     GemVal _t11095 = gem_v_result;
     static GemICacheSlot _ic_1890 = {0};
@@ -49838,21 +49841,21 @@ static GemVal __anon_168(void *_env, GemVal *args, int argc) {
     GemVal _t11099[] = {GEM_STR_LIT("    struct ", 11), _t11098, GEM_STR_LIT(" *", 2), _t11097, GEM_STR_LIT(" = gem_alloc(sizeof(struct ", 27), gem_table_get_cached(_t11096, "struct_name", &_ic_1891), GEM_STR_LIT("));\n", 4)};
     GemVal _t11101[] = {_t11100, gem_interp(7, _t11099)};
     (void)(gem_buf_push_fn(NULL, _t11101, 2));
-#line 1089 "compiler/codegen.gem"
-    gem_set_line(1089);
+#line 1090 "compiler/codegen.gem"
+    gem_set_line(1090);
     GemVal _t11104 = gem_v_b;
     GemVal _t11102 = gem_v_env_tmp;
     GemVal _t11103[] = {GEM_STR_LIT("    ", 4), _t11102, GEM_STR_LIT("->_num_captures = ", 18), gem_len_1(gem_v_captures), GEM_STR_LIT(";\n", 2)};
     GemVal _t11105[] = {_t11104, gem_interp(5, _t11103)};
     (void)(gem_buf_push_fn(NULL, _t11105, 2));
-#line 1090 "compiler/codegen.gem"
-    gem_set_line(1090);
+#line 1091 "compiler/codegen.gem"
+    gem_set_line(1091);
     GemVal gem_v___for_items_297 = gem_for_items_1(gem_v_captures);
-#line 1090 "compiler/codegen.gem"
-    gem_set_line(1090);
+#line 1091 "compiler/codegen.gem"
+    gem_set_line(1091);
     GemVal gem_v___for_i_297 = gem_int(0);
-#line 1090 "compiler/codegen.gem"
-    gem_set_line(1090);
+#line 1091 "compiler/codegen.gem"
+    gem_set_line(1091);
     GemArenaMark _mk318;
     gem_arena_mark(&_mk318);
     while (1) {
@@ -49863,33 +49866,33 @@ static GemVal __anon_168(void *_env, GemVal *args, int argc) {
         }
     GemVal _t11106 = gem_v___for_i_297;
         if (!gem_truthy(gem_lt(_t11106, gem_for_len_1(gem_v___for_items_297)))) break;
-#line 1090 "compiler/codegen.gem"
-        gem_set_line(1090);
-    GemVal _t11107 = gem_v___for_items_297;
-        GemVal gem_v_cap = gem_table_get(_t11107, gem_v___for_i_297);
-#line 1090 "compiler/codegen.gem"
-        gem_set_line(1090);
-        gem_v___for_i_297 = gem_add(gem_v___for_i_297, gem_int(1));
 #line 1091 "compiler/codegen.gem"
         gem_set_line(1091);
-    GemVal _t11109 = (*gem_v_mangle);
-    GemVal _t11108[] = {gem_v_cap};
-    gem_check_callable(_t11109, "compiler/codegen.gem", 1091);
-        GemVal gem_v_mc = _t11109.fn(_t11109.env, _t11108, 1);
+    GemVal _t11107 = gem_v___for_items_297;
+        GemVal gem_v_cap = gem_table_get(_t11107, gem_v___for_i_297);
+#line 1091 "compiler/codegen.gem"
+        gem_set_line(1091);
+        gem_v___for_i_297 = gem_add(gem_v___for_i_297, gem_int(1));
 #line 1092 "compiler/codegen.gem"
         gem_set_line(1092);
+    GemVal _t11109 = (*gem_v_mangle);
+    GemVal _t11108[] = {gem_v_cap};
+    gem_check_callable(_t11109, "compiler/codegen.gem", 1092);
+        GemVal gem_v_mc = _t11109.fn(_t11109.env, _t11108, 1);
+#line 1093 "compiler/codegen.gem"
+        gem_set_line(1093);
     GemVal _t11113 = gem_g___mod_codegen_set_contains;
     GemVal _t11110 = (*gem_v_fs);
     static GemICacheSlot _ic_1892 = {0};
     GemVal _t11111 = gem_table_get_cached(_t11110, "boxed_vars", &_ic_1892);
     GemVal _t11112[] = {_t11111, gem_v_cap};
-    gem_check_callable(_t11113, "compiler/codegen.gem", 1092);
+    gem_check_callable(_t11113, "compiler/codegen.gem", 1093);
         GemVal gem_v_outer_is_box = _t11113.fn(_t11113.env, _t11112, 2);
-#line 1095 "compiler/codegen.gem"
-        gem_set_line(1095);
-        if (gem_truthy(gem_v_outer_is_box)) {
 #line 1096 "compiler/codegen.gem"
-            gem_set_line(1096);
+        gem_set_line(1096);
+        if (gem_truthy(gem_v_outer_is_box)) {
+#line 1097 "compiler/codegen.gem"
+            gem_set_line(1097);
     GemVal _t11117 = gem_v_b;
     GemVal _t11115 = gem_v_env_tmp;
     GemVal _t11114 = gem_v_mc;
@@ -49897,26 +49900,26 @@ static GemVal __anon_168(void *_env, GemVal *args, int argc) {
     GemVal _t11118[] = {_t11117, gem_interp(7, _t11116)};
             (void)(gem_buf_push_fn(NULL, _t11118, 2));
         } else {
-#line 1098 "compiler/codegen.gem"
-            gem_set_line(1098);
-    GemVal _t11119 = (*gem_v_tmp);
-    gem_check_callable(_t11119, "compiler/codegen.gem", 1098);
-            GemVal gem_v_box_tmp = _t11119.fn(_t11119.env, NULL, 0);
 #line 1099 "compiler/codegen.gem"
             gem_set_line(1099);
+    GemVal _t11119 = (*gem_v_tmp);
+    gem_check_callable(_t11119, "compiler/codegen.gem", 1099);
+            GemVal gem_v_box_tmp = _t11119.fn(_t11119.env, NULL, 0);
+#line 1100 "compiler/codegen.gem"
+            gem_set_line(1100);
     GemVal _t11121 = gem_v_b;
     GemVal _t11120[] = {GEM_STR_LIT("    GemVal *", 12), gem_v_box_tmp, GEM_STR_LIT(" = gem_alloc(sizeof(GemVal));\n", 30)};
     GemVal _t11122[] = {_t11121, gem_interp(3, _t11120)};
             (void)(gem_buf_push_fn(NULL, _t11122, 2));
-#line 1100 "compiler/codegen.gem"
-            gem_set_line(1100);
+#line 1101 "compiler/codegen.gem"
+            gem_set_line(1101);
     GemVal _t11125 = gem_v_b;
     GemVal _t11123 = gem_v_box_tmp;
     GemVal _t11124[] = {GEM_STR_LIT("    *", 5), _t11123, GEM_STR_LIT(" = ", 3), gem_v_mc, GEM_STR_LIT(";\n", 2)};
     GemVal _t11126[] = {_t11125, gem_interp(5, _t11124)};
             (void)(gem_buf_push_fn(NULL, _t11126, 2));
-#line 1101 "compiler/codegen.gem"
-            gem_set_line(1101);
+#line 1102 "compiler/codegen.gem"
+            gem_set_line(1102);
     GemVal _t11130 = gem_v_b;
     GemVal _t11128 = gem_v_env_tmp;
     GemVal _t11127 = gem_v_mc;
@@ -49926,8 +49929,8 @@ static GemVal __anon_168(void *_env, GemVal *args, int argc) {
         }
     }
 
-#line 1104 "compiler/codegen.gem"
-    gem_set_line(1104);
+#line 1105 "compiler/codegen.gem"
+    gem_set_line(1105);
     GemVal _t11132 = gem_table_new_braces();
     GemVal _t11133 = gem_v_result;
     static GemICacheSlot _ic_1893 = {0};
@@ -49953,22 +49956,22 @@ static GemVal __anon_169(void *_env, GemVal *args, int argc) {
     GemVal *gem_v_compile_expr = _cls->gem_v_compile_expr;
     GemVal *gem_v_left_to_right = _cls->gem_v_left_to_right;
     GemVal *gem_v_tmp = _cls->gem_v_tmp;
-    gem_push_frame("anonymous fn", "compiler/codegen.gem", 1108);
+    gem_push_frame("anonymous fn", "compiler/codegen.gem", 1109);
     GemVal gem_v_args = (argc > 0) ? args[0] : GEM_NIL;
     GemArenaPoint _ret_pt;
     gem_arena_point(&_ret_pt);
-#line 1109 "compiler/codegen.gem"
-    gem_set_line(1109);
+#line 1110 "compiler/codegen.gem"
+    gem_set_line(1110);
     GemVal _t11143 = gem_table_new();
     GemVal gem_v_results = _t11143;
-#line 1110 "compiler/codegen.gem"
-    gem_set_line(1110);
+#line 1111 "compiler/codegen.gem"
+    gem_set_line(1111);
     GemVal gem_v___for_items_298 = gem_for_items_1(gem_v_args);
-#line 1110 "compiler/codegen.gem"
-    gem_set_line(1110);
+#line 1111 "compiler/codegen.gem"
+    gem_set_line(1111);
     GemVal gem_v___for_i_298 = gem_int(0);
-#line 1110 "compiler/codegen.gem"
-    gem_set_line(1110);
+#line 1111 "compiler/codegen.gem"
+    gem_set_line(1111);
     GemArenaMark _mk319;
     gem_arena_mark(&_mk319);
     while (1) {
@@ -49979,42 +49982,42 @@ static GemVal __anon_169(void *_env, GemVal *args, int argc) {
         }
     GemVal _t11144 = gem_v___for_i_298;
         if (!gem_truthy(gem_lt(_t11144, gem_for_len_1(gem_v___for_items_298)))) break;
-#line 1110 "compiler/codegen.gem"
-        gem_set_line(1110);
-    GemVal _t11145 = gem_v___for_items_298;
-        GemVal gem_v_a = gem_table_get(_t11145, gem_v___for_i_298);
-#line 1110 "compiler/codegen.gem"
-        gem_set_line(1110);
-        gem_v___for_i_298 = gem_add(gem_v___for_i_298, gem_int(1));
 #line 1111 "compiler/codegen.gem"
         gem_set_line(1111);
+    GemVal _t11145 = gem_v___for_items_298;
+        GemVal gem_v_a = gem_table_get(_t11145, gem_v___for_i_298);
+#line 1111 "compiler/codegen.gem"
+        gem_set_line(1111);
+        gem_v___for_i_298 = gem_add(gem_v___for_i_298, gem_int(1));
+#line 1112 "compiler/codegen.gem"
+        gem_set_line(1112);
     GemVal _t11148 = gem_v_results;
     GemVal _t11147 = (*gem_v_compile_expr);
     GemVal _t11146[] = {gem_v_a};
-    gem_check_callable(_t11147, "compiler/codegen.gem", 1111);
+    gem_check_callable(_t11147, "compiler/codegen.gem", 1112);
     GemVal _t11149[] = {_t11148, _t11147.fn(_t11147.env, _t11146, 1)};
         (void)(gem_push_fn(NULL, _t11149, 2));
     }
 
-#line 1113 "compiler/codegen.gem"
-    gem_set_line(1113);
-    GemVal gem_v___sh2_argc = gem_len_1(gem_v_args);
 #line 1114 "compiler/codegen.gem"
     gem_set_line(1114);
-    GemVal _t11151 = (*gem_v_left_to_right);
-    GemVal _t11150[] = {gem_v_results};
-    gem_check_callable(_t11151, "compiler/codegen.gem", 1114);
-    GemVal gem_v_ordered = _t11151.fn(_t11151.env, _t11150, 1);
+    GemVal gem_v___sh2_argc = gem_len_1(gem_v_args);
 #line 1115 "compiler/codegen.gem"
     gem_set_line(1115);
+    GemVal _t11151 = (*gem_v_left_to_right);
+    GemVal _t11150[] = {gem_v_results};
+    gem_check_callable(_t11151, "compiler/codegen.gem", 1115);
+    GemVal gem_v_ordered = _t11151.fn(_t11151.env, _t11150, 1);
+#line 1116 "compiler/codegen.gem"
+    gem_set_line(1116);
     GemVal _t11152 = gem_v_ordered;
     static GemICacheSlot _ic_1894 = {0};
     GemVal gem_v_arg_exprs = gem_table_get_cached(_t11152, "exprs", &_ic_1894);
-#line 1116 "compiler/codegen.gem"
-    gem_set_line(1116);
-    if (gem_truthy(gem_eq(gem_v___sh2_argc, gem_int(0)))) {
 #line 1117 "compiler/codegen.gem"
-        gem_set_line(1117);
+    gem_set_line(1117);
+    if (gem_truthy(gem_eq(gem_v___sh2_argc, gem_int(0)))) {
+#line 1118 "compiler/codegen.gem"
+        gem_set_line(1118);
     GemVal _t11153 = gem_table_new_braces();
     GemVal _t11154 = gem_v_ordered;
     static GemICacheSlot _ic_1895 = {0};
@@ -50026,22 +50029,22 @@ static GemVal __anon_169(void *_env, GemVal *args, int argc) {
         gem_pop_frame();
         return _t11155;
     }
-#line 1119 "compiler/codegen.gem"
-    gem_set_line(1119);
-    GemVal _t11156 = (*gem_v_tmp);
-    gem_check_callable(_t11156, "compiler/codegen.gem", 1119);
-    GemVal gem_v_t = _t11156.fn(_t11156.env, NULL, 0);
 #line 1120 "compiler/codegen.gem"
     gem_set_line(1120);
+    GemVal _t11156 = (*gem_v_tmp);
+    gem_check_callable(_t11156, "compiler/codegen.gem", 1120);
+    GemVal gem_v_t = _t11156.fn(_t11156.env, NULL, 0);
+#line 1121 "compiler/codegen.gem"
+    gem_set_line(1121);
     GemVal gem_v_arr = gem_table_get(gem_v_arg_exprs, gem_int(0));
-#line 1121 "compiler/codegen.gem"
-    gem_set_line(1121);
+#line 1122 "compiler/codegen.gem"
+    gem_set_line(1122);
     GemVal gem_v___for_i_299 = gem_int(1);
-#line 1121 "compiler/codegen.gem"
-    gem_set_line(1121);
+#line 1122 "compiler/codegen.gem"
+    gem_set_line(1122);
     GemVal gem_v___for_limit_299 = gem_v___sh2_argc;
-#line 1121 "compiler/codegen.gem"
-    gem_set_line(1121);
+#line 1122 "compiler/codegen.gem"
+    gem_set_line(1122);
     int _t11158 = 0;
     GemArenaMark _mk320;
     gem_arena_mark(&_mk320);
@@ -50053,14 +50056,14 @@ static GemVal __anon_169(void *_env, GemVal *args, int argc) {
         }
     GemVal _t11157 = gem_v___for_i_299;
         if (!gem_truthy(gem_lt(_t11157, gem_v___for_limit_299))) break;
-#line 1121 "compiler/codegen.gem"
-        gem_set_line(1121);
-        GemVal gem_v_i = gem_v___for_i_299;
-#line 1121 "compiler/codegen.gem"
-        gem_set_line(1121);
-        gem_v___for_i_299 = gem_add(gem_v___for_i_299, gem_int(1));
 #line 1122 "compiler/codegen.gem"
         gem_set_line(1122);
+        GemVal gem_v_i = gem_v___for_i_299;
+#line 1122 "compiler/codegen.gem"
+        gem_set_line(1122);
+        gem_v___for_i_299 = gem_add(gem_v___for_i_299, gem_int(1));
+#line 1123 "compiler/codegen.gem"
+        gem_set_line(1123);
         gem_string_append_to(&gem_v_arr, GEM_STR_LIT(", ", 2), &_t11158);
     GemVal _t11159 = gem_v_arg_exprs;
         gem_string_append_to(&gem_v_arr, gem_table_get(_t11159, gem_v_i), &_t11158);
@@ -50068,8 +50071,8 @@ static GemVal __anon_169(void *_env, GemVal *args, int argc) {
     }
     if (_t11158) gem_v_arr = gem_string_finish(gem_v_arr);
 
-#line 1124 "compiler/codegen.gem"
-    gem_set_line(1124);
+#line 1125 "compiler/codegen.gem"
+    gem_set_line(1125);
     GemVal _t11160 = gem_table_new_braces();
     GemVal _t11161 = gem_v_ordered;
     static GemICacheSlot _ic_1896 = {0};
@@ -50094,13 +50097,13 @@ static GemVal __anon_170(void *_env, GemVal *args, int argc) {
     GemVal gem_v_fn_name = (argc > 0) ? args[0] : GEM_NIL;
     GemVal gem_v_env = (argc > 1) ? args[1] : GEM_NIL;
     GemVal gem_v_ca = (argc > 2) ? args[2] : GEM_NIL;
-#line 1128 "compiler/codegen.gem"
-    gem_leaf_line = 1128;
+#line 1129 "compiler/codegen.gem"
+    gem_leaf_line = 1129;
     GemVal _t11169 = gem_v_ca;
     static GemICacheSlot _ic_1897 = {0};
     if (gem_truthy(gem_eq(gem_table_get_cached(_t11169, "argc", &_ic_1897), gem_int(0)))) {
-#line 1129 "compiler/codegen.gem"
-        gem_leaf_line = 1129;
+#line 1130 "compiler/codegen.gem"
+        gem_leaf_line = 1130;
     GemVal _t11170 = gem_table_new_braces();
     GemVal _t11171 = gem_v_fn_name;
     GemVal _t11172[] = {_t11171, GEM_STR_LIT("(", 1), gem_v_env, GEM_STR_LIT(", NULL, 0)", 10)};
@@ -50112,8 +50115,8 @@ static GemVal __anon_170(void *_env, GemVal *args, int argc) {
         gem_leaf_site = NULL;
         return _t11174;
     }
-#line 1131 "compiler/codegen.gem"
-    gem_leaf_line = 1131;
+#line 1132 "compiler/codegen.gem"
+    gem_leaf_line = 1132;
     GemVal _t11175 = gem_table_new_braces();
     GemVal _t11180 = gem_v_fn_name;
     GemVal _t11179 = gem_v_env;
@@ -50159,26 +50162,26 @@ static GemVal __anon_171(void *_env, GemVal *args, int argc) {
     GemVal *gem_v_left_to_right = _cls->gem_v_left_to_right;
     GemVal *gem_v_rel_path = _cls->gem_v_rel_path;
     GemVal *gem_v_tmp = _cls->gem_v_tmp;
-    gem_push_frame("anonymous fn", "compiler/codegen.gem", 1134);
+    gem_push_frame("anonymous fn", "compiler/codegen.gem", 1135);
     GemVal gem_v_node = (argc > 0) ? args[0] : GEM_NIL;
     GemArenaPoint _ret_pt;
     gem_arena_point(&_ret_pt);
-#line 1135 "compiler/codegen.gem"
-    gem_set_line(1135);
+#line 1136 "compiler/codegen.gem"
+    gem_set_line(1136);
     GemVal gem_v___d1 = gem_v_node;
-#line 1135 "compiler/codegen.gem"
-    gem_set_line(1135);
+#line 1136 "compiler/codegen.gem"
+    gem_set_line(1136);
     GemVal _t11184 = gem_v___d1;
     static GemICacheSlot _ic_1902 = {0};
     GemVal gem_v_func = gem_table_get_cached(_t11184, "func", &_ic_1902);
-#line 1135 "compiler/codegen.gem"
-    gem_set_line(1135);
+#line 1136 "compiler/codegen.gem"
+    gem_set_line(1136);
     GemVal _t11185 = gem_v___d1;
     static GemICacheSlot _ic_1903 = {0};
     GemVal gem_v_args = gem_table_get_cached(_t11185, "args", &_ic_1903);
 
-#line 1137 "compiler/codegen.gem"
-    gem_set_line(1137);
+#line 1138 "compiler/codegen.gem"
+    gem_set_line(1138);
     GemVal _t11186 = gem_v_func;
     static GemICacheSlot _ic_1904 = {0};
     GemVal _t11187 = gem_eq(gem_table_get_cached(_t11186, "tag", &_ic_1904), GEM_STR_LIT("dot", 3));
@@ -50197,16 +50200,16 @@ static GemVal __anon_171(void *_env, GemVal *args, int argc) {
         _t11190 = gem_eq(gem_len_1(gem_v_args), gem_int(0));
     }
     if (gem_truthy(_t11190)) {
-#line 1138 "compiler/codegen.gem"
-        gem_set_line(1138);
+#line 1139 "compiler/codegen.gem"
+        gem_set_line(1139);
     GemVal _t11193 = (*gem_v_compile_expr);
     GemVal _t11191 = gem_v_func;
     static GemICacheSlot _ic_1906 = {0};
     GemVal _t11192[] = {gem_table_get_cached(_t11191, "object", &_ic_1906)};
-    gem_check_callable(_t11193, "compiler/codegen.gem", 1138);
+    gem_check_callable(_t11193, "compiler/codegen.gem", 1139);
         GemVal gem_v_obj_r = _t11193.fn(_t11193.env, _t11192, 1);
-#line 1139 "compiler/codegen.gem"
-        gem_set_line(1139);
+#line 1140 "compiler/codegen.gem"
+        gem_set_line(1140);
     GemVal _t11194 = gem_table_new_braces();
     GemVal _t11195 = gem_v_obj_r;
     static GemICacheSlot _ic_1907 = {0};
@@ -50220,18 +50223,18 @@ static GemVal __anon_171(void *_env, GemVal *args, int argc) {
         gem_pop_frame();
         return _t11198;
     }
-#line 1142 "compiler/codegen.gem"
-    gem_set_line(1142);
+#line 1143 "compiler/codegen.gem"
+    gem_set_line(1143);
     GemVal _t11199 = gem_v_func;
     static GemICacheSlot _ic_1909 = {0};
     if (gem_truthy(gem_eq(gem_table_get_cached(_t11199, "tag", &_ic_1909), GEM_STR_LIT("var", 3)))) {
-#line 1143 "compiler/codegen.gem"
-        gem_set_line(1143);
+#line 1144 "compiler/codegen.gem"
+        gem_set_line(1144);
     GemVal _t11200 = gem_v_func;
     static GemICacheSlot _ic_1910 = {0};
         GemVal gem_v_name = gem_table_get_cached(_t11200, "name", &_ic_1910);
-#line 1145 "compiler/codegen.gem"
-        gem_set_line(1145);
+#line 1146 "compiler/codegen.gem"
+        gem_set_line(1146);
     GemVal _t11201 = gem_eq(gem_v_name, GEM_STR_LIT("error", 5));
     GemVal _t11206;
     if (!gem_truthy(_t11201)) {
@@ -50242,47 +50245,47 @@ static GemVal __anon_171(void *_env, GemVal *args, int argc) {
     static GemICacheSlot _ic_1911 = {0};
     GemVal _t11203 = gem_table_get_cached(_t11202, "local_names", &_ic_1911);
     GemVal _t11204[] = {_t11203, gem_v_name};
-    gem_check_callable(_t11205, "compiler/codegen.gem", 1145);
+    gem_check_callable(_t11205, "compiler/codegen.gem", 1146);
         _t11206 = gem_not(_t11205.fn(_t11205.env, _t11204, 2));
     }
         if (gem_truthy(_t11206)) {
-#line 1146 "compiler/codegen.gem"
-            gem_set_line(1146);
+#line 1147 "compiler/codegen.gem"
+            gem_set_line(1147);
     GemVal _t11207 = gem_v_node;
     static GemICacheSlot _ic_1912 = {0};
             GemVal gem_v_line = gem_table_get_cached(_t11207, "line", &_ic_1912);
-#line 1147 "compiler/codegen.gem"
-            gem_set_line(1147);
-            if (gem_truthy(gem_eq(gem_v_line, GEM_NIL))) {
 #line 1148 "compiler/codegen.gem"
-                gem_set_line(1148);
+            gem_set_line(1148);
+            if (gem_truthy(gem_eq(gem_v_line, GEM_NIL))) {
+#line 1149 "compiler/codegen.gem"
+                gem_set_line(1149);
                 gem_v_line = gem_int(0);
             }
-#line 1150 "compiler/codegen.gem"
-            gem_set_line(1150);
+#line 1151 "compiler/codegen.gem"
+            gem_set_line(1151);
     GemVal _t11213 = gem_g___mod_codegen_escape_c_string;
     GemVal _t11211 = (*gem_v_rel_path);
     GemVal _t11209 = (*gem_v_file_of);
     GemVal _t11208[] = {gem_v_node};
-    gem_check_callable(_t11209, "compiler/codegen.gem", 1150);
+    gem_check_callable(_t11209, "compiler/codegen.gem", 1151);
     GemVal _t11210[] = {_t11209.fn(_t11209.env, _t11208, 1)};
-    gem_check_callable(_t11211, "compiler/codegen.gem", 1150);
+    gem_check_callable(_t11211, "compiler/codegen.gem", 1151);
     GemVal _t11212[] = {_t11211.fn(_t11211.env, _t11210, 1)};
-    gem_check_callable(_t11213, "compiler/codegen.gem", 1150);
+    gem_check_callable(_t11213, "compiler/codegen.gem", 1151);
             GemVal gem_v_escaped_file = _t11213.fn(_t11213.env, _t11212, 1);
-#line 1151 "compiler/codegen.gem"
-            gem_set_line(1151);
-    GemVal _t11215 = (*gem_v_compile_args);
-    GemVal _t11214[] = {gem_v_args};
-    gem_check_callable(_t11215, "compiler/codegen.gem", 1151);
-            GemVal gem_v_ca = _t11215.fn(_t11215.env, _t11214, 1);
 #line 1152 "compiler/codegen.gem"
             gem_set_line(1152);
+    GemVal _t11215 = (*gem_v_compile_args);
+    GemVal _t11214[] = {gem_v_args};
+    gem_check_callable(_t11215, "compiler/codegen.gem", 1152);
+            GemVal gem_v_ca = _t11215.fn(_t11215.env, _t11214, 1);
+#line 1153 "compiler/codegen.gem"
+            gem_set_line(1153);
     GemVal _t11216 = gem_v_ca;
     static GemICacheSlot _ic_1913 = {0};
             if (gem_truthy(gem_eq(gem_table_get_cached(_t11216, "argc", &_ic_1913), gem_int(0)))) {
-#line 1153 "compiler/codegen.gem"
-                gem_set_line(1153);
+#line 1154 "compiler/codegen.gem"
+                gem_set_line(1154);
     GemVal _t11217 = gem_table_new_braces();
     GemVal _t11218 = gem_v_escaped_file;
     GemVal _t11219[] = {GEM_STR_LIT("gem_error_at_fn(\"", 17), _t11218, GEM_STR_LIT("\", ", 3), gem_v_line, GEM_STR_LIT(", NULL, 0)", 10)};
@@ -50295,8 +50298,8 @@ static GemVal __anon_171(void *_env, GemVal *args, int argc) {
                 gem_pop_frame();
                 return _t11221;
             }
-#line 1155 "compiler/codegen.gem"
-            gem_set_line(1155);
+#line 1156 "compiler/codegen.gem"
+            gem_set_line(1156);
     GemVal _t11222 = gem_table_new_braces();
     GemVal _t11227 = gem_v_escaped_file;
     GemVal _t11226 = gem_v_line;
@@ -50315,8 +50318,8 @@ static GemVal __anon_171(void *_env, GemVal *args, int argc) {
             gem_pop_frame();
             return _t11230;
         } else {
-#line 1156 "compiler/codegen.gem"
-            gem_set_line(1156);
+#line 1157 "compiler/codegen.gem"
+            gem_set_line(1157);
     GemVal _t11231 = (*gem_v_builtin_fns);
     GemVal _t11232[] = {_t11231, gem_v_name};
     GemVal _t11233 = gem_has_key_fn(NULL, _t11232, 2);
@@ -50329,31 +50332,31 @@ static GemVal __anon_171(void *_env, GemVal *args, int argc) {
     static GemICacheSlot _ic_1918 = {0};
     GemVal _t11235 = gem_table_get_cached(_t11234, "local_names", &_ic_1918);
     GemVal _t11236[] = {_t11235, gem_v_name};
-    gem_check_callable(_t11237, "compiler/codegen.gem", 1156);
+    gem_check_callable(_t11237, "compiler/codegen.gem", 1157);
         _t11238 = gem_not(_t11237.fn(_t11237.env, _t11236, 2));
     }
             if (gem_truthy(_t11238)) {
-#line 1157 "compiler/codegen.gem"
-                gem_set_line(1157);
+#line 1158 "compiler/codegen.gem"
+                gem_set_line(1158);
     GemVal _t11241 = gem_g___mod_codegen_DIRECT_BUILTINS;
     GemVal _t11239 = gem_v_name;
     GemVal _t11240[] = {_t11239, GEM_STR_LIT("/", 1), gem_len_1(gem_v_args)};
                 GemVal gem_v_direct = gem_table_get(_t11241, gem_interp(3, _t11240));
-#line 1158 "compiler/codegen.gem"
-                gem_set_line(1158);
-                if (gem_truthy(gem_neq(gem_v_direct, GEM_NIL))) {
 #line 1159 "compiler/codegen.gem"
-                    gem_set_line(1159);
+                gem_set_line(1159);
+                if (gem_truthy(gem_neq(gem_v_direct, GEM_NIL))) {
+#line 1160 "compiler/codegen.gem"
+                    gem_set_line(1160);
     GemVal _t11242 = gem_table_new();
                     GemVal gem_v_results = _t11242;
-#line 1160 "compiler/codegen.gem"
-                    gem_set_line(1160);
+#line 1161 "compiler/codegen.gem"
+                    gem_set_line(1161);
                     GemVal gem_v___for_items_300 = gem_for_items_1(gem_v_args);
-#line 1160 "compiler/codegen.gem"
-                    gem_set_line(1160);
+#line 1161 "compiler/codegen.gem"
+                    gem_set_line(1161);
                     GemVal gem_v___for_i_300 = gem_int(0);
-#line 1160 "compiler/codegen.gem"
-                    gem_set_line(1160);
+#line 1161 "compiler/codegen.gem"
+                    gem_set_line(1161);
                     GemArenaMark _mk321;
                     gem_arena_mark(&_mk321);
                     while (1) {
@@ -50364,38 +50367,38 @@ static GemVal __anon_171(void *_env, GemVal *args, int argc) {
                         }
     GemVal _t11243 = gem_v___for_i_300;
                         if (!gem_truthy(gem_lt(_t11243, gem_for_len_1(gem_v___for_items_300)))) break;
-#line 1160 "compiler/codegen.gem"
-                        gem_set_line(1160);
-    GemVal _t11244 = gem_v___for_items_300;
-                        GemVal gem_v_a = gem_table_get(_t11244, gem_v___for_i_300);
-#line 1160 "compiler/codegen.gem"
-                        gem_set_line(1160);
-                        gem_v___for_i_300 = gem_add(gem_v___for_i_300, gem_int(1));
 #line 1161 "compiler/codegen.gem"
                         gem_set_line(1161);
+    GemVal _t11244 = gem_v___for_items_300;
+                        GemVal gem_v_a = gem_table_get(_t11244, gem_v___for_i_300);
+#line 1161 "compiler/codegen.gem"
+                        gem_set_line(1161);
+                        gem_v___for_i_300 = gem_add(gem_v___for_i_300, gem_int(1));
+#line 1162 "compiler/codegen.gem"
+                        gem_set_line(1162);
     GemVal _t11247 = gem_v_results;
     GemVal _t11246 = (*gem_v_compile_expr);
     GemVal _t11245[] = {gem_v_a};
-    gem_check_callable(_t11246, "compiler/codegen.gem", 1161);
+    gem_check_callable(_t11246, "compiler/codegen.gem", 1162);
     GemVal _t11248[] = {_t11247, _t11246.fn(_t11246.env, _t11245, 1)};
                         (void)(gem_push_fn(NULL, _t11248, 2));
                     }
 
-#line 1163 "compiler/codegen.gem"
-                    gem_set_line(1163);
-    GemVal _t11250 = (*gem_v_left_to_right);
-    GemVal _t11249[] = {gem_v_results};
-    gem_check_callable(_t11250, "compiler/codegen.gem", 1163);
-                    GemVal gem_v_ordered = _t11250.fn(_t11250.env, _t11249, 1);
 #line 1164 "compiler/codegen.gem"
                     gem_set_line(1164);
+    GemVal _t11250 = (*gem_v_left_to_right);
+    GemVal _t11249[] = {gem_v_results};
+    gem_check_callable(_t11250, "compiler/codegen.gem", 1164);
+                    GemVal gem_v_ordered = _t11250.fn(_t11250.env, _t11249, 1);
+#line 1165 "compiler/codegen.gem"
+                    gem_set_line(1165);
     GemVal _t11251 = gem_table_new_braces();
     GemVal _t11255 = gem_v_direct;
     GemVal _t11254 = (*gem_v_join_c);
     GemVal _t11252 = gem_v_ordered;
     static GemICacheSlot _ic_1919 = {0};
     GemVal _t11253[] = {gem_table_get_cached(_t11252, "exprs", &_ic_1919)};
-    gem_check_callable(_t11254, "compiler/codegen.gem", 1164);
+    gem_check_callable(_t11254, "compiler/codegen.gem", 1165);
     GemVal _t11256[] = {_t11255, GEM_STR_LIT("(", 1), _t11254.fn(_t11254.env, _t11253, 1), GEM_STR_LIT(")", 1)};
     gem_table_set(_t11251, GEM_STR_LIT("expr", 4), gem_interp(4, _t11256));
     GemVal _t11257 = gem_v_ordered;
@@ -50406,27 +50409,27 @@ static GemVal __anon_171(void *_env, GemVal *args, int argc) {
                     gem_pop_frame();
                     return _t11258;
                 }
-#line 1166 "compiler/codegen.gem"
-                gem_set_line(1166);
+#line 1167 "compiler/codegen.gem"
+                gem_set_line(1167);
     GemVal _t11264 = (*gem_v_emit_direct_call);
     GemVal _t11259 = (*gem_v_builtin_fns);
     GemVal _t11262 = gem_table_get(_t11259, gem_v_name);
     GemVal _t11261 = (*gem_v_compile_args);
     GemVal _t11260[] = {gem_v_args};
-    gem_check_callable(_t11261, "compiler/codegen.gem", 1166);
+    gem_check_callable(_t11261, "compiler/codegen.gem", 1167);
     GemVal _t11263[] = {_t11262, GEM_STR_LIT("NULL", 4), _t11261.fn(_t11261.env, _t11260, 1)};
-    gem_check_callable(_t11264, "compiler/codegen.gem", 1166);
+    gem_check_callable(_t11264, "compiler/codegen.gem", 1167);
                 GemVal _t11265 = _t11264.fn(_t11264.env, _t11263, 3);
                 if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t11265, 1);
                 gem_pop_frame();
                 return _t11265;
             } else {
-#line 1167 "compiler/codegen.gem"
-                gem_set_line(1167);
+#line 1168 "compiler/codegen.gem"
+                gem_set_line(1168);
     GemVal _t11268 = gem_g___mod_codegen_set_contains;
     GemVal _t11266 = (*gem_v_defined_fns);
     GemVal _t11267[] = {_t11266, gem_v_name};
-    gem_check_callable(_t11268, "compiler/codegen.gem", 1167);
+    gem_check_callable(_t11268, "compiler/codegen.gem", 1168);
     GemVal _t11269 = _t11268.fn(_t11268.env, _t11267, 2);
     GemVal _t11274;
     if (!gem_truthy(_t11269)) {
@@ -50437,20 +50440,20 @@ static GemVal __anon_171(void *_env, GemVal *args, int argc) {
     static GemICacheSlot _ic_1921 = {0};
     GemVal _t11271 = gem_table_get_cached(_t11270, "local_names", &_ic_1921);
     GemVal _t11272[] = {_t11271, gem_v_name};
-    gem_check_callable(_t11273, "compiler/codegen.gem", 1167);
+    gem_check_callable(_t11273, "compiler/codegen.gem", 1168);
         _t11274 = gem_not(_t11273.fn(_t11273.env, _t11272, 2));
     }
                 if (gem_truthy(_t11274)) {
-#line 1168 "compiler/codegen.gem"
-                    gem_set_line(1168);
+#line 1169 "compiler/codegen.gem"
+                    gem_set_line(1169);
     GemVal _t11280 = (*gem_v_emit_direct_call);
     GemVal _t11275[] = {GEM_STR_LIT("gem_fn_", 7), gem_v_name};
     GemVal _t11278 = gem_interp(2, _t11275);
     GemVal _t11277 = (*gem_v_compile_args);
     GemVal _t11276[] = {gem_v_args};
-    gem_check_callable(_t11277, "compiler/codegen.gem", 1168);
+    gem_check_callable(_t11277, "compiler/codegen.gem", 1169);
     GemVal _t11279[] = {_t11278, GEM_STR_LIT("NULL", 4), _t11277.fn(_t11277.env, _t11276, 1)};
-    gem_check_callable(_t11280, "compiler/codegen.gem", 1168);
+    gem_check_callable(_t11280, "compiler/codegen.gem", 1169);
                     GemVal _t11281 = _t11280.fn(_t11280.env, _t11279, 3);
                     if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t11281, 1);
                     gem_pop_frame();
@@ -50459,99 +50462,99 @@ static GemVal __anon_171(void *_env, GemVal *args, int argc) {
             }
         }
     }
-#line 1173 "compiler/codegen.gem"
-    gem_set_line(1173);
-    GemVal _t11283 = (*gem_v_compile_expr);
-    GemVal _t11282[] = {gem_v_func};
-    gem_check_callable(_t11283, "compiler/codegen.gem", 1173);
-    GemVal gem_v_func_r = _t11283.fn(_t11283.env, _t11282, 1);
 #line 1174 "compiler/codegen.gem"
     gem_set_line(1174);
-    GemVal _t11285 = (*gem_v_compile_args);
-    GemVal _t11284[] = {gem_v_args};
-    gem_check_callable(_t11285, "compiler/codegen.gem", 1174);
-    GemVal gem_v_ca = _t11285.fn(_t11285.env, _t11284, 1);
+    GemVal _t11283 = (*gem_v_compile_expr);
+    GemVal _t11282[] = {gem_v_func};
+    gem_check_callable(_t11283, "compiler/codegen.gem", 1174);
+    GemVal gem_v_func_r = _t11283.fn(_t11283.env, _t11282, 1);
 #line 1175 "compiler/codegen.gem"
     gem_set_line(1175);
-    GemVal _t11286 = (*gem_v_tmp);
-    gem_check_callable(_t11286, "compiler/codegen.gem", 1175);
-    GemVal gem_v_tmp_fn = _t11286.fn(_t11286.env, NULL, 0);
+    GemVal _t11285 = (*gem_v_compile_args);
+    GemVal _t11284[] = {gem_v_args};
+    gem_check_callable(_t11285, "compiler/codegen.gem", 1175);
+    GemVal gem_v_ca = _t11285.fn(_t11285.env, _t11284, 1);
 #line 1176 "compiler/codegen.gem"
     gem_set_line(1176);
+    GemVal _t11286 = (*gem_v_tmp);
+    gem_check_callable(_t11286, "compiler/codegen.gem", 1176);
+    GemVal gem_v_tmp_fn = _t11286.fn(_t11286.env, NULL, 0);
+#line 1177 "compiler/codegen.gem"
+    gem_set_line(1177);
     GemVal _t11287 = gem_v_node;
     static GemICacheSlot _ic_1922 = {0};
     GemVal gem_v_line = gem_table_get_cached(_t11287, "line", &_ic_1922);
-#line 1177 "compiler/codegen.gem"
-    gem_set_line(1177);
-    if (gem_truthy(gem_eq(gem_v_line, GEM_NIL))) {
 #line 1178 "compiler/codegen.gem"
-        gem_set_line(1178);
+    gem_set_line(1178);
+    if (gem_truthy(gem_eq(gem_v_line, GEM_NIL))) {
+#line 1179 "compiler/codegen.gem"
+        gem_set_line(1179);
         gem_v_line = gem_int(0);
     }
-#line 1180 "compiler/codegen.gem"
-    gem_set_line(1180);
+#line 1181 "compiler/codegen.gem"
+    gem_set_line(1181);
     GemVal _t11293 = gem_g___mod_codegen_escape_c_string;
     GemVal _t11291 = (*gem_v_rel_path);
     GemVal _t11289 = (*gem_v_file_of);
     GemVal _t11288[] = {gem_v_node};
-    gem_check_callable(_t11289, "compiler/codegen.gem", 1180);
+    gem_check_callable(_t11289, "compiler/codegen.gem", 1181);
     GemVal _t11290[] = {_t11289.fn(_t11289.env, _t11288, 1)};
-    gem_check_callable(_t11291, "compiler/codegen.gem", 1180);
+    gem_check_callable(_t11291, "compiler/codegen.gem", 1181);
     GemVal _t11292[] = {_t11291.fn(_t11291.env, _t11290, 1)};
-    gem_check_callable(_t11293, "compiler/codegen.gem", 1180);
+    gem_check_callable(_t11293, "compiler/codegen.gem", 1181);
     GemVal gem_v_escaped_file = _t11293.fn(_t11293.env, _t11292, 1);
-#line 1182 "compiler/codegen.gem"
-    gem_set_line(1182);
+#line 1183 "compiler/codegen.gem"
+    gem_set_line(1183);
     GemVal gem_v___val_301 = GEM_NIL;
-#line 1182 "compiler/codegen.gem"
-    gem_set_line(1182);
+#line 1183 "compiler/codegen.gem"
+    gem_set_line(1183);
     GemVal _t11294 = gem_v_func;
     static GemICacheSlot _ic_1923 = {0};
     if (gem_truthy(gem_eq(gem_table_get_cached(_t11294, "tag", &_ic_1923), GEM_STR_LIT("dot", 3)))) {
-#line 1182 "compiler/codegen.gem"
-        gem_set_line(1182);
+#line 1183 "compiler/codegen.gem"
+        gem_set_line(1183);
     GemVal _t11295 = gem_v_func;
     static GemICacheSlot _ic_1924 = {0};
         gem_v___val_301 = gem_table_get_cached(_t11295, "field", &_ic_1924);
     } else {
-#line 1182 "compiler/codegen.gem"
-        gem_set_line(1182);
+#line 1183 "compiler/codegen.gem"
+        gem_set_line(1183);
     GemVal _t11296 = gem_v_node;
     static GemICacheSlot _ic_1925 = {0};
         gem_v___val_301 = gem_table_get_cached(_t11296, "callee_field", &_ic_1925);
     }
-#line 1182 "compiler/codegen.gem"
-    gem_set_line(1182);
+#line 1183 "compiler/codegen.gem"
+    gem_set_line(1183);
     GemVal gem_v_field = gem_v___val_301;
-#line 1183 "compiler/codegen.gem"
-    gem_set_line(1183);
-    GemVal gem_v___val_302 = GEM_NIL;
-#line 1183 "compiler/codegen.gem"
-    gem_set_line(1183);
-    if (gem_truthy(gem_neq(gem_v_field, GEM_NIL))) {
 #line 1184 "compiler/codegen.gem"
-        gem_set_line(1184);
+    gem_set_line(1184);
+    GemVal gem_v___val_302 = GEM_NIL;
+#line 1184 "compiler/codegen.gem"
+    gem_set_line(1184);
+    if (gem_truthy(gem_neq(gem_v_field, GEM_NIL))) {
+#line 1185 "compiler/codegen.gem"
+        gem_set_line(1185);
     GemVal _t11301 = gem_v_tmp_fn;
     GemVal _t11298 = gem_g___mod_codegen_escape_c_string;
     GemVal _t11297[] = {gem_v_field};
-    gem_check_callable(_t11298, "compiler/codegen.gem", 1184);
+    gem_check_callable(_t11298, "compiler/codegen.gem", 1185);
     GemVal _t11300 = _t11298.fn(_t11298.env, _t11297, 1);
     GemVal _t11299 = gem_v_escaped_file;
     GemVal _t11302[] = {GEM_STR_LIT("gem_check_callable_field(", 25), _t11301, GEM_STR_LIT(", \"", 3), _t11300, GEM_STR_LIT("\", \"", 4), _t11299, GEM_STR_LIT("\", ", 3), gem_v_line, GEM_STR_LIT(")", 1)};
         gem_v___val_302 = gem_interp(9, _t11302);
     } else {
-#line 1186 "compiler/codegen.gem"
-        gem_set_line(1186);
+#line 1187 "compiler/codegen.gem"
+        gem_set_line(1187);
     GemVal _t11304 = gem_v_tmp_fn;
     GemVal _t11303 = gem_v_escaped_file;
     GemVal _t11305[] = {GEM_STR_LIT("gem_check_callable(", 19), _t11304, GEM_STR_LIT(", \"", 3), _t11303, GEM_STR_LIT("\", ", 3), gem_v_line, GEM_STR_LIT(")", 1)};
         gem_v___val_302 = gem_interp(7, _t11305);
     }
-#line 1183 "compiler/codegen.gem"
-    gem_set_line(1183);
+#line 1184 "compiler/codegen.gem"
+    gem_set_line(1184);
     GemVal gem_v_check = gem_v___val_302;
-#line 1188 "compiler/codegen.gem"
-    gem_set_line(1188);
+#line 1189 "compiler/codegen.gem"
+    gem_set_line(1189);
     GemVal _t11306 = gem_v_func_r;
     static GemICacheSlot _ic_1926 = {0};
     GemVal _t11310 = gem_table_get_cached(_t11306, "setup", &_ic_1926);
@@ -50565,13 +50568,13 @@ static GemVal __anon_171(void *_env, GemVal *args, int argc) {
     GemVal _t11314 = gem_add(_t11312, gem_table_get_cached(_t11311, "setup", &_ic_1928));
     GemVal _t11313[] = {GEM_STR_LIT("    ", 4), gem_v_check, GEM_STR_LIT(";\n", 2)};
     GemVal gem_v_setup = gem_add(_t11314, gem_interp(3, _t11313));
-#line 1189 "compiler/codegen.gem"
-    gem_set_line(1189);
+#line 1190 "compiler/codegen.gem"
+    gem_set_line(1190);
     GemVal _t11315 = gem_v_ca;
     static GemICacheSlot _ic_1929 = {0};
     if (gem_truthy(gem_eq(gem_table_get_cached(_t11315, "argc", &_ic_1929), gem_int(0)))) {
-#line 1190 "compiler/codegen.gem"
-        gem_set_line(1190);
+#line 1191 "compiler/codegen.gem"
+        gem_set_line(1191);
     GemVal _t11316 = gem_table_new_braces();
     GemVal _t11317 = gem_v_tmp_fn;
     GemVal _t11318[] = {_t11317, GEM_STR_LIT(".fn(", 4), gem_v_tmp_fn, GEM_STR_LIT(".env, NULL, 0)", 14)};
@@ -50582,8 +50585,8 @@ static GemVal __anon_171(void *_env, GemVal *args, int argc) {
         gem_pop_frame();
         return _t11319;
     }
-#line 1192 "compiler/codegen.gem"
-    gem_set_line(1192);
+#line 1193 "compiler/codegen.gem"
+    gem_set_line(1193);
     GemVal _t11320 = gem_table_new_braces();
     GemVal _t11325 = gem_v_tmp_fn;
     GemVal _t11324 = gem_v_tmp_fn;
@@ -50616,35 +50619,35 @@ static GemVal __anon_172(void *_env, GemVal *args, int argc) {
     GemVal *gem_v_operands = _cls->gem_v_operands;
     GemVal *gem_v_pin_operand = _cls->gem_v_pin_operand;
     GemVal *gem_v_tmp = _cls->gem_v_tmp;
-    gem_push_frame("anonymous fn", "compiler/codegen.gem", 1195);
+    gem_push_frame("anonymous fn", "compiler/codegen.gem", 1196);
     GemVal gem_v_node = (argc > 0) ? args[0] : GEM_NIL;
     GemArenaPoint _ret_pt;
     gem_arena_point(&_ret_pt);
-#line 1196 "compiler/codegen.gem"
-    gem_set_line(1196);
+#line 1197 "compiler/codegen.gem"
+    gem_set_line(1197);
     GemVal _t11338 = gem_v_node;
     static GemICacheSlot _ic_1932 = {0};
     GemVal gem_v_op = gem_table_get_cached(_t11338, "op", &_ic_1932);
-#line 1197 "compiler/codegen.gem"
-    gem_set_line(1197);
+#line 1198 "compiler/codegen.gem"
+    gem_set_line(1198);
     GemVal _t11341 = (*gem_v_compile_expr);
     GemVal _t11339 = gem_v_node;
     static GemICacheSlot _ic_1933 = {0};
     GemVal _t11340[] = {gem_table_get_cached(_t11339, "left", &_ic_1933)};
-    gem_check_callable(_t11341, "compiler/codegen.gem", 1197);
+    gem_check_callable(_t11341, "compiler/codegen.gem", 1198);
     GemVal gem_v_lc_r = _t11341.fn(_t11341.env, _t11340, 1);
-#line 1198 "compiler/codegen.gem"
-    gem_set_line(1198);
+#line 1199 "compiler/codegen.gem"
+    gem_set_line(1199);
     GemVal _t11342 = gem_v_lc_r;
     static GemICacheSlot _ic_1934 = {0};
     GemVal gem_v_lc = gem_table_get_cached(_t11342, "expr", &_ic_1934);
-#line 1199 "compiler/codegen.gem"
-    gem_set_line(1199);
+#line 1200 "compiler/codegen.gem"
+    gem_set_line(1200);
     GemVal _t11343 = gem_v_lc_r;
     static GemICacheSlot _ic_1935 = {0};
     GemVal gem_v_ls = gem_table_get_cached(_t11343, "setup", &_ic_1935);
-#line 1201 "compiler/codegen.gem"
-    gem_set_line(1201);
+#line 1202 "compiler/codegen.gem"
+    gem_set_line(1202);
     GemVal _t11344 = gem_eq(gem_v_op, GEM_STR_LIT("and", 3));
     GemVal _t11345;
     if (gem_truthy(_t11344)) {
@@ -50653,37 +50656,37 @@ static GemVal __anon_172(void *_env, GemVal *args, int argc) {
         _t11345 = gem_eq(gem_v_op, GEM_STR_LIT("or", 2));
     }
     if (gem_truthy(_t11345)) {
-#line 1202 "compiler/codegen.gem"
-        gem_set_line(1202);
-    GemVal _t11347 = (*gem_v_pin_operand);
-    GemVal _t11346[] = {gem_v_lc_r};
-    gem_check_callable(_t11347, "compiler/codegen.gem", 1202);
-        GemVal gem_v_pr = _t11347.fn(_t11347.env, _t11346, 1);
 #line 1203 "compiler/codegen.gem"
         gem_set_line(1203);
+    GemVal _t11347 = (*gem_v_pin_operand);
+    GemVal _t11346[] = {gem_v_lc_r};
+    gem_check_callable(_t11347, "compiler/codegen.gem", 1203);
+        GemVal gem_v_pr = _t11347.fn(_t11347.env, _t11346, 1);
+#line 1204 "compiler/codegen.gem"
+        gem_set_line(1204);
     GemVal _t11348 = gem_v_pr;
     static GemICacheSlot _ic_1936 = {0};
         gem_v_lc = gem_table_get_cached(_t11348, "expr", &_ic_1936);
-#line 1204 "compiler/codegen.gem"
-        gem_set_line(1204);
+#line 1205 "compiler/codegen.gem"
+        gem_set_line(1205);
     GemVal _t11349 = gem_v_pr;
     static GemICacheSlot _ic_1937 = {0};
         gem_v_ls = gem_table_get_cached(_t11349, "setup", &_ic_1937);
     }
-#line 1207 "compiler/codegen.gem"
-    gem_set_line(1207);
-    if (gem_truthy(gem_eq(gem_v_op, GEM_STR_LIT("+", 1)))) {
 #line 1208 "compiler/codegen.gem"
-        gem_set_line(1208);
+    gem_set_line(1208);
+    if (gem_truthy(gem_eq(gem_v_op, GEM_STR_LIT("+", 1)))) {
+#line 1209 "compiler/codegen.gem"
+        gem_set_line(1209);
     GemVal _t11353 = (*gem_v_operands);
     GemVal _t11351 = gem_v_lc_r;
     GemVal _t11350 = gem_v_node;
     static GemICacheSlot _ic_1938 = {0};
     GemVal _t11352[] = {_t11351, gem_table_get_cached(_t11350, "right", &_ic_1938)};
-    gem_check_callable(_t11353, "compiler/codegen.gem", 1208);
+    gem_check_callable(_t11353, "compiler/codegen.gem", 1209);
         GemVal gem_v_o = _t11353.fn(_t11353.env, _t11352, 2);
-#line 1209 "compiler/codegen.gem"
-        gem_set_line(1209);
+#line 1210 "compiler/codegen.gem"
+        gem_set_line(1210);
     GemVal _t11354 = gem_table_new_braces();
     GemVal _t11355 = gem_v_o;
     static GemICacheSlot _ic_1939 = {0};
@@ -50700,20 +50703,20 @@ static GemVal __anon_172(void *_env, GemVal *args, int argc) {
         gem_pop_frame();
         return _t11360;
     } else {
-#line 1210 "compiler/codegen.gem"
-        gem_set_line(1210);
-        if (gem_truthy(gem_eq(gem_v_op, GEM_STR_LIT("-", 1)))) {
 #line 1211 "compiler/codegen.gem"
-            gem_set_line(1211);
+        gem_set_line(1211);
+        if (gem_truthy(gem_eq(gem_v_op, GEM_STR_LIT("-", 1)))) {
+#line 1212 "compiler/codegen.gem"
+            gem_set_line(1212);
     GemVal _t11364 = (*gem_v_operands);
     GemVal _t11362 = gem_v_lc_r;
     GemVal _t11361 = gem_v_node;
     static GemICacheSlot _ic_1942 = {0};
     GemVal _t11363[] = {_t11362, gem_table_get_cached(_t11361, "right", &_ic_1942)};
-    gem_check_callable(_t11364, "compiler/codegen.gem", 1211);
+    gem_check_callable(_t11364, "compiler/codegen.gem", 1212);
             GemVal gem_v_o = _t11364.fn(_t11364.env, _t11363, 2);
-#line 1212 "compiler/codegen.gem"
-            gem_set_line(1212);
+#line 1213 "compiler/codegen.gem"
+            gem_set_line(1213);
     GemVal _t11365 = gem_table_new_braces();
     GemVal _t11366 = gem_v_o;
     static GemICacheSlot _ic_1943 = {0};
@@ -50730,20 +50733,20 @@ static GemVal __anon_172(void *_env, GemVal *args, int argc) {
             gem_pop_frame();
             return _t11371;
         } else {
-#line 1213 "compiler/codegen.gem"
-            gem_set_line(1213);
-            if (gem_truthy(gem_eq(gem_v_op, GEM_STR_LIT("*", 1)))) {
 #line 1214 "compiler/codegen.gem"
-                gem_set_line(1214);
+            gem_set_line(1214);
+            if (gem_truthy(gem_eq(gem_v_op, GEM_STR_LIT("*", 1)))) {
+#line 1215 "compiler/codegen.gem"
+                gem_set_line(1215);
     GemVal _t11375 = (*gem_v_operands);
     GemVal _t11373 = gem_v_lc_r;
     GemVal _t11372 = gem_v_node;
     static GemICacheSlot _ic_1946 = {0};
     GemVal _t11374[] = {_t11373, gem_table_get_cached(_t11372, "right", &_ic_1946)};
-    gem_check_callable(_t11375, "compiler/codegen.gem", 1214);
+    gem_check_callable(_t11375, "compiler/codegen.gem", 1215);
                 GemVal gem_v_o = _t11375.fn(_t11375.env, _t11374, 2);
-#line 1215 "compiler/codegen.gem"
-                gem_set_line(1215);
+#line 1216 "compiler/codegen.gem"
+                gem_set_line(1216);
     GemVal _t11376 = gem_table_new_braces();
     GemVal _t11377 = gem_v_o;
     static GemICacheSlot _ic_1947 = {0};
@@ -50760,20 +50763,20 @@ static GemVal __anon_172(void *_env, GemVal *args, int argc) {
                 gem_pop_frame();
                 return _t11382;
             } else {
-#line 1216 "compiler/codegen.gem"
-                gem_set_line(1216);
-                if (gem_truthy(gem_eq(gem_v_op, GEM_STR_LIT("/", 1)))) {
 #line 1217 "compiler/codegen.gem"
-                    gem_set_line(1217);
+                gem_set_line(1217);
+                if (gem_truthy(gem_eq(gem_v_op, GEM_STR_LIT("/", 1)))) {
+#line 1218 "compiler/codegen.gem"
+                    gem_set_line(1218);
     GemVal _t11386 = (*gem_v_operands);
     GemVal _t11384 = gem_v_lc_r;
     GemVal _t11383 = gem_v_node;
     static GemICacheSlot _ic_1950 = {0};
     GemVal _t11385[] = {_t11384, gem_table_get_cached(_t11383, "right", &_ic_1950)};
-    gem_check_callable(_t11386, "compiler/codegen.gem", 1217);
+    gem_check_callable(_t11386, "compiler/codegen.gem", 1218);
                     GemVal gem_v_o = _t11386.fn(_t11386.env, _t11385, 2);
-#line 1218 "compiler/codegen.gem"
-                    gem_set_line(1218);
+#line 1219 "compiler/codegen.gem"
+                    gem_set_line(1219);
     GemVal _t11387 = gem_table_new_braces();
     GemVal _t11388 = gem_v_o;
     static GemICacheSlot _ic_1951 = {0};
@@ -50790,20 +50793,20 @@ static GemVal __anon_172(void *_env, GemVal *args, int argc) {
                     gem_pop_frame();
                     return _t11393;
                 } else {
-#line 1219 "compiler/codegen.gem"
-                    gem_set_line(1219);
-                    if (gem_truthy(gem_eq(gem_v_op, GEM_STR_LIT("%", 1)))) {
 #line 1220 "compiler/codegen.gem"
-                        gem_set_line(1220);
+                    gem_set_line(1220);
+                    if (gem_truthy(gem_eq(gem_v_op, GEM_STR_LIT("%", 1)))) {
+#line 1221 "compiler/codegen.gem"
+                        gem_set_line(1221);
     GemVal _t11397 = (*gem_v_operands);
     GemVal _t11395 = gem_v_lc_r;
     GemVal _t11394 = gem_v_node;
     static GemICacheSlot _ic_1954 = {0};
     GemVal _t11396[] = {_t11395, gem_table_get_cached(_t11394, "right", &_ic_1954)};
-    gem_check_callable(_t11397, "compiler/codegen.gem", 1220);
+    gem_check_callable(_t11397, "compiler/codegen.gem", 1221);
                         GemVal gem_v_o = _t11397.fn(_t11397.env, _t11396, 2);
-#line 1221 "compiler/codegen.gem"
-                        gem_set_line(1221);
+#line 1222 "compiler/codegen.gem"
+                        gem_set_line(1222);
     GemVal _t11398 = gem_table_new_braces();
     GemVal _t11399 = gem_v_o;
     static GemICacheSlot _ic_1955 = {0};
@@ -50820,25 +50823,25 @@ static GemVal __anon_172(void *_env, GemVal *args, int argc) {
                         gem_pop_frame();
                         return _t11404;
                     } else {
-#line 1222 "compiler/codegen.gem"
-                        gem_set_line(1222);
-                        if (gem_truthy(gem_eq(gem_v_op, GEM_STR_LIT("in", 2)))) {
 #line 1223 "compiler/codegen.gem"
-                            gem_set_line(1223);
+                        gem_set_line(1223);
+                        if (gem_truthy(gem_eq(gem_v_op, GEM_STR_LIT("in", 2)))) {
+#line 1224 "compiler/codegen.gem"
+                            gem_set_line(1224);
     GemVal _t11408 = (*gem_v_operands);
     GemVal _t11406 = gem_v_lc_r;
     GemVal _t11405 = gem_v_node;
     static GemICacheSlot _ic_1958 = {0};
     GemVal _t11407[] = {_t11406, gem_table_get_cached(_t11405, "right", &_ic_1958)};
-    gem_check_callable(_t11408, "compiler/codegen.gem", 1223);
+    gem_check_callable(_t11408, "compiler/codegen.gem", 1224);
                             GemVal gem_v_o = _t11408.fn(_t11408.env, _t11407, 2);
-#line 1224 "compiler/codegen.gem"
-                            gem_set_line(1224);
-    GemVal _t11409 = (*gem_v_tmp);
-    gem_check_callable(_t11409, "compiler/codegen.gem", 1224);
-                            GemVal gem_v_t = _t11409.fn(_t11409.env, NULL, 0);
 #line 1225 "compiler/codegen.gem"
                             gem_set_line(1225);
+    GemVal _t11409 = (*gem_v_tmp);
+    gem_check_callable(_t11409, "compiler/codegen.gem", 1225);
+                            GemVal gem_v_t = _t11409.fn(_t11409.env, NULL, 0);
+#line 1226 "compiler/codegen.gem"
+                            gem_set_line(1226);
     GemVal _t11410 = gem_v_o;
     static GemICacheSlot _ic_1959 = {0};
     GemVal _t11416 = gem_table_get_cached(_t11410, "setup", &_ic_1959);
@@ -50850,8 +50853,8 @@ static GemVal __anon_172(void *_env, GemVal *args, int argc) {
     static GemICacheSlot _ic_1961 = {0};
     GemVal _t11415[] = {GEM_STR_LIT("    GemVal ", 11), _t11414, GEM_STR_LIT("[] = {", 6), _t11413, GEM_STR_LIT(", ", 2), gem_table_get_cached(_t11412, "left", &_ic_1961), GEM_STR_LIT("};\n", 3)};
                             GemVal gem_v_setup = gem_add(_t11416, gem_interp(7, _t11415));
-#line 1226 "compiler/codegen.gem"
-                            gem_set_line(1226);
+#line 1227 "compiler/codegen.gem"
+                            gem_set_line(1227);
     GemVal _t11417 = gem_table_new_braces();
     GemVal _t11418[] = {GEM_STR_LIT("gem_in_fn(NULL, ", 16), gem_v_t, GEM_STR_LIT(", 2)", 4)};
     gem_table_set(_t11417, GEM_STR_LIT("expr", 4), gem_interp(3, _t11418));
@@ -50861,20 +50864,20 @@ static GemVal __anon_172(void *_env, GemVal *args, int argc) {
                             gem_pop_frame();
                             return _t11419;
                         } else {
-#line 1227 "compiler/codegen.gem"
-                            gem_set_line(1227);
-                            if (gem_truthy(gem_eq(gem_v_op, GEM_STR_LIT("==", 2)))) {
 #line 1228 "compiler/codegen.gem"
-                                gem_set_line(1228);
+                            gem_set_line(1228);
+                            if (gem_truthy(gem_eq(gem_v_op, GEM_STR_LIT("==", 2)))) {
+#line 1229 "compiler/codegen.gem"
+                                gem_set_line(1229);
     GemVal _t11423 = (*gem_v_operands);
     GemVal _t11421 = gem_v_lc_r;
     GemVal _t11420 = gem_v_node;
     static GemICacheSlot _ic_1962 = {0};
     GemVal _t11422[] = {_t11421, gem_table_get_cached(_t11420, "right", &_ic_1962)};
-    gem_check_callable(_t11423, "compiler/codegen.gem", 1228);
+    gem_check_callable(_t11423, "compiler/codegen.gem", 1229);
                                 GemVal gem_v_o = _t11423.fn(_t11423.env, _t11422, 2);
-#line 1229 "compiler/codegen.gem"
-                                gem_set_line(1229);
+#line 1230 "compiler/codegen.gem"
+                                gem_set_line(1230);
     GemVal _t11424 = gem_table_new_braces();
     GemVal _t11425 = gem_v_o;
     static GemICacheSlot _ic_1963 = {0};
@@ -50891,20 +50894,20 @@ static GemVal __anon_172(void *_env, GemVal *args, int argc) {
                                 gem_pop_frame();
                                 return _t11430;
                             } else {
-#line 1230 "compiler/codegen.gem"
-                                gem_set_line(1230);
-                                if (gem_truthy(gem_eq(gem_v_op, GEM_STR_LIT("!=", 2)))) {
 #line 1231 "compiler/codegen.gem"
-                                    gem_set_line(1231);
+                                gem_set_line(1231);
+                                if (gem_truthy(gem_eq(gem_v_op, GEM_STR_LIT("!=", 2)))) {
+#line 1232 "compiler/codegen.gem"
+                                    gem_set_line(1232);
     GemVal _t11434 = (*gem_v_operands);
     GemVal _t11432 = gem_v_lc_r;
     GemVal _t11431 = gem_v_node;
     static GemICacheSlot _ic_1966 = {0};
     GemVal _t11433[] = {_t11432, gem_table_get_cached(_t11431, "right", &_ic_1966)};
-    gem_check_callable(_t11434, "compiler/codegen.gem", 1231);
+    gem_check_callable(_t11434, "compiler/codegen.gem", 1232);
                                     GemVal gem_v_o = _t11434.fn(_t11434.env, _t11433, 2);
-#line 1232 "compiler/codegen.gem"
-                                    gem_set_line(1232);
+#line 1233 "compiler/codegen.gem"
+                                    gem_set_line(1233);
     GemVal _t11435 = gem_table_new_braces();
     GemVal _t11436 = gem_v_o;
     static GemICacheSlot _ic_1967 = {0};
@@ -50921,20 +50924,20 @@ static GemVal __anon_172(void *_env, GemVal *args, int argc) {
                                     gem_pop_frame();
                                     return _t11441;
                                 } else {
-#line 1233 "compiler/codegen.gem"
-                                    gem_set_line(1233);
-                                    if (gem_truthy(gem_eq(gem_v_op, GEM_STR_LIT("<", 1)))) {
 #line 1234 "compiler/codegen.gem"
-                                        gem_set_line(1234);
+                                    gem_set_line(1234);
+                                    if (gem_truthy(gem_eq(gem_v_op, GEM_STR_LIT("<", 1)))) {
+#line 1235 "compiler/codegen.gem"
+                                        gem_set_line(1235);
     GemVal _t11445 = (*gem_v_operands);
     GemVal _t11443 = gem_v_lc_r;
     GemVal _t11442 = gem_v_node;
     static GemICacheSlot _ic_1970 = {0};
     GemVal _t11444[] = {_t11443, gem_table_get_cached(_t11442, "right", &_ic_1970)};
-    gem_check_callable(_t11445, "compiler/codegen.gem", 1234);
+    gem_check_callable(_t11445, "compiler/codegen.gem", 1235);
                                         GemVal gem_v_o = _t11445.fn(_t11445.env, _t11444, 2);
-#line 1235 "compiler/codegen.gem"
-                                        gem_set_line(1235);
+#line 1236 "compiler/codegen.gem"
+                                        gem_set_line(1236);
     GemVal _t11446 = gem_table_new_braces();
     GemVal _t11447 = gem_v_o;
     static GemICacheSlot _ic_1971 = {0};
@@ -50951,20 +50954,20 @@ static GemVal __anon_172(void *_env, GemVal *args, int argc) {
                                         gem_pop_frame();
                                         return _t11452;
                                     } else {
-#line 1236 "compiler/codegen.gem"
-                                        gem_set_line(1236);
-                                        if (gem_truthy(gem_eq(gem_v_op, GEM_STR_LIT(">", 1)))) {
 #line 1237 "compiler/codegen.gem"
-                                            gem_set_line(1237);
+                                        gem_set_line(1237);
+                                        if (gem_truthy(gem_eq(gem_v_op, GEM_STR_LIT(">", 1)))) {
+#line 1238 "compiler/codegen.gem"
+                                            gem_set_line(1238);
     GemVal _t11456 = (*gem_v_operands);
     GemVal _t11454 = gem_v_lc_r;
     GemVal _t11453 = gem_v_node;
     static GemICacheSlot _ic_1974 = {0};
     GemVal _t11455[] = {_t11454, gem_table_get_cached(_t11453, "right", &_ic_1974)};
-    gem_check_callable(_t11456, "compiler/codegen.gem", 1237);
+    gem_check_callable(_t11456, "compiler/codegen.gem", 1238);
                                             GemVal gem_v_o = _t11456.fn(_t11456.env, _t11455, 2);
-#line 1238 "compiler/codegen.gem"
-                                            gem_set_line(1238);
+#line 1239 "compiler/codegen.gem"
+                                            gem_set_line(1239);
     GemVal _t11457 = gem_table_new_braces();
     GemVal _t11458 = gem_v_o;
     static GemICacheSlot _ic_1975 = {0};
@@ -50981,20 +50984,20 @@ static GemVal __anon_172(void *_env, GemVal *args, int argc) {
                                             gem_pop_frame();
                                             return _t11463;
                                         } else {
-#line 1239 "compiler/codegen.gem"
-                                            gem_set_line(1239);
-                                            if (gem_truthy(gem_eq(gem_v_op, GEM_STR_LIT("<=", 2)))) {
 #line 1240 "compiler/codegen.gem"
-                                                gem_set_line(1240);
+                                            gem_set_line(1240);
+                                            if (gem_truthy(gem_eq(gem_v_op, GEM_STR_LIT("<=", 2)))) {
+#line 1241 "compiler/codegen.gem"
+                                                gem_set_line(1241);
     GemVal _t11467 = (*gem_v_operands);
     GemVal _t11465 = gem_v_lc_r;
     GemVal _t11464 = gem_v_node;
     static GemICacheSlot _ic_1978 = {0};
     GemVal _t11466[] = {_t11465, gem_table_get_cached(_t11464, "right", &_ic_1978)};
-    gem_check_callable(_t11467, "compiler/codegen.gem", 1240);
+    gem_check_callable(_t11467, "compiler/codegen.gem", 1241);
                                                 GemVal gem_v_o = _t11467.fn(_t11467.env, _t11466, 2);
-#line 1241 "compiler/codegen.gem"
-                                                gem_set_line(1241);
+#line 1242 "compiler/codegen.gem"
+                                                gem_set_line(1242);
     GemVal _t11468 = gem_table_new_braces();
     GemVal _t11469 = gem_v_o;
     static GemICacheSlot _ic_1979 = {0};
@@ -51011,20 +51014,20 @@ static GemVal __anon_172(void *_env, GemVal *args, int argc) {
                                                 gem_pop_frame();
                                                 return _t11474;
                                             } else {
-#line 1242 "compiler/codegen.gem"
-                                                gem_set_line(1242);
-                                                if (gem_truthy(gem_eq(gem_v_op, GEM_STR_LIT(">=", 2)))) {
 #line 1243 "compiler/codegen.gem"
-                                                    gem_set_line(1243);
+                                                gem_set_line(1243);
+                                                if (gem_truthy(gem_eq(gem_v_op, GEM_STR_LIT(">=", 2)))) {
+#line 1244 "compiler/codegen.gem"
+                                                    gem_set_line(1244);
     GemVal _t11478 = (*gem_v_operands);
     GemVal _t11476 = gem_v_lc_r;
     GemVal _t11475 = gem_v_node;
     static GemICacheSlot _ic_1982 = {0};
     GemVal _t11477[] = {_t11476, gem_table_get_cached(_t11475, "right", &_ic_1982)};
-    gem_check_callable(_t11478, "compiler/codegen.gem", 1243);
+    gem_check_callable(_t11478, "compiler/codegen.gem", 1244);
                                                     GemVal gem_v_o = _t11478.fn(_t11478.env, _t11477, 2);
-#line 1244 "compiler/codegen.gem"
-                                                    gem_set_line(1244);
+#line 1245 "compiler/codegen.gem"
+                                                    gem_set_line(1245);
     GemVal _t11479 = gem_table_new_braces();
     GemVal _t11480 = gem_v_o;
     static GemICacheSlot _ic_1983 = {0};
@@ -51041,68 +51044,68 @@ static GemVal __anon_172(void *_env, GemVal *args, int argc) {
                                                     gem_pop_frame();
                                                     return _t11485;
                                                 } else {
-#line 1245 "compiler/codegen.gem"
-                                                    gem_set_line(1245);
-                                                    if (gem_truthy(gem_eq(gem_v_op, GEM_STR_LIT("and", 3)))) {
 #line 1246 "compiler/codegen.gem"
-                                                        gem_set_line(1246);
+                                                    gem_set_line(1246);
+                                                    if (gem_truthy(gem_eq(gem_v_op, GEM_STR_LIT("and", 3)))) {
+#line 1247 "compiler/codegen.gem"
+                                                        gem_set_line(1247);
     GemVal _t11488 = (*gem_v_compile_expr);
     GemVal _t11486 = gem_v_node;
     static GemICacheSlot _ic_1986 = {0};
     GemVal _t11487[] = {gem_table_get_cached(_t11486, "right", &_ic_1986)};
-    gem_check_callable(_t11488, "compiler/codegen.gem", 1246);
+    gem_check_callable(_t11488, "compiler/codegen.gem", 1247);
                                                         GemVal gem_v_rc_r = _t11488.fn(_t11488.env, _t11487, 1);
-#line 1247 "compiler/codegen.gem"
-                                                        gem_set_line(1247);
-    GemVal _t11489 = (*gem_v_tmp);
-    gem_check_callable(_t11489, "compiler/codegen.gem", 1247);
-                                                        GemVal gem_v_t = _t11489.fn(_t11489.env, NULL, 0);
 #line 1248 "compiler/codegen.gem"
                                                         gem_set_line(1248);
-                                                        GemVal gem_v_b = gem_buf_new_fn(NULL, NULL, 0);
+    GemVal _t11489 = (*gem_v_tmp);
+    gem_check_callable(_t11489, "compiler/codegen.gem", 1248);
+                                                        GemVal gem_v_t = _t11489.fn(_t11489.env, NULL, 0);
 #line 1249 "compiler/codegen.gem"
                                                         gem_set_line(1249);
+                                                        GemVal gem_v_b = gem_buf_new_fn(NULL, NULL, 0);
+#line 1250 "compiler/codegen.gem"
+                                                        gem_set_line(1250);
     GemVal _t11490 = gem_v_b;
     GemVal _t11491[] = {_t11490, gem_v_ls};
                                                         (void)(gem_buf_push_fn(NULL, _t11491, 2));
-#line 1250 "compiler/codegen.gem"
-                                                        gem_set_line(1250);
+#line 1251 "compiler/codegen.gem"
+                                                        gem_set_line(1251);
     GemVal _t11493 = gem_v_b;
     GemVal _t11492[] = {GEM_STR_LIT("    GemVal ", 11), gem_v_t, GEM_STR_LIT(";\n", 2)};
     GemVal _t11494[] = {_t11493, gem_interp(3, _t11492)};
                                                         (void)(gem_buf_push_fn(NULL, _t11494, 2));
-#line 1251 "compiler/codegen.gem"
-                                                        gem_set_line(1251);
+#line 1252 "compiler/codegen.gem"
+                                                        gem_set_line(1252);
     GemVal _t11496 = gem_v_b;
     GemVal _t11495[] = {GEM_STR_LIT("    if (!gem_truthy(", 20), gem_v_lc, GEM_STR_LIT(")) {\n", 5)};
     GemVal _t11497[] = {_t11496, gem_interp(3, _t11495)};
                                                         (void)(gem_buf_push_fn(NULL, _t11497, 2));
-#line 1252 "compiler/codegen.gem"
-                                                        gem_set_line(1252);
+#line 1253 "compiler/codegen.gem"
+                                                        gem_set_line(1253);
     GemVal _t11500 = gem_v_b;
     GemVal _t11498 = gem_v_t;
     GemVal _t11499[] = {GEM_STR_LIT("        ", 8), _t11498, GEM_STR_LIT(" = ", 3), gem_v_lc, GEM_STR_LIT(";\n", 2)};
     GemVal _t11501[] = {_t11500, gem_interp(5, _t11499)};
                                                         (void)(gem_buf_push_fn(NULL, _t11501, 2));
-#line 1253 "compiler/codegen.gem"
-                                                        gem_set_line(1253);
-    GemVal _t11502[] = {gem_v_b, GEM_STR_LIT("    } else {\n", 13)};
-                                                        (void)(gem_buf_push_fn(NULL, _t11502, 2));
 #line 1254 "compiler/codegen.gem"
                                                         gem_set_line(1254);
+    GemVal _t11502[] = {gem_v_b, GEM_STR_LIT("    } else {\n", 13)};
+                                                        (void)(gem_buf_push_fn(NULL, _t11502, 2));
+#line 1255 "compiler/codegen.gem"
+                                                        gem_set_line(1255);
     GemVal _t11503 = gem_v_rc_r;
     static GemICacheSlot _ic_1987 = {0};
                                                         if (gem_truthy(gem_neq(gem_table_get_cached(_t11503, "setup", &_ic_1987), GEM_STR_LIT("", 0)))) {
-#line 1256 "compiler/codegen.gem"
-                                                            gem_set_line(1256);
+#line 1257 "compiler/codegen.gem"
+                                                            gem_set_line(1257);
     GemVal _t11505 = gem_v_b;
     GemVal _t11504 = gem_v_rc_r;
     static GemICacheSlot _ic_1988 = {0};
     GemVal _t11506[] = {_t11505, gem_table_get_cached(_t11504, "setup", &_ic_1988)};
                                                             (void)(gem_buf_push_fn(NULL, _t11506, 2));
                                                         }
-#line 1258 "compiler/codegen.gem"
-                                                        gem_set_line(1258);
+#line 1259 "compiler/codegen.gem"
+                                                        gem_set_line(1259);
     GemVal _t11510 = gem_v_b;
     GemVal _t11508 = gem_v_t;
     GemVal _t11507 = gem_v_rc_r;
@@ -51110,12 +51113,12 @@ static GemVal __anon_172(void *_env, GemVal *args, int argc) {
     GemVal _t11509[] = {GEM_STR_LIT("        ", 8), _t11508, GEM_STR_LIT(" = ", 3), gem_table_get_cached(_t11507, "expr", &_ic_1989), GEM_STR_LIT(";\n", 2)};
     GemVal _t11511[] = {_t11510, gem_interp(5, _t11509)};
                                                         (void)(gem_buf_push_fn(NULL, _t11511, 2));
-#line 1259 "compiler/codegen.gem"
-                                                        gem_set_line(1259);
-    GemVal _t11512[] = {gem_v_b, GEM_STR_LIT("    }\n", 6)};
-                                                        (void)(gem_buf_push_fn(NULL, _t11512, 2));
 #line 1260 "compiler/codegen.gem"
                                                         gem_set_line(1260);
+    GemVal _t11512[] = {gem_v_b, GEM_STR_LIT("    }\n", 6)};
+                                                        (void)(gem_buf_push_fn(NULL, _t11512, 2));
+#line 1261 "compiler/codegen.gem"
+                                                        gem_set_line(1261);
     GemVal _t11513 = gem_table_new_braces();
     gem_table_set(_t11513, GEM_STR_LIT("expr", 4), gem_v_t);
     GemVal _t11514[] = {gem_v_b};
@@ -51125,68 +51128,68 @@ static GemVal __anon_172(void *_env, GemVal *args, int argc) {
                                                         gem_pop_frame();
                                                         return _t11515;
                                                     } else {
-#line 1261 "compiler/codegen.gem"
-                                                        gem_set_line(1261);
-                                                        if (gem_truthy(gem_eq(gem_v_op, GEM_STR_LIT("or", 2)))) {
 #line 1262 "compiler/codegen.gem"
-                                                            gem_set_line(1262);
+                                                        gem_set_line(1262);
+                                                        if (gem_truthy(gem_eq(gem_v_op, GEM_STR_LIT("or", 2)))) {
+#line 1263 "compiler/codegen.gem"
+                                                            gem_set_line(1263);
     GemVal _t11518 = (*gem_v_compile_expr);
     GemVal _t11516 = gem_v_node;
     static GemICacheSlot _ic_1990 = {0};
     GemVal _t11517[] = {gem_table_get_cached(_t11516, "right", &_ic_1990)};
-    gem_check_callable(_t11518, "compiler/codegen.gem", 1262);
+    gem_check_callable(_t11518, "compiler/codegen.gem", 1263);
                                                             GemVal gem_v_rc_r = _t11518.fn(_t11518.env, _t11517, 1);
-#line 1263 "compiler/codegen.gem"
-                                                            gem_set_line(1263);
-    GemVal _t11519 = (*gem_v_tmp);
-    gem_check_callable(_t11519, "compiler/codegen.gem", 1263);
-                                                            GemVal gem_v_t = _t11519.fn(_t11519.env, NULL, 0);
 #line 1264 "compiler/codegen.gem"
                                                             gem_set_line(1264);
-                                                            GemVal gem_v_b = gem_buf_new_fn(NULL, NULL, 0);
+    GemVal _t11519 = (*gem_v_tmp);
+    gem_check_callable(_t11519, "compiler/codegen.gem", 1264);
+                                                            GemVal gem_v_t = _t11519.fn(_t11519.env, NULL, 0);
 #line 1265 "compiler/codegen.gem"
                                                             gem_set_line(1265);
+                                                            GemVal gem_v_b = gem_buf_new_fn(NULL, NULL, 0);
+#line 1266 "compiler/codegen.gem"
+                                                            gem_set_line(1266);
     GemVal _t11520 = gem_v_b;
     GemVal _t11521[] = {_t11520, gem_v_ls};
                                                             (void)(gem_buf_push_fn(NULL, _t11521, 2));
-#line 1266 "compiler/codegen.gem"
-                                                            gem_set_line(1266);
+#line 1267 "compiler/codegen.gem"
+                                                            gem_set_line(1267);
     GemVal _t11523 = gem_v_b;
     GemVal _t11522[] = {GEM_STR_LIT("    GemVal ", 11), gem_v_t, GEM_STR_LIT(";\n", 2)};
     GemVal _t11524[] = {_t11523, gem_interp(3, _t11522)};
                                                             (void)(gem_buf_push_fn(NULL, _t11524, 2));
-#line 1267 "compiler/codegen.gem"
-                                                            gem_set_line(1267);
+#line 1268 "compiler/codegen.gem"
+                                                            gem_set_line(1268);
     GemVal _t11526 = gem_v_b;
     GemVal _t11525[] = {GEM_STR_LIT("    if (gem_truthy(", 19), gem_v_lc, GEM_STR_LIT(")) {\n", 5)};
     GemVal _t11527[] = {_t11526, gem_interp(3, _t11525)};
                                                             (void)(gem_buf_push_fn(NULL, _t11527, 2));
-#line 1268 "compiler/codegen.gem"
-                                                            gem_set_line(1268);
+#line 1269 "compiler/codegen.gem"
+                                                            gem_set_line(1269);
     GemVal _t11530 = gem_v_b;
     GemVal _t11528 = gem_v_t;
     GemVal _t11529[] = {GEM_STR_LIT("        ", 8), _t11528, GEM_STR_LIT(" = ", 3), gem_v_lc, GEM_STR_LIT(";\n", 2)};
     GemVal _t11531[] = {_t11530, gem_interp(5, _t11529)};
                                                             (void)(gem_buf_push_fn(NULL, _t11531, 2));
-#line 1269 "compiler/codegen.gem"
-                                                            gem_set_line(1269);
-    GemVal _t11532[] = {gem_v_b, GEM_STR_LIT("    } else {\n", 13)};
-                                                            (void)(gem_buf_push_fn(NULL, _t11532, 2));
 #line 1270 "compiler/codegen.gem"
                                                             gem_set_line(1270);
+    GemVal _t11532[] = {gem_v_b, GEM_STR_LIT("    } else {\n", 13)};
+                                                            (void)(gem_buf_push_fn(NULL, _t11532, 2));
+#line 1271 "compiler/codegen.gem"
+                                                            gem_set_line(1271);
     GemVal _t11533 = gem_v_rc_r;
     static GemICacheSlot _ic_1991 = {0};
                                                             if (gem_truthy(gem_neq(gem_table_get_cached(_t11533, "setup", &_ic_1991), GEM_STR_LIT("", 0)))) {
-#line 1271 "compiler/codegen.gem"
-                                                                gem_set_line(1271);
+#line 1272 "compiler/codegen.gem"
+                                                                gem_set_line(1272);
     GemVal _t11535 = gem_v_b;
     GemVal _t11534 = gem_v_rc_r;
     static GemICacheSlot _ic_1992 = {0};
     GemVal _t11536[] = {_t11535, gem_table_get_cached(_t11534, "setup", &_ic_1992)};
                                                                 (void)(gem_buf_push_fn(NULL, _t11536, 2));
                                                             }
-#line 1273 "compiler/codegen.gem"
-                                                            gem_set_line(1273);
+#line 1274 "compiler/codegen.gem"
+                                                            gem_set_line(1274);
     GemVal _t11540 = gem_v_b;
     GemVal _t11538 = gem_v_t;
     GemVal _t11537 = gem_v_rc_r;
@@ -51194,12 +51197,12 @@ static GemVal __anon_172(void *_env, GemVal *args, int argc) {
     GemVal _t11539[] = {GEM_STR_LIT("        ", 8), _t11538, GEM_STR_LIT(" = ", 3), gem_table_get_cached(_t11537, "expr", &_ic_1993), GEM_STR_LIT(";\n", 2)};
     GemVal _t11541[] = {_t11540, gem_interp(5, _t11539)};
                                                             (void)(gem_buf_push_fn(NULL, _t11541, 2));
-#line 1274 "compiler/codegen.gem"
-                                                            gem_set_line(1274);
-    GemVal _t11542[] = {gem_v_b, GEM_STR_LIT("    }\n", 6)};
-                                                            (void)(gem_buf_push_fn(NULL, _t11542, 2));
 #line 1275 "compiler/codegen.gem"
                                                             gem_set_line(1275);
+    GemVal _t11542[] = {gem_v_b, GEM_STR_LIT("    }\n", 6)};
+                                                            (void)(gem_buf_push_fn(NULL, _t11542, 2));
+#line 1276 "compiler/codegen.gem"
+                                                            gem_set_line(1276);
     GemVal _t11543 = gem_table_new_braces();
     gem_table_set(_t11543, GEM_STR_LIT("expr", 4), gem_v_t);
     GemVal _t11544[] = {gem_v_b};
@@ -51222,13 +51225,13 @@ static GemVal __anon_172(void *_env, GemVal *args, int argc) {
             }
         }
     }
-#line 1278 "compiler/codegen.gem"
-    gem_set_line(1278);
+#line 1279 "compiler/codegen.gem"
+    gem_set_line(1279);
     GemVal _t11549 = (*gem_v_codegen_error);
     GemVal _t11547 = gem_v_node;
     GemVal _t11546[] = {GEM_STR_LIT("unknown binary operator: ", 25), gem_v_op};
     GemVal _t11548[] = {_t11547, gem_interp(2, _t11546)};
-    gem_check_callable(_t11549, "compiler/codegen.gem", 1278);
+    gem_check_callable(_t11549, "compiler/codegen.gem", 1279);
     GemVal _t11550 = _t11549.fn(_t11549.env, _t11548, 2);
     if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t11550, 1);
     gem_pop_frame();
@@ -51242,22 +51245,22 @@ struct _closure___anon_173 {
 static GemVal __anon_173(void *_env, GemVal *args, int argc) {
     struct _closure___anon_173 *_cls = (struct _closure___anon_173 *)_env;
     GemVal *gem_v_compile_stmt = _cls->gem_v_compile_stmt;
-    gem_push_frame("anonymous fn", "compiler/codegen.gem", 1281);
+    gem_push_frame("anonymous fn", "compiler/codegen.gem", 1282);
     GemVal gem_v_stmts = (argc > 0) ? args[0] : GEM_NIL;
     GemVal gem_v_indent = (argc > 1) ? args[1] : GEM_NIL;
     GemArenaPoint _ret_pt;
     gem_arena_point(&_ret_pt);
-#line 1282 "compiler/codegen.gem"
-    gem_set_line(1282);
+#line 1283 "compiler/codegen.gem"
+    gem_set_line(1283);
     GemVal gem_v_b = gem_buf_new_fn(NULL, NULL, 0);
-#line 1283 "compiler/codegen.gem"
-    gem_set_line(1283);
+#line 1284 "compiler/codegen.gem"
+    gem_set_line(1284);
     GemVal gem_v___for_items_303 = gem_for_items_1(gem_v_stmts);
-#line 1283 "compiler/codegen.gem"
-    gem_set_line(1283);
+#line 1284 "compiler/codegen.gem"
+    gem_set_line(1284);
     GemVal gem_v___for_i_303 = gem_int(0);
-#line 1283 "compiler/codegen.gem"
-    gem_set_line(1283);
+#line 1284 "compiler/codegen.gem"
+    gem_set_line(1284);
     GemArenaMark _mk322;
     gem_arena_mark(&_mk322);
     while (1) {
@@ -51268,30 +51271,30 @@ static GemVal __anon_173(void *_env, GemVal *args, int argc) {
         }
     GemVal _t11556 = gem_v___for_i_303;
         if (!gem_truthy(gem_lt(_t11556, gem_for_len_1(gem_v___for_items_303)))) break;
-#line 1283 "compiler/codegen.gem"
-        gem_set_line(1283);
-    GemVal _t11557 = gem_v___for_items_303;
-        GemVal gem_v_stmt = gem_table_get(_t11557, gem_v___for_i_303);
-#line 1283 "compiler/codegen.gem"
-        gem_set_line(1283);
-        gem_v___for_i_303 = gem_add(gem_v___for_i_303, gem_int(1));
 #line 1284 "compiler/codegen.gem"
         gem_set_line(1284);
+    GemVal _t11557 = gem_v___for_items_303;
+        GemVal gem_v_stmt = gem_table_get(_t11557, gem_v___for_i_303);
+#line 1284 "compiler/codegen.gem"
+        gem_set_line(1284);
+        gem_v___for_i_303 = gem_add(gem_v___for_i_303, gem_int(1));
+#line 1285 "compiler/codegen.gem"
+        gem_set_line(1285);
     GemVal _t11561 = gem_v_b;
     GemVal _t11560 = (*gem_v_compile_stmt);
     GemVal _t11558 = gem_v_stmt;
     GemVal _t11559[] = {_t11558, gem_v_indent};
-    gem_check_callable(_t11560, "compiler/codegen.gem", 1284);
+    gem_check_callable(_t11560, "compiler/codegen.gem", 1285);
     GemVal _t11562[] = {_t11561, _t11560.fn(_t11560.env, _t11559, 2)};
         (void)(gem_buf_push_fn(NULL, _t11562, 2));
-#line 1285 "compiler/codegen.gem"
-        gem_set_line(1285);
+#line 1286 "compiler/codegen.gem"
+        gem_set_line(1286);
     GemVal _t11563[] = {gem_v_b, GEM_STR_LIT("\n", 1)};
         (void)(gem_buf_push_fn(NULL, _t11563, 2));
     }
 
-#line 1287 "compiler/codegen.gem"
-    gem_set_line(1287);
+#line 1288 "compiler/codegen.gem"
+    gem_set_line(1288);
     GemVal _t11564[] = {gem_v_b};
     GemVal _t11565 = gem_to_string_fn(NULL, _t11564, 1);
     if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t11565, 1);
@@ -51312,40 +51315,40 @@ static GemVal __anon_174(void *_env, GemVal *args, int argc) {
     GemVal *gem_v_compile_stmt_return = _cls->gem_v_compile_stmt_return;
     GemVal *gem_v_compile_stmts = _cls->gem_v_compile_stmts;
     GemVal *gem_v_return_nil_str = _cls->gem_v_return_nil_str;
-    gem_push_frame("anonymous fn", "compiler/codegen.gem", 1290);
+    gem_push_frame("anonymous fn", "compiler/codegen.gem", 1291);
     GemVal gem_v_stmts = (argc > 0) ? args[0] : GEM_NIL;
     GemVal gem_v_indent = (argc > 1) ? args[1] : GEM_NIL;
     GemVal gem_v_return_pos = (argc > 2) ? args[2] : GEM_NIL;
     GemArenaPoint _ret_pt;
     gem_arena_point(&_ret_pt);
-#line 1291 "compiler/codegen.gem"
-    gem_set_line(1291);
-    if (gem_truthy(gem_not(gem_v_return_pos))) {
 #line 1292 "compiler/codegen.gem"
-        gem_set_line(1292);
+    gem_set_line(1292);
+    if (gem_truthy(gem_not(gem_v_return_pos))) {
+#line 1293 "compiler/codegen.gem"
+        gem_set_line(1293);
     GemVal _t11569 = (*gem_v_compile_stmts);
     GemVal _t11567 = gem_v_stmts;
     GemVal _t11568[] = {_t11567, gem_v_indent};
-    gem_check_callable(_t11569, "compiler/codegen.gem", 1292);
+    gem_check_callable(_t11569, "compiler/codegen.gem", 1293);
         GemVal _t11570 = _t11569.fn(_t11569.env, _t11568, 2);
         if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t11570, 1);
         gem_pop_frame();
         return _t11570;
     }
-#line 1294 "compiler/codegen.gem"
-    gem_set_line(1294);
-    GemVal gem_v_b = gem_buf_new_fn(NULL, NULL, 0);
 #line 1295 "compiler/codegen.gem"
     gem_set_line(1295);
+    GemVal gem_v_b = gem_buf_new_fn(NULL, NULL, 0);
+#line 1296 "compiler/codegen.gem"
+    gem_set_line(1296);
     if (gem_truthy(gem_gt(gem_len_1(gem_v_stmts), gem_int(0)))) {
-#line 1296 "compiler/codegen.gem"
-        gem_set_line(1296);
+#line 1297 "compiler/codegen.gem"
+        gem_set_line(1297);
         GemVal gem_v___for_i_304 = gem_int(0);
-#line 1296 "compiler/codegen.gem"
-        gem_set_line(1296);
+#line 1297 "compiler/codegen.gem"
+        gem_set_line(1297);
         GemVal gem_v___for_limit_304 = gem_sub(gem_len_1(gem_v_stmts), gem_int(1));
-#line 1296 "compiler/codegen.gem"
-        gem_set_line(1296);
+#line 1297 "compiler/codegen.gem"
+        gem_set_line(1297);
         GemArenaMark _mk323;
         gem_arena_mark(&_mk323);
         while (1) {
@@ -51356,60 +51359,60 @@ static GemVal __anon_174(void *_env, GemVal *args, int argc) {
             }
     GemVal _t11571 = gem_v___for_i_304;
             if (!gem_truthy(gem_lt(_t11571, gem_v___for_limit_304))) break;
-#line 1296 "compiler/codegen.gem"
-            gem_set_line(1296);
-            GemVal gem_v_i = gem_v___for_i_304;
-#line 1296 "compiler/codegen.gem"
-            gem_set_line(1296);
-            gem_v___for_i_304 = gem_add(gem_v___for_i_304, gem_int(1));
 #line 1297 "compiler/codegen.gem"
             gem_set_line(1297);
+            GemVal gem_v_i = gem_v___for_i_304;
+#line 1297 "compiler/codegen.gem"
+            gem_set_line(1297);
+            gem_v___for_i_304 = gem_add(gem_v___for_i_304, gem_int(1));
+#line 1298 "compiler/codegen.gem"
+            gem_set_line(1298);
     GemVal _t11576 = gem_v_b;
     GemVal _t11575 = (*gem_v_compile_stmt);
     GemVal _t11572 = gem_v_stmts;
     GemVal _t11573 = gem_table_get(_t11572, gem_v_i);
     GemVal _t11574[] = {_t11573, gem_v_indent};
-    gem_check_callable(_t11575, "compiler/codegen.gem", 1297);
+    gem_check_callable(_t11575, "compiler/codegen.gem", 1298);
     GemVal _t11577[] = {_t11576, _t11575.fn(_t11575.env, _t11574, 2)};
             (void)(gem_buf_push_fn(NULL, _t11577, 2));
-#line 1298 "compiler/codegen.gem"
-            gem_set_line(1298);
+#line 1299 "compiler/codegen.gem"
+            gem_set_line(1299);
     GemVal _t11578[] = {gem_v_b, GEM_STR_LIT("\n", 1)};
             (void)(gem_buf_push_fn(NULL, _t11578, 2));
         }
 
-#line 1300 "compiler/codegen.gem"
-        gem_set_line(1300);
+#line 1301 "compiler/codegen.gem"
+        gem_set_line(1301);
     GemVal _t11582 = gem_v_b;
     GemVal _t11581 = (*gem_v_compile_stmt_return);
     GemVal _t11579 = gem_table_get(gem_v_stmts, gem_int(-1));
     GemVal _t11580[] = {_t11579, gem_v_indent};
-    gem_check_callable(_t11581, "compiler/codegen.gem", 1300);
+    gem_check_callable(_t11581, "compiler/codegen.gem", 1301);
     GemVal _t11583[] = {_t11582, _t11581.fn(_t11581.env, _t11580, 2)};
         (void)(gem_buf_push_fn(NULL, _t11583, 2));
-#line 1301 "compiler/codegen.gem"
-        gem_set_line(1301);
+#line 1302 "compiler/codegen.gem"
+        gem_set_line(1302);
     GemVal _t11584[] = {gem_v_b, GEM_STR_LIT("\n", 1)};
         (void)(gem_buf_push_fn(NULL, _t11584, 2));
     } else {
-#line 1303 "compiler/codegen.gem"
-        gem_set_line(1303);
-    GemVal _t11586 = gem_g___mod_codegen_pad_for;
-    GemVal _t11585[] = {gem_v_indent};
-    gem_check_callable(_t11586, "compiler/codegen.gem", 1303);
-        GemVal gem_v_p = _t11586.fn(_t11586.env, _t11585, 1);
 #line 1304 "compiler/codegen.gem"
         gem_set_line(1304);
+    GemVal _t11586 = gem_g___mod_codegen_pad_for;
+    GemVal _t11585[] = {gem_v_indent};
+    gem_check_callable(_t11586, "compiler/codegen.gem", 1304);
+        GemVal gem_v_p = _t11586.fn(_t11586.env, _t11585, 1);
+#line 1305 "compiler/codegen.gem"
+        gem_set_line(1305);
     GemVal _t11590 = gem_v_b;
     GemVal _t11588 = (*gem_v_return_nil_str);
     GemVal _t11587[] = {gem_v_p};
-    gem_check_callable(_t11588, "compiler/codegen.gem", 1304);
+    gem_check_callable(_t11588, "compiler/codegen.gem", 1305);
     GemVal _t11589[] = {_t11588.fn(_t11588.env, _t11587, 1), GEM_STR_LIT("\n", 1)};
     GemVal _t11591[] = {_t11590, gem_interp(2, _t11589)};
         (void)(gem_buf_push_fn(NULL, _t11591, 2));
     }
-#line 1306 "compiler/codegen.gem"
-    gem_set_line(1306);
+#line 1307 "compiler/codegen.gem"
+    gem_set_line(1307);
     GemVal _t11592[] = {gem_v_b};
     GemVal _t11593 = gem_to_string_fn(NULL, _t11592, 1);
     if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t11593, 1);
@@ -51468,27 +51471,27 @@ static GemVal __anon_175(void *_env, GemVal *args, int argc) {
     GemVal *gem_v_top_level_vars = _cls->gem_v_top_level_vars;
     GemVal *gem_v_var_lvalue = _cls->gem_v_var_lvalue;
     GemVal *gem_v_var_store = _cls->gem_v_var_store;
-    gem_push_frame("anonymous fn", "compiler/codegen.gem", 1309);
+    gem_push_frame("anonymous fn", "compiler/codegen.gem", 1310);
     GemVal gem_v_node = (argc > 0) ? args[0] : GEM_NIL;
     GemVal gem_v_indent = (argc > 1) ? args[1] : GEM_NIL;
     GemArenaPoint _ret_pt;
     gem_arena_point(&_ret_pt);
-#line 1310 "compiler/codegen.gem"
-    gem_set_line(1310);
+#line 1311 "compiler/codegen.gem"
+    gem_set_line(1311);
     GemVal _t11597 = gem_g___mod_codegen_pad_for;
     GemVal _t11596[] = {gem_v_indent};
-    gem_check_callable(_t11597, "compiler/codegen.gem", 1310);
+    gem_check_callable(_t11597, "compiler/codegen.gem", 1311);
     GemVal gem_v_p = _t11597.fn(_t11597.env, _t11596, 1);
-#line 1311 "compiler/codegen.gem"
-    gem_set_line(1311);
+#line 1312 "compiler/codegen.gem"
+    gem_set_line(1312);
     GemVal gem_v___val_305 = GEM_NIL;
-#line 1311 "compiler/codegen.gem"
-    gem_set_line(1311);
+#line 1312 "compiler/codegen.gem"
+    gem_set_line(1312);
     GemVal _t11598 = gem_v_node;
     static GemICacheSlot _ic_1994 = {0};
     if (gem_truthy(gem_neq(gem_table_get_cached(_t11598, "line", &_ic_1994), GEM_NIL))) {
-#line 1312 "compiler/codegen.gem"
-        gem_set_line(1312);
+#line 1313 "compiler/codegen.gem"
+        gem_set_line(1313);
     GemVal _t11599 = gem_v_node;
     static GemICacheSlot _ic_1995 = {0};
     GemVal _t11611 = gem_table_get_cached(_t11599, "line", &_ic_1995);
@@ -51496,30 +51499,30 @@ static GemVal __anon_175(void *_env, GemVal *args, int argc) {
     GemVal _t11603 = (*gem_v_rel_path);
     GemVal _t11601 = (*gem_v_file_of);
     GemVal _t11600[] = {gem_v_node};
-    gem_check_callable(_t11601, "compiler/codegen.gem", 1312);
+    gem_check_callable(_t11601, "compiler/codegen.gem", 1313);
     GemVal _t11602[] = {_t11601.fn(_t11601.env, _t11600, 1)};
-    gem_check_callable(_t11603, "compiler/codegen.gem", 1312);
+    gem_check_callable(_t11603, "compiler/codegen.gem", 1313);
     GemVal _t11604[] = {_t11603.fn(_t11603.env, _t11602, 1)};
-    gem_check_callable(_t11605, "compiler/codegen.gem", 1312);
+    gem_check_callable(_t11605, "compiler/codegen.gem", 1313);
     GemVal _t11610 = _t11605.fn(_t11605.env, _t11604, 1);
     GemVal _t11609 = (*gem_v_setline_str);
     GemVal _t11606 = gem_v_node;
     static GemICacheSlot _ic_1996 = {0};
     GemVal _t11607 = gem_table_get_cached(_t11606, "line", &_ic_1996);
     GemVal _t11608[] = {_t11607, gem_v_p};
-    gem_check_callable(_t11609, "compiler/codegen.gem", 1312);
+    gem_check_callable(_t11609, "compiler/codegen.gem", 1313);
     GemVal _t11612[] = {GEM_STR_LIT("#line ", 6), _t11611, GEM_STR_LIT(" \"", 2), _t11610, GEM_STR_LIT("\"\n", 2), _t11609.fn(_t11609.env, _t11608, 2)};
         gem_v___val_305 = gem_interp(6, _t11612);
     } else {
-#line 1314 "compiler/codegen.gem"
-        gem_set_line(1314);
+#line 1315 "compiler/codegen.gem"
+        gem_set_line(1315);
         gem_v___val_305 = GEM_STR_LIT("", 0);
     }
-#line 1311 "compiler/codegen.gem"
-    gem_set_line(1311);
+#line 1312 "compiler/codegen.gem"
+    gem_set_line(1312);
     GemVal gem_v_line_dir = gem_v___val_305;
-#line 1317 "compiler/codegen.gem"
-    gem_set_line(1317);
+#line 1318 "compiler/codegen.gem"
+    gem_set_line(1318);
     GemVal gem_v___match_306 = gem_v_node;
     GemVal _t11613 = gem_eq(gem_type_1(gem_v___match_306), GEM_STR_LIT("table", 5));
     GemVal _t11615;
@@ -51550,29 +51553,29 @@ static GemVal __anon_175(void *_env, GemVal *args, int argc) {
         _t11620 = gem_has_key_fn(NULL, _t11619, 2);
     }
     if (gem_truthy(_t11620)) {
-#line 1318 "compiler/codegen.gem"
-        gem_set_line(1318);
+#line 1319 "compiler/codegen.gem"
+        gem_set_line(1319);
         GemVal gem_v_name = gem_table_get(gem_v___match_306, GEM_STR_LIT("name", 4));
-#line 1318 "compiler/codegen.gem"
-        gem_set_line(1318);
+#line 1319 "compiler/codegen.gem"
+        gem_set_line(1319);
         GemVal gem_v_value = gem_table_get(gem_v___match_306, GEM_STR_LIT("value", 5));
-#line 1320 "compiler/codegen.gem"
-        gem_set_line(1320);
+#line 1321 "compiler/codegen.gem"
+        gem_set_line(1321);
     GemVal _t11624 = gem_g___mod_codegen_set_add;
     GemVal _t11621 = (*gem_v_fs);
     static GemICacheSlot _ic_1997 = {0};
     GemVal _t11622 = gem_table_get_cached(_t11621, "fn_scope_locals", &_ic_1997);
     GemVal _t11623[] = {_t11622, gem_v_name};
-    gem_check_callable(_t11624, "compiler/codegen.gem", 1320);
+    gem_check_callable(_t11624, "compiler/codegen.gem", 1321);
         (void)(_t11624.fn(_t11624.env, _t11623, 2));
-#line 1321 "compiler/codegen.gem"
-        gem_set_line(1321);
-    GemVal _t11626 = (*gem_v_compile_expr);
-    GemVal _t11625[] = {gem_v_value};
-    gem_check_callable(_t11626, "compiler/codegen.gem", 1321);
-        GemVal gem_v_r = _t11626.fn(_t11626.env, _t11625, 1);
 #line 1322 "compiler/codegen.gem"
         gem_set_line(1322);
+    GemVal _t11626 = (*gem_v_compile_expr);
+    GemVal _t11625[] = {gem_v_value};
+    gem_check_callable(_t11626, "compiler/codegen.gem", 1322);
+        GemVal gem_v_r = _t11626.fn(_t11626.env, _t11625, 1);
+#line 1323 "compiler/codegen.gem"
+        gem_set_line(1323);
     GemVal _t11627 = (*gem_v_fs);
     static GemICacheSlot _ic_1998 = {0};
     GemVal _t11628 = gem_table_get_cached(_t11627, "in_top_level", &_ic_1998);
@@ -51590,7 +51593,7 @@ static GemVal __anon_175(void *_env, GemVal *args, int argc) {
     } else {
     GemVal _t11633 = gem_g___mod_codegen_is_node;
     GemVal _t11632[] = {gem_v_value, GEM_STR_LIT("table", 5)};
-    gem_check_callable(_t11633, "compiler/codegen.gem", 1322);
+    gem_check_callable(_t11633, "compiler/codegen.gem", 1323);
     GemVal _t11634 = _t11633.fn(_t11633.env, _t11632, 2);
     GemVal _t11636;
     if (!gem_truthy(_t11634)) {
@@ -51603,20 +51606,20 @@ static GemVal __anon_175(void *_env, GemVal *args, int argc) {
         _t11637 = gem_not(_t11636);
     }
         if (gem_truthy(_t11637)) {
-#line 1323 "compiler/codegen.gem"
-            gem_set_line(1323);
+#line 1324 "compiler/codegen.gem"
+            gem_set_line(1324);
     GemVal _t11638 = (*gem_v_module_bindings);
     GemVal _t11639[] = {_t11638, gem_v_name};
             (void)(gem_delete_fn(NULL, _t11639, 2));
         }
-#line 1325 "compiler/codegen.gem"
-        gem_set_line(1325);
-    GemVal _t11641 = (*gem_v_mangle);
-    GemVal _t11640[] = {gem_v_name};
-    gem_check_callable(_t11641, "compiler/codegen.gem", 1325);
-        GemVal gem_v_mname = _t11641.fn(_t11641.env, _t11640, 1);
 #line 1326 "compiler/codegen.gem"
         gem_set_line(1326);
+    GemVal _t11641 = (*gem_v_mangle);
+    GemVal _t11640[] = {gem_v_name};
+    gem_check_callable(_t11641, "compiler/codegen.gem", 1326);
+        GemVal gem_v_mname = _t11641.fn(_t11641.env, _t11640, 1);
+#line 1327 "compiler/codegen.gem"
+        gem_set_line(1327);
     GemVal _t11642 = (*gem_v_fs);
     static GemICacheSlot _ic_2000 = {0};
     GemVal _t11643 = gem_table_get_cached(_t11642, "in_top_level", &_ic_2000);
@@ -51627,12 +51630,12 @@ static GemVal __anon_175(void *_env, GemVal *args, int argc) {
     GemVal _t11646 = gem_g___mod_codegen_set_contains;
     GemVal _t11644 = (*gem_v_top_level_vars);
     GemVal _t11645[] = {_t11644, gem_v_name};
-    gem_check_callable(_t11646, "compiler/codegen.gem", 1326);
+    gem_check_callable(_t11646, "compiler/codegen.gem", 1327);
         _t11647 = _t11646.fn(_t11646.env, _t11645, 2);
     }
         if (gem_truthy(_t11647)) {
-#line 1327 "compiler/codegen.gem"
-            gem_set_line(1327);
+#line 1328 "compiler/codegen.gem"
+            gem_set_line(1328);
     GemVal _t11655 = gem_v_line_dir;
     GemVal _t11648 = gem_v_r;
     static GemICacheSlot _ic_2001 = {0};
@@ -51640,7 +51643,7 @@ static GemVal __anon_175(void *_env, GemVal *args, int argc) {
     GemVal _t11653 = gem_v_p;
     GemVal _t11650 = (*gem_v_gindex);
     GemVal _t11649[] = {gem_v_name};
-    gem_check_callable(_t11650, "compiler/codegen.gem", 1327);
+    gem_check_callable(_t11650, "compiler/codegen.gem", 1328);
     GemVal _t11652 = _t11650.fn(_t11650.env, _t11649, 1);
     GemVal _t11651 = gem_v_r;
     static GemICacheSlot _ic_2002 = {0};
@@ -51650,17 +51653,17 @@ static GemVal __anon_175(void *_env, GemVal *args, int argc) {
             gem_pop_frame();
             return _t11657;
         }
-#line 1329 "compiler/codegen.gem"
-        gem_set_line(1329);
+#line 1330 "compiler/codegen.gem"
+        gem_set_line(1330);
     GemVal _t11661 = gem_g___mod_codegen_set_contains;
     GemVal _t11658 = (*gem_v_fs);
     static GemICacheSlot _ic_2003 = {0};
     GemVal _t11659 = gem_table_get_cached(_t11658, "boxed_vars", &_ic_2003);
     GemVal _t11660[] = {_t11659, gem_v_name};
-    gem_check_callable(_t11661, "compiler/codegen.gem", 1329);
+    gem_check_callable(_t11661, "compiler/codegen.gem", 1330);
         if (gem_truthy(_t11661.fn(_t11661.env, _t11660, 2))) {
-#line 1331 "compiler/codegen.gem"
-            gem_set_line(1331);
+#line 1332 "compiler/codegen.gem"
+            gem_set_line(1332);
     GemVal _t11669 = gem_v_line_dir;
     GemVal _t11662 = gem_v_r;
     static GemICacheSlot _ic_2004 = {0};
@@ -51677,8 +51680,8 @@ static GemVal __anon_175(void *_env, GemVal *args, int argc) {
             gem_pop_frame();
             return _t11671;
         }
-#line 1333 "compiler/codegen.gem"
-        gem_set_line(1333);
+#line 1334 "compiler/codegen.gem"
+        gem_set_line(1334);
     GemVal _t11677 = gem_v_line_dir;
     GemVal _t11672 = gem_v_r;
     static GemICacheSlot _ic_2006 = {0};
@@ -51722,64 +51725,64 @@ static GemVal __anon_175(void *_env, GemVal *args, int argc) {
         _t11687 = gem_has_key_fn(NULL, _t11686, 2);
     }
     if (gem_truthy(_t11687)) {
-#line 1334 "compiler/codegen.gem"
-        gem_set_line(1334);
-        GemVal gem_v_name = gem_table_get(gem_v___match_306, GEM_STR_LIT("name", 4));
-#line 1334 "compiler/codegen.gem"
-        gem_set_line(1334);
-        GemVal gem_v_value = gem_table_get(gem_v___match_306, GEM_STR_LIT("value", 5));
 #line 1335 "compiler/codegen.gem"
         gem_set_line(1335);
+        GemVal gem_v_name = gem_table_get(gem_v___match_306, GEM_STR_LIT("name", 4));
+#line 1335 "compiler/codegen.gem"
+        gem_set_line(1335);
+        GemVal gem_v_value = gem_table_get(gem_v___match_306, GEM_STR_LIT("value", 5));
+#line 1336 "compiler/codegen.gem"
+        gem_set_line(1336);
     GemVal _t11690 = (*gem_v_check_assign_target);
     GemVal _t11688 = gem_v_name;
     GemVal _t11689[] = {_t11688, gem_v_node};
-    gem_check_callable(_t11690, "compiler/codegen.gem", 1335);
+    gem_check_callable(_t11690, "compiler/codegen.gem", 1336);
         (void)(_t11690.fn(_t11690.env, _t11689, 2));
-#line 1336 "compiler/codegen.gem"
-        gem_set_line(1336);
+#line 1337 "compiler/codegen.gem"
+        gem_set_line(1337);
     GemVal _t11691 = (*gem_v_fs);
     static GemICacheSlot _ic_2008 = {0};
     GemVal _t11692 = gem_table_get_cached(_t11691, "append_buf_vars", &_ic_2008);
     GemVal _t11693[] = {_t11692, gem_v_name};
         if (gem_truthy(gem_has_key_fn(NULL, _t11693, 2))) {
-#line 1337 "compiler/codegen.gem"
-            gem_set_line(1337);
+#line 1338 "compiler/codegen.gem"
+            gem_set_line(1338);
     GemVal _t11696 = gem_g___mod_codegen_decompose_concat;
     GemVal _t11694 = gem_v_name;
     GemVal _t11695[] = {_t11694, gem_v_value};
-    gem_check_callable(_t11696, "compiler/codegen.gem", 1337);
+    gem_check_callable(_t11696, "compiler/codegen.gem", 1338);
             GemVal gem_v_parts = _t11696.fn(_t11696.env, _t11695, 2);
-#line 1338 "compiler/codegen.gem"
-            gem_set_line(1338);
-            if (gem_truthy(gem_neq(gem_v_parts, GEM_NIL))) {
 #line 1339 "compiler/codegen.gem"
-                gem_set_line(1339);
-    GemVal _t11698 = (*gem_v_var_lvalue);
-    GemVal _t11697[] = {gem_v_name};
-    gem_check_callable(_t11698, "compiler/codegen.gem", 1339);
-                GemVal gem_v_mname = _t11698.fn(_t11698.env, _t11697, 1);
+            gem_set_line(1339);
+            if (gem_truthy(gem_neq(gem_v_parts, GEM_NIL))) {
 #line 1340 "compiler/codegen.gem"
                 gem_set_line(1340);
+    GemVal _t11698 = (*gem_v_var_lvalue);
+    GemVal _t11697[] = {gem_v_name};
+    gem_check_callable(_t11698, "compiler/codegen.gem", 1340);
+                GemVal gem_v_mname = _t11698.fn(_t11698.env, _t11697, 1);
+#line 1341 "compiler/codegen.gem"
+                gem_set_line(1341);
     GemVal _t11699 = (*gem_v_fs);
     static GemICacheSlot _ic_2009 = {0};
     GemVal _t11700 = gem_table_get_cached(_t11699, "append_buf_vars", &_ic_2009);
                 GemVal gem_v_flag = gem_table_get(_t11700, gem_v_name);
-#line 1341 "compiler/codegen.gem"
-                gem_set_line(1341);
-                GemVal gem_v_b = gem_buf_new_fn(NULL, NULL, 0);
 #line 1342 "compiler/codegen.gem"
                 gem_set_line(1342);
+                GemVal gem_v_b = gem_buf_new_fn(NULL, NULL, 0);
+#line 1343 "compiler/codegen.gem"
+                gem_set_line(1343);
     GemVal _t11701 = gem_v_b;
     GemVal _t11702[] = {_t11701, gem_v_line_dir};
                 (void)(gem_buf_push_fn(NULL, _t11702, 2));
-#line 1343 "compiler/codegen.gem"
-                gem_set_line(1343);
+#line 1344 "compiler/codegen.gem"
+                gem_set_line(1344);
                 GemVal gem_v___for_items_307 = gem_for_items_1(gem_v_parts);
-#line 1343 "compiler/codegen.gem"
-                gem_set_line(1343);
+#line 1344 "compiler/codegen.gem"
+                gem_set_line(1344);
                 GemVal gem_v___for_i_307 = gem_int(0);
-#line 1343 "compiler/codegen.gem"
-                gem_set_line(1343);
+#line 1344 "compiler/codegen.gem"
+                gem_set_line(1344);
                 GemArenaMark _mk324;
                 gem_arena_mark(&_mk324);
                 while (1) {
@@ -51790,28 +51793,28 @@ static GemVal __anon_175(void *_env, GemVal *args, int argc) {
                     }
     GemVal _t11703 = gem_v___for_i_307;
                     if (!gem_truthy(gem_lt(_t11703, gem_for_len_1(gem_v___for_items_307)))) break;
-#line 1343 "compiler/codegen.gem"
-                    gem_set_line(1343);
-    GemVal _t11704 = gem_v___for_items_307;
-                    GemVal gem_v_part = gem_table_get(_t11704, gem_v___for_i_307);
-#line 1343 "compiler/codegen.gem"
-                    gem_set_line(1343);
-                    gem_v___for_i_307 = gem_add(gem_v___for_i_307, gem_int(1));
 #line 1344 "compiler/codegen.gem"
                     gem_set_line(1344);
-    GemVal _t11706 = (*gem_v_compile_expr);
-    GemVal _t11705[] = {gem_v_part};
-    gem_check_callable(_t11706, "compiler/codegen.gem", 1344);
-                    GemVal gem_v_r = _t11706.fn(_t11706.env, _t11705, 1);
+    GemVal _t11704 = gem_v___for_items_307;
+                    GemVal gem_v_part = gem_table_get(_t11704, gem_v___for_i_307);
+#line 1344 "compiler/codegen.gem"
+                    gem_set_line(1344);
+                    gem_v___for_i_307 = gem_add(gem_v___for_i_307, gem_int(1));
 #line 1345 "compiler/codegen.gem"
                     gem_set_line(1345);
+    GemVal _t11706 = (*gem_v_compile_expr);
+    GemVal _t11705[] = {gem_v_part};
+    gem_check_callable(_t11706, "compiler/codegen.gem", 1345);
+                    GemVal gem_v_r = _t11706.fn(_t11706.env, _t11705, 1);
+#line 1346 "compiler/codegen.gem"
+                    gem_set_line(1346);
     GemVal _t11708 = gem_v_b;
     GemVal _t11707 = gem_v_r;
     static GemICacheSlot _ic_2010 = {0};
     GemVal _t11709[] = {_t11708, gem_table_get_cached(_t11707, "setup", &_ic_2010)};
                     (void)(gem_buf_push_fn(NULL, _t11709, 2));
-#line 1346 "compiler/codegen.gem"
-                    gem_set_line(1346);
+#line 1347 "compiler/codegen.gem"
+                    gem_set_line(1347);
     GemVal _t11715 = gem_v_b;
     GemVal _t11713 = gem_v_p;
     GemVal _t11712 = gem_v_mname;
@@ -51823,8 +51826,8 @@ static GemVal __anon_175(void *_env, GemVal *args, int argc) {
                     (void)(gem_buf_push_fn(NULL, _t11716, 2));
                 }
 
-#line 1348 "compiler/codegen.gem"
-                gem_set_line(1348);
+#line 1349 "compiler/codegen.gem"
+                gem_set_line(1349);
     GemVal _t11717[] = {gem_v_b};
                 GemVal _t11718 = gem_to_string_fn(NULL, _t11717, 1);
                 if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t11718, 1);
@@ -51832,24 +51835,24 @@ static GemVal __anon_175(void *_env, GemVal *args, int argc) {
                 return _t11718;
             }
         }
-#line 1351 "compiler/codegen.gem"
-        gem_set_line(1351);
-    GemVal _t11720 = (*gem_v_compile_expr);
-    GemVal _t11719[] = {gem_v_value};
-    gem_check_callable(_t11720, "compiler/codegen.gem", 1351);
-        GemVal gem_v_r = _t11720.fn(_t11720.env, _t11719, 1);
 #line 1352 "compiler/codegen.gem"
         gem_set_line(1352);
+    GemVal _t11720 = (*gem_v_compile_expr);
+    GemVal _t11719[] = {gem_v_value};
+    gem_check_callable(_t11720, "compiler/codegen.gem", 1352);
+        GemVal gem_v_r = _t11720.fn(_t11720.env, _t11719, 1);
+#line 1353 "compiler/codegen.gem"
+        gem_set_line(1353);
     GemVal _t11723 = (*gem_v_ns_refresh);
     GemVal _t11721 = gem_v_name;
     GemVal _t11722[] = {_t11721, gem_v_p};
-    gem_check_callable(_t11723, "compiler/codegen.gem", 1352);
+    gem_check_callable(_t11723, "compiler/codegen.gem", 1353);
         GemVal gem_v_refresh = _t11723.fn(_t11723.env, _t11722, 2);
-#line 1353 "compiler/codegen.gem"
-        gem_set_line(1353);
-        if (gem_truthy(gem_neq(gem_v_refresh, GEM_STR_LIT("", 0)))) {
 #line 1354 "compiler/codegen.gem"
-            gem_set_line(1354);
+        gem_set_line(1354);
+        if (gem_truthy(gem_neq(gem_v_refresh, GEM_STR_LIT("", 0)))) {
+#line 1355 "compiler/codegen.gem"
+            gem_set_line(1355);
     GemVal _t11734 = gem_v_line_dir;
     GemVal _t11724 = gem_v_r;
     static GemICacheSlot _ic_2012 = {0};
@@ -51860,7 +51863,7 @@ static GemVal __anon_175(void *_env, GemVal *args, int argc) {
     GemVal _t11725 = gem_v_r;
     static GemICacheSlot _ic_2013 = {0};
     GemVal _t11727[] = {_t11726, gem_table_get_cached(_t11725, "expr", &_ic_2013)};
-    gem_check_callable(_t11728, "compiler/codegen.gem", 1354);
+    gem_check_callable(_t11728, "compiler/codegen.gem", 1355);
     GemVal _t11731 = _t11728.fn(_t11728.env, _t11727, 2);
     GemVal _t11729 = gem_v_refresh;
     GemVal _t11730[] = {_t11729, gem_int(0), gem_sub(gem_len_1(gem_v_refresh), gem_int(1))};
@@ -51870,8 +51873,8 @@ static GemVal __anon_175(void *_env, GemVal *args, int argc) {
             gem_pop_frame();
             return _t11736;
         }
-#line 1356 "compiler/codegen.gem"
-        gem_set_line(1356);
+#line 1357 "compiler/codegen.gem"
+        gem_set_line(1357);
     GemVal _t11744 = gem_v_line_dir;
     GemVal _t11737 = gem_v_r;
     static GemICacheSlot _ic_2014 = {0};
@@ -51882,7 +51885,7 @@ static GemVal __anon_175(void *_env, GemVal *args, int argc) {
     GemVal _t11738 = gem_v_r;
     static GemICacheSlot _ic_2015 = {0};
     GemVal _t11740[] = {_t11739, gem_table_get_cached(_t11738, "expr", &_ic_2015)};
-    gem_check_callable(_t11741, "compiler/codegen.gem", 1356);
+    gem_check_callable(_t11741, "compiler/codegen.gem", 1357);
     GemVal _t11745[] = {_t11744, _t11743, _t11742, _t11741.fn(_t11741.env, _t11740, 2)};
         GemVal _t11746 = gem_interp(4, _t11745);
         if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t11746, 1);
@@ -51925,38 +51928,38 @@ static GemVal __anon_175(void *_env, GemVal *args, int argc) {
         _t11756 = gem_has_key_fn(NULL, _t11755, 2);
     }
     if (gem_truthy(_t11756)) {
-#line 1357 "compiler/codegen.gem"
-        gem_set_line(1357);
-        GemVal gem_v_object = gem_table_get(gem_v___match_306, GEM_STR_LIT("object", 6));
-#line 1357 "compiler/codegen.gem"
-        gem_set_line(1357);
-        GemVal gem_v_value = gem_table_get(gem_v___match_306, GEM_STR_LIT("value", 5));
-#line 1357 "compiler/codegen.gem"
-        gem_set_line(1357);
-        GemVal gem_v_field = gem_table_get(gem_v___match_306, GEM_STR_LIT("field", 5));
 #line 1358 "compiler/codegen.gem"
         gem_set_line(1358);
+        GemVal gem_v_object = gem_table_get(gem_v___match_306, GEM_STR_LIT("object", 6));
+#line 1358 "compiler/codegen.gem"
+        gem_set_line(1358);
+        GemVal gem_v_value = gem_table_get(gem_v___match_306, GEM_STR_LIT("value", 5));
+#line 1358 "compiler/codegen.gem"
+        gem_set_line(1358);
+        GemVal gem_v_field = gem_table_get(gem_v___match_306, GEM_STR_LIT("field", 5));
+#line 1359 "compiler/codegen.gem"
+        gem_set_line(1359);
     GemVal _t11763 = (*gem_v_left_to_right);
     GemVal _t11757 = gem_table_new();
     GemVal _t11759 = (*gem_v_compile_expr);
     GemVal _t11758[] = {gem_v_object};
-    gem_check_callable(_t11759, "compiler/codegen.gem", 1358);
+    gem_check_callable(_t11759, "compiler/codegen.gem", 1359);
     gem_table_set(_t11757, gem_int(0), _t11759.fn(_t11759.env, _t11758, 1));
     GemVal _t11761 = (*gem_v_compile_expr);
     GemVal _t11760[] = {gem_v_value};
-    gem_check_callable(_t11761, "compiler/codegen.gem", 1358);
+    gem_check_callable(_t11761, "compiler/codegen.gem", 1359);
     gem_table_set(_t11757, gem_int(1), _t11761.fn(_t11761.env, _t11760, 1));
     GemVal _t11762[] = {_t11757};
-    gem_check_callable(_t11763, "compiler/codegen.gem", 1358);
+    gem_check_callable(_t11763, "compiler/codegen.gem", 1359);
         GemVal gem_v_o = _t11763.fn(_t11763.env, _t11762, 1);
-#line 1359 "compiler/codegen.gem"
-        gem_set_line(1359);
-    GemVal _t11765 = gem_g___mod_codegen_escape_c_string;
-    GemVal _t11764[] = {gem_v_field};
-    gem_check_callable(_t11765, "compiler/codegen.gem", 1359);
-        GemVal gem_v_escaped = _t11765.fn(_t11765.env, _t11764, 1);
 #line 1360 "compiler/codegen.gem"
         gem_set_line(1360);
+    GemVal _t11765 = gem_g___mod_codegen_escape_c_string;
+    GemVal _t11764[] = {gem_v_field};
+    gem_check_callable(_t11765, "compiler/codegen.gem", 1360);
+        GemVal gem_v_escaped = _t11765.fn(_t11765.env, _t11764, 1);
+#line 1361 "compiler/codegen.gem"
+        gem_set_line(1361);
     GemVal _t11774 = gem_v_line_dir;
     GemVal _t11766 = gem_v_o;
     static GemICacheSlot _ic_2016 = {0};
@@ -52011,36 +52014,36 @@ static GemVal __anon_175(void *_env, GemVal *args, int argc) {
         _t11786 = gem_has_key_fn(NULL, _t11785, 2);
     }
     if (gem_truthy(_t11786)) {
-#line 1361 "compiler/codegen.gem"
-        gem_set_line(1361);
-        GemVal gem_v_object = gem_table_get(gem_v___match_306, GEM_STR_LIT("object", 6));
-#line 1361 "compiler/codegen.gem"
-        gem_set_line(1361);
-        GemVal gem_v_key = gem_table_get(gem_v___match_306, GEM_STR_LIT("key", 3));
-#line 1361 "compiler/codegen.gem"
-        gem_set_line(1361);
-        GemVal gem_v_value = gem_table_get(gem_v___match_306, GEM_STR_LIT("value", 5));
 #line 1362 "compiler/codegen.gem"
         gem_set_line(1362);
+        GemVal gem_v_object = gem_table_get(gem_v___match_306, GEM_STR_LIT("object", 6));
+#line 1362 "compiler/codegen.gem"
+        gem_set_line(1362);
+        GemVal gem_v_key = gem_table_get(gem_v___match_306, GEM_STR_LIT("key", 3));
+#line 1362 "compiler/codegen.gem"
+        gem_set_line(1362);
+        GemVal gem_v_value = gem_table_get(gem_v___match_306, GEM_STR_LIT("value", 5));
+#line 1363 "compiler/codegen.gem"
+        gem_set_line(1363);
     GemVal _t11795 = (*gem_v_left_to_right);
     GemVal _t11787 = gem_table_new();
     GemVal _t11789 = (*gem_v_compile_expr);
     GemVal _t11788[] = {gem_v_object};
-    gem_check_callable(_t11789, "compiler/codegen.gem", 1362);
+    gem_check_callable(_t11789, "compiler/codegen.gem", 1363);
     gem_table_set(_t11787, gem_int(0), _t11789.fn(_t11789.env, _t11788, 1));
     GemVal _t11791 = (*gem_v_compile_expr);
     GemVal _t11790[] = {gem_v_key};
-    gem_check_callable(_t11791, "compiler/codegen.gem", 1362);
+    gem_check_callable(_t11791, "compiler/codegen.gem", 1363);
     gem_table_set(_t11787, gem_int(1), _t11791.fn(_t11791.env, _t11790, 1));
     GemVal _t11793 = (*gem_v_compile_expr);
     GemVal _t11792[] = {gem_v_value};
-    gem_check_callable(_t11793, "compiler/codegen.gem", 1362);
+    gem_check_callable(_t11793, "compiler/codegen.gem", 1363);
     gem_table_set(_t11787, gem_int(2), _t11793.fn(_t11793.env, _t11792, 1));
     GemVal _t11794[] = {_t11787};
-    gem_check_callable(_t11795, "compiler/codegen.gem", 1362);
+    gem_check_callable(_t11795, "compiler/codegen.gem", 1363);
         GemVal gem_v_o = _t11795.fn(_t11795.env, _t11794, 1);
-#line 1363 "compiler/codegen.gem"
-        gem_set_line(1363);
+#line 1364 "compiler/codegen.gem"
+        gem_set_line(1364);
     GemVal _t11804 = gem_v_line_dir;
     GemVal _t11796 = gem_v_o;
     static GemICacheSlot _ic_2019 = {0};
@@ -52075,14 +52078,14 @@ static GemVal __anon_175(void *_env, GemVal *args, int argc) {
         _t11810 = gem_eq(gem_table_get(gem_v___match_306, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("if", 2));
     }
     if (gem_truthy(_t11810)) {
-#line 1365 "compiler/codegen.gem"
-        gem_set_line(1365);
+#line 1366 "compiler/codegen.gem"
+        gem_set_line(1366);
     GemVal _t11811[] = {gem_v_line_dir};
     GemVal _t11815 = gem_interp(1, _t11811);
     GemVal _t11814 = (*gem_v_compile_if);
     GemVal _t11812 = gem_v_node;
     GemVal _t11813[] = {_t11812, gem_v_indent, gem_bool(0)};
-    gem_check_callable(_t11814, "compiler/codegen.gem", 1365);
+    gem_check_callable(_t11814, "compiler/codegen.gem", 1366);
         GemVal _t11816 = gem_add(_t11815, _t11814.fn(_t11814.env, _t11813, 3));
         if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t11816, 1);
         gem_pop_frame();
@@ -52103,14 +52106,14 @@ static GemVal __anon_175(void *_env, GemVal *args, int argc) {
         _t11820 = gem_eq(gem_table_get(gem_v___match_306, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("while", 5));
     }
     if (gem_truthy(_t11820)) {
-#line 1367 "compiler/codegen.gem"
-        gem_set_line(1367);
+#line 1368 "compiler/codegen.gem"
+        gem_set_line(1368);
     GemVal _t11821[] = {gem_v_line_dir};
     GemVal _t11825 = gem_interp(1, _t11821);
     GemVal _t11824 = (*gem_v_compile_while);
     GemVal _t11822 = gem_v_node;
     GemVal _t11823[] = {_t11822, gem_v_indent};
-    gem_check_callable(_t11824, "compiler/codegen.gem", 1367);
+    gem_check_callable(_t11824, "compiler/codegen.gem", 1368);
         GemVal _t11826 = gem_add(_t11825, _t11824.fn(_t11824.env, _t11823, 2));
         if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t11826, 1);
         gem_pop_frame();
@@ -52131,14 +52134,14 @@ static GemVal __anon_175(void *_env, GemVal *args, int argc) {
         _t11830 = gem_eq(gem_table_get(gem_v___match_306, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("match", 5));
     }
     if (gem_truthy(_t11830)) {
-#line 1369 "compiler/codegen.gem"
-        gem_set_line(1369);
+#line 1370 "compiler/codegen.gem"
+        gem_set_line(1370);
     GemVal _t11831[] = {gem_v_line_dir};
     GemVal _t11835 = gem_interp(1, _t11831);
     GemVal _t11834 = (*gem_v_compile_match);
     GemVal _t11832 = gem_v_node;
     GemVal _t11833[] = {_t11832, gem_v_indent, gem_bool(0)};
-    gem_check_callable(_t11834, "compiler/codegen.gem", 1369);
+    gem_check_callable(_t11834, "compiler/codegen.gem", 1370);
         GemVal _t11836 = gem_add(_t11835, _t11834.fn(_t11834.env, _t11833, 3));
         if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t11836, 1);
         gem_pop_frame();
@@ -52159,14 +52162,14 @@ static GemVal __anon_175(void *_env, GemVal *args, int argc) {
         _t11840 = gem_eq(gem_table_get(gem_v___match_306, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("receive_match", 13));
     }
     if (gem_truthy(_t11840)) {
-#line 1371 "compiler/codegen.gem"
-        gem_set_line(1371);
+#line 1372 "compiler/codegen.gem"
+        gem_set_line(1372);
     GemVal _t11841[] = {gem_v_line_dir};
     GemVal _t11845 = gem_interp(1, _t11841);
     GemVal _t11844 = (*gem_v_compile_receive_match);
     GemVal _t11842 = gem_v_node;
     GemVal _t11843[] = {_t11842, gem_v_indent, gem_bool(0)};
-    gem_check_callable(_t11844, "compiler/codegen.gem", 1371);
+    gem_check_callable(_t11844, "compiler/codegen.gem", 1372);
         GemVal _t11846 = gem_add(_t11845, _t11844.fn(_t11844.env, _t11843, 3));
         if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t11846, 1);
         gem_pop_frame();
@@ -52187,8 +52190,8 @@ static GemVal __anon_175(void *_env, GemVal *args, int argc) {
         _t11850 = gem_eq(gem_table_get(gem_v___match_306, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("break", 5));
     }
     if (gem_truthy(_t11850)) {
-#line 1373 "compiler/codegen.gem"
-        gem_set_line(1373);
+#line 1374 "compiler/codegen.gem"
+        gem_set_line(1374);
         GemVal _t11851 = gem_add(gem_v_p, GEM_STR_LIT("break;", 6));
         if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t11851, 1);
         gem_pop_frame();
@@ -52209,8 +52212,8 @@ static GemVal __anon_175(void *_env, GemVal *args, int argc) {
         _t11855 = gem_eq(gem_table_get(gem_v___match_306, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("continue", 8));
     }
     if (gem_truthy(_t11855)) {
-#line 1375 "compiler/codegen.gem"
-        gem_set_line(1375);
+#line 1376 "compiler/codegen.gem"
+        gem_set_line(1376);
         GemVal _t11856 = gem_add(gem_v_p, GEM_STR_LIT("continue;", 9));
         if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t11856, 1);
         gem_pop_frame();
@@ -52238,43 +52241,43 @@ static GemVal __anon_175(void *_env, GemVal *args, int argc) {
         _t11862 = gem_has_key_fn(NULL, _t11861, 2);
     }
     if (gem_truthy(_t11862)) {
-#line 1376 "compiler/codegen.gem"
-        gem_set_line(1376);
-        GemVal gem_v_value = gem_table_get(gem_v___match_306, GEM_STR_LIT("value", 5));
 #line 1377 "compiler/codegen.gem"
         gem_set_line(1377);
-        if (gem_truthy(gem_neq(gem_v_value, GEM_NIL))) {
+        GemVal gem_v_value = gem_table_get(gem_v___match_306, GEM_STR_LIT("value", 5));
 #line 1378 "compiler/codegen.gem"
-            gem_set_line(1378);
+        gem_set_line(1378);
+        if (gem_truthy(gem_neq(gem_v_value, GEM_NIL))) {
+#line 1379 "compiler/codegen.gem"
+            gem_set_line(1379);
     GemVal _t11865 = (*gem_v_tail_call_jump);
     GemVal _t11863 = gem_v_value;
     GemVal _t11864[] = {_t11863, gem_v_indent};
-    gem_check_callable(_t11865, "compiler/codegen.gem", 1378);
+    gem_check_callable(_t11865, "compiler/codegen.gem", 1379);
             GemVal gem_v_jump = _t11865.fn(_t11865.env, _t11864, 2);
-#line 1379 "compiler/codegen.gem"
-            gem_set_line(1379);
-            if (gem_truthy(gem_neq(gem_v_jump, GEM_NIL))) {
 #line 1380 "compiler/codegen.gem"
-                gem_set_line(1380);
+            gem_set_line(1380);
+            if (gem_truthy(gem_neq(gem_v_jump, GEM_NIL))) {
+#line 1381 "compiler/codegen.gem"
+                gem_set_line(1381);
     GemVal _t11866 = gem_v_line_dir;
                 GemVal _t11867 = gem_add(_t11866, gem_v_jump);
                 if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t11867, 1);
                 gem_pop_frame();
                 return _t11867;
             }
-#line 1382 "compiler/codegen.gem"
-            gem_set_line(1382);
-    GemVal _t11869 = (*gem_v_compile_expr);
-    GemVal _t11868[] = {gem_v_value};
-    gem_check_callable(_t11869, "compiler/codegen.gem", 1382);
-            GemVal gem_v_r = _t11869.fn(_t11869.env, _t11868, 1);
 #line 1383 "compiler/codegen.gem"
             gem_set_line(1383);
-    GemVal _t11870 = (*gem_v_tmp);
-    gem_check_callable(_t11870, "compiler/codegen.gem", 1383);
-            GemVal gem_v_t = _t11870.fn(_t11870.env, NULL, 0);
+    GemVal _t11869 = (*gem_v_compile_expr);
+    GemVal _t11868[] = {gem_v_value};
+    gem_check_callable(_t11869, "compiler/codegen.gem", 1383);
+            GemVal gem_v_r = _t11869.fn(_t11869.env, _t11868, 1);
 #line 1384 "compiler/codegen.gem"
             gem_set_line(1384);
+    GemVal _t11870 = (*gem_v_tmp);
+    gem_check_callable(_t11870, "compiler/codegen.gem", 1384);
+            GemVal gem_v_t = _t11870.fn(_t11870.env, NULL, 0);
+#line 1385 "compiler/codegen.gem"
+            gem_set_line(1385);
     GemVal _t11880 = gem_v_line_dir;
     GemVal _t11871 = gem_v_r;
     static GemICacheSlot _ic_2023 = {0};
@@ -52287,19 +52290,19 @@ static GemVal __anon_175(void *_env, GemVal *args, int argc) {
     GemVal _t11875 = (*gem_v_return_str);
     GemVal _t11873 = gem_v_p;
     GemVal _t11874[] = {_t11873, gem_v_t};
-    gem_check_callable(_t11875, "compiler/codegen.gem", 1384);
+    gem_check_callable(_t11875, "compiler/codegen.gem", 1385);
     GemVal _t11881[] = {_t11880, _t11879, _t11878, GEM_STR_LIT("GemVal ", 7), _t11877, GEM_STR_LIT(" = ", 3), _t11876, GEM_STR_LIT(";\n", 2), _t11875.fn(_t11875.env, _t11874, 2)};
             GemVal _t11882 = gem_interp(9, _t11881);
             if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t11882, 1);
             gem_pop_frame();
             return _t11882;
         }
-#line 1386 "compiler/codegen.gem"
-        gem_set_line(1386);
+#line 1387 "compiler/codegen.gem"
+        gem_set_line(1387);
     GemVal _t11885 = gem_v_line_dir;
     GemVal _t11884 = (*gem_v_return_nil_str);
     GemVal _t11883[] = {gem_v_p};
-    gem_check_callable(_t11884, "compiler/codegen.gem", 1386);
+    gem_check_callable(_t11884, "compiler/codegen.gem", 1387);
     GemVal _t11886[] = {_t11885, _t11884.fn(_t11884.env, _t11883, 1)};
         GemVal _t11887 = gem_interp(2, _t11886);
         if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t11887, 1);
@@ -52321,14 +52324,14 @@ static GemVal __anon_175(void *_env, GemVal *args, int argc) {
         _t11891 = gem_eq(gem_table_get(gem_v___match_306, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("call", 4));
     }
     if (gem_truthy(_t11891)) {
-#line 1388 "compiler/codegen.gem"
-        gem_set_line(1388);
-    GemVal _t11893 = (*gem_v_compile_expr);
-    GemVal _t11892[] = {gem_v_node};
-    gem_check_callable(_t11893, "compiler/codegen.gem", 1388);
-        GemVal gem_v_r = _t11893.fn(_t11893.env, _t11892, 1);
 #line 1389 "compiler/codegen.gem"
         gem_set_line(1389);
+    GemVal _t11893 = (*gem_v_compile_expr);
+    GemVal _t11892[] = {gem_v_node};
+    gem_check_callable(_t11893, "compiler/codegen.gem", 1389);
+        GemVal gem_v_r = _t11893.fn(_t11893.env, _t11892, 1);
+#line 1390 "compiler/codegen.gem"
+        gem_set_line(1390);
     GemVal _t11898 = gem_v_line_dir;
     GemVal _t11894 = gem_v_r;
     static GemICacheSlot _ic_2025 = {0};
@@ -52357,8 +52360,8 @@ static GemVal __anon_175(void *_env, GemVal *args, int argc) {
         _t11904 = gem_eq(gem_table_get(gem_v___match_306, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("fn_def", 6));
     }
     if (gem_truthy(_t11904)) {
-#line 1391 "compiler/codegen.gem"
-        gem_set_line(1391);
+#line 1392 "compiler/codegen.gem"
+        gem_set_line(1392);
         GemVal _t11905 = GEM_STR_LIT("", 0);
         if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t11905, 1);
         gem_pop_frame();
@@ -52386,20 +52389,20 @@ static GemVal __anon_175(void *_env, GemVal *args, int argc) {
         _t11911 = gem_has_key_fn(NULL, _t11910, 2);
     }
     if (gem_truthy(_t11911)) {
-#line 1392 "compiler/codegen.gem"
-        gem_set_line(1392);
-        GemVal gem_v_stmts = gem_table_get(gem_v___match_306, GEM_STR_LIT("stmts", 5));
 #line 1393 "compiler/codegen.gem"
         gem_set_line(1393);
+        GemVal gem_v_stmts = gem_table_get(gem_v___match_306, GEM_STR_LIT("stmts", 5));
+#line 1394 "compiler/codegen.gem"
+        gem_set_line(1394);
         GemVal gem_v_b = gem_buf_new_fn(NULL, NULL, 0);
-#line 1394 "compiler/codegen.gem"
-        gem_set_line(1394);
+#line 1395 "compiler/codegen.gem"
+        gem_set_line(1395);
         GemVal gem_v___for_items_308 = gem_for_items_1(gem_v_stmts);
-#line 1394 "compiler/codegen.gem"
-        gem_set_line(1394);
+#line 1395 "compiler/codegen.gem"
+        gem_set_line(1395);
         GemVal gem_v___for_i_308 = gem_int(0);
-#line 1394 "compiler/codegen.gem"
-        gem_set_line(1394);
+#line 1395 "compiler/codegen.gem"
+        gem_set_line(1395);
         GemArenaMark _mk325;
         gem_arena_mark(&_mk325);
         while (1) {
@@ -52410,38 +52413,38 @@ static GemVal __anon_175(void *_env, GemVal *args, int argc) {
             }
     GemVal _t11912 = gem_v___for_i_308;
             if (!gem_truthy(gem_lt(_t11912, gem_for_len_1(gem_v___for_items_308)))) break;
-#line 1394 "compiler/codegen.gem"
-            gem_set_line(1394);
-    GemVal _t11913 = gem_v___for_items_308;
-            GemVal gem_v_stmt = gem_table_get(_t11913, gem_v___for_i_308);
-#line 1394 "compiler/codegen.gem"
-            gem_set_line(1394);
-            gem_v___for_i_308 = gem_add(gem_v___for_i_308, gem_int(1));
 #line 1395 "compiler/codegen.gem"
             gem_set_line(1395);
+    GemVal _t11913 = gem_v___for_items_308;
+            GemVal gem_v_stmt = gem_table_get(_t11913, gem_v___for_i_308);
+#line 1395 "compiler/codegen.gem"
+            gem_set_line(1395);
+            gem_v___for_i_308 = gem_add(gem_v___for_i_308, gem_int(1));
+#line 1396 "compiler/codegen.gem"
+            gem_set_line(1396);
     GemVal _t11917 = gem_v_b;
     GemVal _t11916 = (*gem_v_compile_stmt);
     GemVal _t11914 = gem_v_stmt;
     GemVal _t11915[] = {_t11914, gem_v_indent};
-    gem_check_callable(_t11916, "compiler/codegen.gem", 1395);
+    gem_check_callable(_t11916, "compiler/codegen.gem", 1396);
     GemVal _t11918[] = {_t11917, _t11916.fn(_t11916.env, _t11915, 2)};
             (void)(gem_buf_push_fn(NULL, _t11918, 2));
-#line 1396 "compiler/codegen.gem"
-            gem_set_line(1396);
+#line 1397 "compiler/codegen.gem"
+            gem_set_line(1397);
     GemVal _t11919[] = {gem_v_b, GEM_STR_LIT("\n", 1)};
             (void)(gem_buf_push_fn(NULL, _t11919, 2));
         }
 
-#line 1398 "compiler/codegen.gem"
-        gem_set_line(1398);
+#line 1399 "compiler/codegen.gem"
+        gem_set_line(1399);
     GemVal _t11920[] = {gem_v_b};
         GemVal _t11921 = gem_to_string_fn(NULL, _t11920, 1);
         if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t11921, 1);
         gem_pop_frame();
         return _t11921;
     } else {
-#line 1400 "compiler/codegen.gem"
-        gem_set_line(1400);
+#line 1401 "compiler/codegen.gem"
+        gem_set_line(1401);
         (void)(GEM_NIL);
     }
     }
@@ -52457,14 +52460,14 @@ static GemVal __anon_175(void *_env, GemVal *args, int argc) {
     }
     }
     }
-#line 1403 "compiler/codegen.gem"
-    gem_set_line(1403);
-    GemVal _t11923 = (*gem_v_compile_expr);
-    GemVal _t11922[] = {gem_v_node};
-    gem_check_callable(_t11923, "compiler/codegen.gem", 1403);
-    GemVal gem_v_r = _t11923.fn(_t11923.env, _t11922, 1);
 #line 1404 "compiler/codegen.gem"
     gem_set_line(1404);
+    GemVal _t11923 = (*gem_v_compile_expr);
+    GemVal _t11922[] = {gem_v_node};
+    gem_check_callable(_t11923, "compiler/codegen.gem", 1404);
+    GemVal gem_v_r = _t11923.fn(_t11923.env, _t11922, 1);
+#line 1405 "compiler/codegen.gem"
+    gem_set_line(1405);
     GemVal _t11928 = gem_v_line_dir;
     GemVal _t11924 = gem_v_r;
     static GemICacheSlot _ic_2027 = {0};
@@ -52492,16 +52495,16 @@ static GemVal __anon_176(void *_env, GemVal *args, int argc) {
     GemVal *gem_v_emit_tco_continue = _cls->gem_v_emit_tco_continue;
     GemVal *gem_v_fs = _cls->gem_v_fs;
     GemVal *gem_v_scc_member_to_id = _cls->gem_v_scc_member_to_id;
-    gem_push_frame("anonymous fn", "compiler/codegen.gem", 1408);
+    gem_push_frame("anonymous fn", "compiler/codegen.gem", 1409);
     GemVal gem_v_call_node = (argc > 0) ? args[0] : GEM_NIL;
     GemVal gem_v_indent = (argc > 1) ? args[1] : GEM_NIL;
     GemArenaPoint _ret_pt;
     gem_arena_point(&_ret_pt);
-#line 1409 "compiler/codegen.gem"
-    gem_set_line(1409);
+#line 1410 "compiler/codegen.gem"
+    gem_set_line(1410);
     GemVal _t11947 = gem_g___mod_codegen_is_node;
     GemVal _t11946[] = {gem_v_call_node, GEM_STR_LIT("call", 4)};
-    gem_check_callable(_t11947, "compiler/codegen.gem", 1409);
+    gem_check_callable(_t11947, "compiler/codegen.gem", 1410);
     GemVal _t11948 = gem_not(_t11947.fn(_t11947.env, _t11946, 2));
     GemVal _t11952;
     if (gem_truthy(_t11948)) {
@@ -52511,7 +52514,7 @@ static GemVal __anon_176(void *_env, GemVal *args, int argc) {
     GemVal _t11949 = gem_v_call_node;
     static GemICacheSlot _ic_2029 = {0};
     GemVal _t11950[] = {gem_table_get_cached(_t11949, "func", &_ic_2029), GEM_STR_LIT("var", 3)};
-    gem_check_callable(_t11951, "compiler/codegen.gem", 1409);
+    gem_check_callable(_t11951, "compiler/codegen.gem", 1410);
         _t11952 = gem_not(_t11951.fn(_t11951.env, _t11950, 2));
     }
     GemVal _t11959;
@@ -52527,43 +52530,43 @@ static GemVal __anon_176(void *_env, GemVal *args, int argc) {
     GemVal _t11955 = gem_table_get_cached(_t11954, "func", &_ic_2031);
     static GemICacheSlot _ic_2032 = {0};
     GemVal _t11957[] = {_t11956, gem_table_get_cached(_t11955, "name", &_ic_2032)};
-    gem_check_callable(_t11958, "compiler/codegen.gem", 1409);
+    gem_check_callable(_t11958, "compiler/codegen.gem", 1410);
         _t11959 = _t11958.fn(_t11958.env, _t11957, 2);
     }
     if (gem_truthy(_t11959)) {
-#line 1410 "compiler/codegen.gem"
-        gem_set_line(1410);
+#line 1411 "compiler/codegen.gem"
+        gem_set_line(1411);
         GemVal _t11960 = GEM_NIL;
         if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t11960, 1);
         gem_pop_frame();
         return _t11960;
     }
-#line 1412 "compiler/codegen.gem"
-    gem_set_line(1412);
+#line 1413 "compiler/codegen.gem"
+    gem_set_line(1413);
     GemVal _t11961 = gem_v_call_node;
     static GemICacheSlot _ic_2033 = {0};
     GemVal _t11962 = gem_table_get_cached(_t11961, "func", &_ic_2033);
     static GemICacheSlot _ic_2034 = {0};
     GemVal gem_v_name = gem_table_get_cached(_t11962, "name", &_ic_2034);
-#line 1413 "compiler/codegen.gem"
-    gem_set_line(1413);
+#line 1414 "compiler/codegen.gem"
+    gem_set_line(1414);
     GemVal _t11964 = gem_v_name;
     GemVal _t11963 = (*gem_v_fs);
     static GemICacheSlot _ic_2035 = {0};
     if (gem_truthy(gem_eq(_t11964, gem_table_get_cached(_t11963, "tco_fn_name", &_ic_2035)))) {
-#line 1414 "compiler/codegen.gem"
-        gem_set_line(1414);
+#line 1415 "compiler/codegen.gem"
+        gem_set_line(1415);
     GemVal _t11967 = (*gem_v_emit_tco_continue);
     GemVal _t11965 = gem_v_call_node;
     GemVal _t11966[] = {_t11965, gem_v_indent};
-    gem_check_callable(_t11967, "compiler/codegen.gem", 1414);
+    gem_check_callable(_t11967, "compiler/codegen.gem", 1415);
         GemVal _t11968 = _t11967.fn(_t11967.env, _t11966, 2);
         if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t11968, 1);
         gem_pop_frame();
         return _t11968;
     }
-#line 1417 "compiler/codegen.gem"
-    gem_set_line(1417);
+#line 1418 "compiler/codegen.gem"
+    gem_set_line(1418);
     GemVal _t11969 = (*gem_v_fs);
     static GemICacheSlot _ic_2036 = {0};
     GemVal _t11970 = gem_neq(gem_table_get_cached(_t11969, "current_scc_id", &_ic_2036), GEM_NIL);
@@ -52586,20 +52589,20 @@ static GemVal __anon_176(void *_env, GemVal *args, int argc) {
         _t11976 = gem_le(gem_len_1(gem_table_get_cached(_t11975, "args", &_ic_2038)), gem_int(16));
     }
     if (gem_truthy(_t11976)) {
-#line 1418 "compiler/codegen.gem"
-        gem_set_line(1418);
+#line 1419 "compiler/codegen.gem"
+        gem_set_line(1419);
     GemVal _t11980 = (*gem_v_emit_scc_tail_call);
     GemVal _t11978 = gem_v_call_node;
     GemVal _t11977 = gem_v_name;
     GemVal _t11979[] = {_t11978, _t11977, gem_v_indent};
-    gem_check_callable(_t11980, "compiler/codegen.gem", 1418);
+    gem_check_callable(_t11980, "compiler/codegen.gem", 1419);
         GemVal _t11981 = _t11980.fn(_t11980.env, _t11979, 3);
         if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t11981, 1);
         gem_pop_frame();
         return _t11981;
     }
-#line 1420 "compiler/codegen.gem"
-    gem_set_line(1420);
+#line 1421 "compiler/codegen.gem"
+    gem_set_line(1421);
     GemVal _t11982 = GEM_NIL;
     if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t11982, 1);
     gem_pop_frame();
@@ -52653,27 +52656,27 @@ static GemVal __anon_177(void *_env, GemVal *args, int argc) {
     GemVal *gem_v_tmp = _cls->gem_v_tmp;
     GemVal *gem_v_top_level_vars = _cls->gem_v_top_level_vars;
     GemVal *gem_v_var_store = _cls->gem_v_var_store;
-    gem_push_frame("anonymous fn", "compiler/codegen.gem", 1423);
+    gem_push_frame("anonymous fn", "compiler/codegen.gem", 1424);
     GemVal gem_v_node = (argc > 0) ? args[0] : GEM_NIL;
     GemVal gem_v_indent = (argc > 1) ? args[1] : GEM_NIL;
     GemArenaPoint _ret_pt;
     gem_arena_point(&_ret_pt);
-#line 1424 "compiler/codegen.gem"
-    gem_set_line(1424);
+#line 1425 "compiler/codegen.gem"
+    gem_set_line(1425);
     GemVal _t11985 = gem_g___mod_codegen_pad_for;
     GemVal _t11984[] = {gem_v_indent};
-    gem_check_callable(_t11985, "compiler/codegen.gem", 1424);
+    gem_check_callable(_t11985, "compiler/codegen.gem", 1425);
     GemVal gem_v_p = _t11985.fn(_t11985.env, _t11984, 1);
-#line 1425 "compiler/codegen.gem"
-    gem_set_line(1425);
+#line 1426 "compiler/codegen.gem"
+    gem_set_line(1426);
     GemVal gem_v___val_309 = GEM_NIL;
-#line 1425 "compiler/codegen.gem"
-    gem_set_line(1425);
+#line 1426 "compiler/codegen.gem"
+    gem_set_line(1426);
     GemVal _t11986 = gem_v_node;
     static GemICacheSlot _ic_2039 = {0};
     if (gem_truthy(gem_neq(gem_table_get_cached(_t11986, "line", &_ic_2039), GEM_NIL))) {
-#line 1426 "compiler/codegen.gem"
-        gem_set_line(1426);
+#line 1427 "compiler/codegen.gem"
+        gem_set_line(1427);
     GemVal _t11987 = gem_v_node;
     static GemICacheSlot _ic_2040 = {0};
     GemVal _t11999 = gem_table_get_cached(_t11987, "line", &_ic_2040);
@@ -52681,70 +52684,70 @@ static GemVal __anon_177(void *_env, GemVal *args, int argc) {
     GemVal _t11991 = (*gem_v_rel_path);
     GemVal _t11989 = (*gem_v_file_of);
     GemVal _t11988[] = {gem_v_node};
-    gem_check_callable(_t11989, "compiler/codegen.gem", 1426);
+    gem_check_callable(_t11989, "compiler/codegen.gem", 1427);
     GemVal _t11990[] = {_t11989.fn(_t11989.env, _t11988, 1)};
-    gem_check_callable(_t11991, "compiler/codegen.gem", 1426);
+    gem_check_callable(_t11991, "compiler/codegen.gem", 1427);
     GemVal _t11992[] = {_t11991.fn(_t11991.env, _t11990, 1)};
-    gem_check_callable(_t11993, "compiler/codegen.gem", 1426);
+    gem_check_callable(_t11993, "compiler/codegen.gem", 1427);
     GemVal _t11998 = _t11993.fn(_t11993.env, _t11992, 1);
     GemVal _t11997 = (*gem_v_setline_str);
     GemVal _t11994 = gem_v_node;
     static GemICacheSlot _ic_2041 = {0};
     GemVal _t11995 = gem_table_get_cached(_t11994, "line", &_ic_2041);
     GemVal _t11996[] = {_t11995, gem_v_p};
-    gem_check_callable(_t11997, "compiler/codegen.gem", 1426);
+    gem_check_callable(_t11997, "compiler/codegen.gem", 1427);
     GemVal _t12000[] = {GEM_STR_LIT("#line ", 6), _t11999, GEM_STR_LIT(" \"", 2), _t11998, GEM_STR_LIT("\"\n", 2), _t11997.fn(_t11997.env, _t11996, 2)};
         gem_v___val_309 = gem_interp(6, _t12000);
     } else {
-#line 1428 "compiler/codegen.gem"
-        gem_set_line(1428);
+#line 1429 "compiler/codegen.gem"
+        gem_set_line(1429);
         gem_v___val_309 = GEM_STR_LIT("", 0);
     }
-#line 1425 "compiler/codegen.gem"
-    gem_set_line(1425);
+#line 1426 "compiler/codegen.gem"
+    gem_set_line(1426);
     GemVal gem_v_line_dir = gem_v___val_309;
-#line 1431 "compiler/codegen.gem"
-    gem_set_line(1431);
+#line 1432 "compiler/codegen.gem"
+    gem_set_line(1432);
     GemVal gem_v___val_310 = (*gem_v_tail_call_jump);
-#line 1431 "compiler/codegen.gem"
-    gem_set_line(1431);
+#line 1432 "compiler/codegen.gem"
+    gem_set_line(1432);
     GemVal gem_v___val_311 = GEM_NIL;
-#line 1431 "compiler/codegen.gem"
-    gem_set_line(1431);
+#line 1432 "compiler/codegen.gem"
+    gem_set_line(1432);
     GemVal _t12002 = gem_g___mod_codegen_is_node;
     GemVal _t12001[] = {gem_v_node, GEM_STR_LIT("return", 6)};
-    gem_check_callable(_t12002, "compiler/codegen.gem", 1431);
+    gem_check_callable(_t12002, "compiler/codegen.gem", 1432);
     if (gem_truthy(_t12002.fn(_t12002.env, _t12001, 2))) {
-#line 1431 "compiler/codegen.gem"
-        gem_set_line(1431);
+#line 1432 "compiler/codegen.gem"
+        gem_set_line(1432);
     GemVal _t12003 = gem_v_node;
     static GemICacheSlot _ic_2042 = {0};
         gem_v___val_311 = gem_table_get_cached(_t12003, "value", &_ic_2042);
     } else {
-#line 1431 "compiler/codegen.gem"
-        gem_set_line(1431);
+#line 1432 "compiler/codegen.gem"
+        gem_set_line(1432);
         gem_v___val_311 = gem_v_node;
     }
-#line 1431 "compiler/codegen.gem"
-    gem_set_line(1431);
+#line 1432 "compiler/codegen.gem"
+    gem_set_line(1432);
     GemVal _t12006 = gem_v___val_310;
     GemVal _t12004 = gem_v___val_311;
     GemVal _t12005[] = {_t12004, gem_v_indent};
-    gem_check_callable(_t12006, "compiler/codegen.gem", 1431);
+    gem_check_callable(_t12006, "compiler/codegen.gem", 1432);
     GemVal gem_v_jump = _t12006.fn(_t12006.env, _t12005, 2);
-#line 1432 "compiler/codegen.gem"
-    gem_set_line(1432);
-    if (gem_truthy(gem_neq(gem_v_jump, GEM_NIL))) {
 #line 1433 "compiler/codegen.gem"
-        gem_set_line(1433);
+    gem_set_line(1433);
+    if (gem_truthy(gem_neq(gem_v_jump, GEM_NIL))) {
+#line 1434 "compiler/codegen.gem"
+        gem_set_line(1434);
     GemVal _t12007 = gem_v_line_dir;
         GemVal _t12008 = gem_add(_t12007, gem_v_jump);
         if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t12008, 1);
         gem_pop_frame();
         return _t12008;
     }
-#line 1436 "compiler/codegen.gem"
-    gem_set_line(1436);
+#line 1437 "compiler/codegen.gem"
+    gem_set_line(1437);
     GemVal gem_v___match_312 = gem_v_node;
     GemVal _t12009 = gem_eq(gem_type_1(gem_v___match_312), GEM_STR_LIT("table", 5));
     GemVal _t12011;
@@ -52775,35 +52778,35 @@ static GemVal __anon_177(void *_env, GemVal *args, int argc) {
         _t12016 = gem_has_key_fn(NULL, _t12015, 2);
     }
     if (gem_truthy(_t12016)) {
-#line 1437 "compiler/codegen.gem"
-        gem_set_line(1437);
-        GemVal gem_v_name = gem_table_get(gem_v___match_312, GEM_STR_LIT("name", 4));
-#line 1437 "compiler/codegen.gem"
-        gem_set_line(1437);
-        GemVal gem_v_value = gem_table_get(gem_v___match_312, GEM_STR_LIT("value", 5));
 #line 1438 "compiler/codegen.gem"
         gem_set_line(1438);
+        GemVal gem_v_name = gem_table_get(gem_v___match_312, GEM_STR_LIT("name", 4));
+#line 1438 "compiler/codegen.gem"
+        gem_set_line(1438);
+        GemVal gem_v_value = gem_table_get(gem_v___match_312, GEM_STR_LIT("value", 5));
+#line 1439 "compiler/codegen.gem"
+        gem_set_line(1439);
     GemVal _t12020 = gem_g___mod_codegen_set_add;
     GemVal _t12017 = (*gem_v_fs);
     static GemICacheSlot _ic_2043 = {0};
     GemVal _t12018 = gem_table_get_cached(_t12017, "fn_scope_locals", &_ic_2043);
     GemVal _t12019[] = {_t12018, gem_v_name};
-    gem_check_callable(_t12020, "compiler/codegen.gem", 1438);
+    gem_check_callable(_t12020, "compiler/codegen.gem", 1439);
         (void)(_t12020.fn(_t12020.env, _t12019, 2));
-#line 1439 "compiler/codegen.gem"
-        gem_set_line(1439);
-    GemVal _t12022 = (*gem_v_compile_expr);
-    GemVal _t12021[] = {gem_v_value};
-    gem_check_callable(_t12022, "compiler/codegen.gem", 1439);
-        GemVal gem_v_r = _t12022.fn(_t12022.env, _t12021, 1);
 #line 1440 "compiler/codegen.gem"
         gem_set_line(1440);
-    GemVal _t12024 = (*gem_v_mangle);
-    GemVal _t12023[] = {gem_v_name};
-    gem_check_callable(_t12024, "compiler/codegen.gem", 1440);
-        GemVal gem_v_mname = _t12024.fn(_t12024.env, _t12023, 1);
+    GemVal _t12022 = (*gem_v_compile_expr);
+    GemVal _t12021[] = {gem_v_value};
+    gem_check_callable(_t12022, "compiler/codegen.gem", 1440);
+        GemVal gem_v_r = _t12022.fn(_t12022.env, _t12021, 1);
 #line 1441 "compiler/codegen.gem"
         gem_set_line(1441);
+    GemVal _t12024 = (*gem_v_mangle);
+    GemVal _t12023[] = {gem_v_name};
+    gem_check_callable(_t12024, "compiler/codegen.gem", 1441);
+        GemVal gem_v_mname = _t12024.fn(_t12024.env, _t12023, 1);
+#line 1442 "compiler/codegen.gem"
+        gem_set_line(1442);
     GemVal _t12025 = (*gem_v_fs);
     static GemICacheSlot _ic_2044 = {0};
     GemVal _t12026 = gem_table_get_cached(_t12025, "in_top_level", &_ic_2044);
@@ -52814,12 +52817,12 @@ static GemVal __anon_177(void *_env, GemVal *args, int argc) {
     GemVal _t12029 = gem_g___mod_codegen_set_contains;
     GemVal _t12027 = (*gem_v_top_level_vars);
     GemVal _t12028[] = {_t12027, gem_v_name};
-    gem_check_callable(_t12029, "compiler/codegen.gem", 1441);
+    gem_check_callable(_t12029, "compiler/codegen.gem", 1442);
         _t12030 = _t12029.fn(_t12029.env, _t12028, 2);
     }
         if (gem_truthy(_t12030)) {
-#line 1442 "compiler/codegen.gem"
-            gem_set_line(1442);
+#line 1443 "compiler/codegen.gem"
+            gem_set_line(1443);
     GemVal _t12041 = gem_v_line_dir;
     GemVal _t12031 = gem_v_r;
     static GemICacheSlot _ic_2045 = {0};
@@ -52827,31 +52830,31 @@ static GemVal __anon_177(void *_env, GemVal *args, int argc) {
     GemVal _t12039 = gem_v_p;
     GemVal _t12033 = (*gem_v_gindex);
     GemVal _t12032[] = {gem_v_name};
-    gem_check_callable(_t12033, "compiler/codegen.gem", 1442);
+    gem_check_callable(_t12033, "compiler/codegen.gem", 1443);
     GemVal _t12038 = _t12033.fn(_t12033.env, _t12032, 1);
     GemVal _t12034 = gem_v_r;
     static GemICacheSlot _ic_2046 = {0};
     GemVal _t12037 = gem_table_get_cached(_t12034, "expr", &_ic_2046);
     GemVal _t12036 = (*gem_v_return_nil_str);
     GemVal _t12035[] = {gem_v_p};
-    gem_check_callable(_t12036, "compiler/codegen.gem", 1442);
+    gem_check_callable(_t12036, "compiler/codegen.gem", 1443);
     GemVal _t12042[] = {_t12041, _t12040, _t12039, GEM_STR_LIT("gem_global_set(", 15), _t12038, GEM_STR_LIT(", ", 2), _t12037, GEM_STR_LIT(");\n", 3), _t12036.fn(_t12036.env, _t12035, 1)};
             GemVal _t12043 = gem_interp(9, _t12042);
             if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t12043, 1);
             gem_pop_frame();
             return _t12043;
         }
-#line 1444 "compiler/codegen.gem"
-        gem_set_line(1444);
+#line 1445 "compiler/codegen.gem"
+        gem_set_line(1445);
     GemVal _t12047 = gem_g___mod_codegen_set_contains;
     GemVal _t12044 = (*gem_v_fs);
     static GemICacheSlot _ic_2047 = {0};
     GemVal _t12045 = gem_table_get_cached(_t12044, "boxed_vars", &_ic_2047);
     GemVal _t12046[] = {_t12045, gem_v_name};
-    gem_check_callable(_t12047, "compiler/codegen.gem", 1444);
+    gem_check_callable(_t12047, "compiler/codegen.gem", 1445);
         if (gem_truthy(_t12047.fn(_t12047.env, _t12046, 2))) {
-#line 1445 "compiler/codegen.gem"
-            gem_set_line(1445);
+#line 1446 "compiler/codegen.gem"
+            gem_set_line(1446);
     GemVal _t12058 = gem_v_line_dir;
     GemVal _t12048 = gem_v_r;
     static GemICacheSlot _ic_2048 = {0};
@@ -52865,15 +52868,15 @@ static GemVal __anon_177(void *_env, GemVal *args, int argc) {
     GemVal _t12052 = gem_table_get_cached(_t12049, "expr", &_ic_2049);
     GemVal _t12051 = (*gem_v_return_nil_str);
     GemVal _t12050[] = {gem_v_p};
-    gem_check_callable(_t12051, "compiler/codegen.gem", 1445);
+    gem_check_callable(_t12051, "compiler/codegen.gem", 1446);
     GemVal _t12059[] = {_t12058, _t12057, _t12056, GEM_STR_LIT("GemVal *", 8), _t12055, GEM_STR_LIT(" = gem_box_alloc();\n", 20), _t12054, GEM_STR_LIT("*", 1), _t12053, GEM_STR_LIT(" = ", 3), _t12052, GEM_STR_LIT(";\n", 2), _t12051.fn(_t12051.env, _t12050, 1)};
             GemVal _t12060 = gem_interp(13, _t12059);
             if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t12060, 1);
             gem_pop_frame();
             return _t12060;
         }
-#line 1447 "compiler/codegen.gem"
-        gem_set_line(1447);
+#line 1448 "compiler/codegen.gem"
+        gem_set_line(1448);
     GemVal _t12069 = gem_v_line_dir;
     GemVal _t12061 = gem_v_r;
     static GemICacheSlot _ic_2050 = {0};
@@ -52885,7 +52888,7 @@ static GemVal __anon_177(void *_env, GemVal *args, int argc) {
     GemVal _t12065 = gem_table_get_cached(_t12062, "expr", &_ic_2051);
     GemVal _t12064 = (*gem_v_return_nil_str);
     GemVal _t12063[] = {gem_v_p};
-    gem_check_callable(_t12064, "compiler/codegen.gem", 1447);
+    gem_check_callable(_t12064, "compiler/codegen.gem", 1448);
     GemVal _t12070[] = {_t12069, _t12068, _t12067, GEM_STR_LIT("GemVal ", 7), _t12066, GEM_STR_LIT(" = ", 3), _t12065, GEM_STR_LIT(";\n", 2), _t12064.fn(_t12064.env, _t12063, 1)};
         GemVal _t12071 = gem_interp(9, _t12070);
         if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t12071, 1);
@@ -52921,32 +52924,32 @@ static GemVal __anon_177(void *_env, GemVal *args, int argc) {
         _t12079 = gem_has_key_fn(NULL, _t12078, 2);
     }
     if (gem_truthy(_t12079)) {
-#line 1448 "compiler/codegen.gem"
-        gem_set_line(1448);
-        GemVal gem_v_name = gem_table_get(gem_v___match_312, GEM_STR_LIT("name", 4));
-#line 1448 "compiler/codegen.gem"
-        gem_set_line(1448);
-        GemVal gem_v_value = gem_table_get(gem_v___match_312, GEM_STR_LIT("value", 5));
 #line 1449 "compiler/codegen.gem"
         gem_set_line(1449);
+        GemVal gem_v_name = gem_table_get(gem_v___match_312, GEM_STR_LIT("name", 4));
+#line 1449 "compiler/codegen.gem"
+        gem_set_line(1449);
+        GemVal gem_v_value = gem_table_get(gem_v___match_312, GEM_STR_LIT("value", 5));
+#line 1450 "compiler/codegen.gem"
+        gem_set_line(1450);
     GemVal _t12082 = (*gem_v_check_assign_target);
     GemVal _t12080 = gem_v_name;
     GemVal _t12081[] = {_t12080, gem_v_node};
-    gem_check_callable(_t12082, "compiler/codegen.gem", 1449);
+    gem_check_callable(_t12082, "compiler/codegen.gem", 1450);
         (void)(_t12082.fn(_t12082.env, _t12081, 2));
-#line 1450 "compiler/codegen.gem"
-        gem_set_line(1450);
-    GemVal _t12084 = (*gem_v_compile_expr);
-    GemVal _t12083[] = {gem_v_value};
-    gem_check_callable(_t12084, "compiler/codegen.gem", 1450);
-        GemVal gem_v_r = _t12084.fn(_t12084.env, _t12083, 1);
 #line 1451 "compiler/codegen.gem"
         gem_set_line(1451);
+    GemVal _t12084 = (*gem_v_compile_expr);
+    GemVal _t12083[] = {gem_v_value};
+    gem_check_callable(_t12084, "compiler/codegen.gem", 1451);
+        GemVal gem_v_r = _t12084.fn(_t12084.env, _t12083, 1);
+#line 1452 "compiler/codegen.gem"
+        gem_set_line(1452);
     GemVal _t12085 = (*gem_v_tmp);
-    gem_check_callable(_t12085, "compiler/codegen.gem", 1451);
+    gem_check_callable(_t12085, "compiler/codegen.gem", 1452);
         GemVal gem_v_t = _t12085.fn(_t12085.env, NULL, 0);
-#line 1453 "compiler/codegen.gem"
-        gem_set_line(1453);
+#line 1454 "compiler/codegen.gem"
+        gem_set_line(1454);
     GemVal _t12103 = gem_v_line_dir;
     GemVal _t12086 = gem_v_r;
     static GemICacheSlot _ic_2052 = {0};
@@ -52960,16 +52963,16 @@ static GemVal __anon_177(void *_env, GemVal *args, int argc) {
     GemVal _t12090 = (*gem_v_var_store);
     GemVal _t12088 = gem_v_name;
     GemVal _t12089[] = {_t12088, gem_v_t};
-    gem_check_callable(_t12090, "compiler/codegen.gem", 1453);
+    gem_check_callable(_t12090, "compiler/codegen.gem", 1454);
     GemVal _t12097 = _t12090.fn(_t12090.env, _t12089, 2);
     GemVal _t12093 = (*gem_v_ns_refresh);
     GemVal _t12091 = gem_v_name;
     GemVal _t12092[] = {_t12091, gem_v_p};
-    gem_check_callable(_t12093, "compiler/codegen.gem", 1453);
+    gem_check_callable(_t12093, "compiler/codegen.gem", 1454);
     GemVal _t12096 = _t12093.fn(_t12093.env, _t12092, 2);
     GemVal _t12095 = (*gem_v_return_nil_str);
     GemVal _t12094[] = {gem_v_p};
-    gem_check_callable(_t12095, "compiler/codegen.gem", 1453);
+    gem_check_callable(_t12095, "compiler/codegen.gem", 1454);
     GemVal _t12104[] = {_t12103, _t12102, _t12101, GEM_STR_LIT("GemVal ", 7), _t12100, GEM_STR_LIT(" = ", 3), _t12099, GEM_STR_LIT(";\n", 2), _t12098, _t12097, GEM_STR_LIT("\n", 1), _t12096, _t12095.fn(_t12095.env, _t12094, 1)};
         GemVal _t12105 = gem_interp(13, _t12104);
         if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t12105, 1);
@@ -52998,25 +53001,25 @@ static GemVal __anon_177(void *_env, GemVal *args, int argc) {
         _t12111 = gem_has_key_fn(NULL, _t12110, 2);
     }
     if (gem_truthy(_t12111)) {
-#line 1454 "compiler/codegen.gem"
-        gem_set_line(1454);
-        GemVal gem_v_value = gem_table_get(gem_v___match_312, GEM_STR_LIT("value", 5));
 #line 1455 "compiler/codegen.gem"
         gem_set_line(1455);
-        if (gem_truthy(gem_neq(gem_v_value, GEM_NIL))) {
+        GemVal gem_v_value = gem_table_get(gem_v___match_312, GEM_STR_LIT("value", 5));
 #line 1456 "compiler/codegen.gem"
-            gem_set_line(1456);
-    GemVal _t12113 = (*gem_v_compile_expr);
-    GemVal _t12112[] = {gem_v_value};
-    gem_check_callable(_t12113, "compiler/codegen.gem", 1456);
-            GemVal gem_v_r = _t12113.fn(_t12113.env, _t12112, 1);
+        gem_set_line(1456);
+        if (gem_truthy(gem_neq(gem_v_value, GEM_NIL))) {
 #line 1457 "compiler/codegen.gem"
             gem_set_line(1457);
-    GemVal _t12114 = (*gem_v_tmp);
-    gem_check_callable(_t12114, "compiler/codegen.gem", 1457);
-            GemVal gem_v_t = _t12114.fn(_t12114.env, NULL, 0);
+    GemVal _t12113 = (*gem_v_compile_expr);
+    GemVal _t12112[] = {gem_v_value};
+    gem_check_callable(_t12113, "compiler/codegen.gem", 1457);
+            GemVal gem_v_r = _t12113.fn(_t12113.env, _t12112, 1);
 #line 1458 "compiler/codegen.gem"
             gem_set_line(1458);
+    GemVal _t12114 = (*gem_v_tmp);
+    gem_check_callable(_t12114, "compiler/codegen.gem", 1458);
+            GemVal gem_v_t = _t12114.fn(_t12114.env, NULL, 0);
+#line 1459 "compiler/codegen.gem"
+            gem_set_line(1459);
     GemVal _t12124 = gem_v_line_dir;
     GemVal _t12115 = gem_v_r;
     static GemICacheSlot _ic_2054 = {0};
@@ -53029,19 +53032,19 @@ static GemVal __anon_177(void *_env, GemVal *args, int argc) {
     GemVal _t12119 = (*gem_v_return_str);
     GemVal _t12117 = gem_v_p;
     GemVal _t12118[] = {_t12117, gem_v_t};
-    gem_check_callable(_t12119, "compiler/codegen.gem", 1458);
+    gem_check_callable(_t12119, "compiler/codegen.gem", 1459);
     GemVal _t12125[] = {_t12124, _t12123, _t12122, GEM_STR_LIT("GemVal ", 7), _t12121, GEM_STR_LIT(" = ", 3), _t12120, GEM_STR_LIT(";\n", 2), _t12119.fn(_t12119.env, _t12118, 2)};
             GemVal _t12126 = gem_interp(9, _t12125);
             if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t12126, 1);
             gem_pop_frame();
             return _t12126;
         }
-#line 1460 "compiler/codegen.gem"
-        gem_set_line(1460);
+#line 1461 "compiler/codegen.gem"
+        gem_set_line(1461);
     GemVal _t12129 = gem_v_line_dir;
     GemVal _t12128 = (*gem_v_return_nil_str);
     GemVal _t12127[] = {gem_v_p};
-    gem_check_callable(_t12128, "compiler/codegen.gem", 1460);
+    gem_check_callable(_t12128, "compiler/codegen.gem", 1461);
     GemVal _t12130[] = {_t12129, _t12128.fn(_t12128.env, _t12127, 1)};
         GemVal _t12131 = gem_interp(2, _t12130);
         if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t12131, 1);
@@ -53063,14 +53066,14 @@ static GemVal __anon_177(void *_env, GemVal *args, int argc) {
         _t12135 = gem_eq(gem_table_get(gem_v___match_312, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("if", 2));
     }
     if (gem_truthy(_t12135)) {
-#line 1462 "compiler/codegen.gem"
-        gem_set_line(1462);
+#line 1463 "compiler/codegen.gem"
+        gem_set_line(1463);
     GemVal _t12136[] = {gem_v_line_dir};
     GemVal _t12140 = gem_interp(1, _t12136);
     GemVal _t12139 = (*gem_v_compile_if);
     GemVal _t12137 = gem_v_node;
     GemVal _t12138[] = {_t12137, gem_v_indent, gem_bool(1)};
-    gem_check_callable(_t12139, "compiler/codegen.gem", 1462);
+    gem_check_callable(_t12139, "compiler/codegen.gem", 1463);
         GemVal _t12141 = gem_add(_t12140, _t12139.fn(_t12139.env, _t12138, 3));
         if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t12141, 1);
         gem_pop_frame();
@@ -53091,17 +53094,17 @@ static GemVal __anon_177(void *_env, GemVal *args, int argc) {
         _t12145 = gem_eq(gem_table_get(gem_v___match_312, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("while", 5));
     }
     if (gem_truthy(_t12145)) {
-#line 1464 "compiler/codegen.gem"
-        gem_set_line(1464);
+#line 1465 "compiler/codegen.gem"
+        gem_set_line(1465);
     GemVal _t12152 = gem_v_line_dir;
     GemVal _t12148 = (*gem_v_compile_while);
     GemVal _t12146 = gem_v_node;
     GemVal _t12147[] = {_t12146, gem_v_indent};
-    gem_check_callable(_t12148, "compiler/codegen.gem", 1464);
+    gem_check_callable(_t12148, "compiler/codegen.gem", 1465);
     GemVal _t12151 = _t12148.fn(_t12148.env, _t12147, 2);
     GemVal _t12150 = (*gem_v_return_nil_str);
     GemVal _t12149[] = {gem_v_p};
-    gem_check_callable(_t12150, "compiler/codegen.gem", 1464);
+    gem_check_callable(_t12150, "compiler/codegen.gem", 1465);
     GemVal _t12153[] = {_t12152, _t12151, GEM_STR_LIT("\n", 1), _t12150.fn(_t12150.env, _t12149, 1)};
         GemVal _t12154 = gem_interp(4, _t12153);
         if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t12154, 1);
@@ -53123,14 +53126,14 @@ static GemVal __anon_177(void *_env, GemVal *args, int argc) {
         _t12158 = gem_eq(gem_table_get(gem_v___match_312, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("match", 5));
     }
     if (gem_truthy(_t12158)) {
-#line 1466 "compiler/codegen.gem"
-        gem_set_line(1466);
+#line 1467 "compiler/codegen.gem"
+        gem_set_line(1467);
     GemVal _t12159[] = {gem_v_line_dir};
     GemVal _t12163 = gem_interp(1, _t12159);
     GemVal _t12162 = (*gem_v_compile_match);
     GemVal _t12160 = gem_v_node;
     GemVal _t12161[] = {_t12160, gem_v_indent, gem_bool(1)};
-    gem_check_callable(_t12162, "compiler/codegen.gem", 1466);
+    gem_check_callable(_t12162, "compiler/codegen.gem", 1467);
         GemVal _t12164 = gem_add(_t12163, _t12162.fn(_t12162.env, _t12161, 3));
         if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t12164, 1);
         gem_pop_frame();
@@ -53151,14 +53154,14 @@ static GemVal __anon_177(void *_env, GemVal *args, int argc) {
         _t12168 = gem_eq(gem_table_get(gem_v___match_312, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("receive_match", 13));
     }
     if (gem_truthy(_t12168)) {
-#line 1468 "compiler/codegen.gem"
-        gem_set_line(1468);
+#line 1469 "compiler/codegen.gem"
+        gem_set_line(1469);
     GemVal _t12169[] = {gem_v_line_dir};
     GemVal _t12173 = gem_interp(1, _t12169);
     GemVal _t12172 = (*gem_v_compile_receive_match);
     GemVal _t12170 = gem_v_node;
     GemVal _t12171[] = {_t12170, gem_v_indent, gem_bool(1)};
-    gem_check_callable(_t12172, "compiler/codegen.gem", 1468);
+    gem_check_callable(_t12172, "compiler/codegen.gem", 1469);
         GemVal _t12174 = gem_add(_t12173, _t12172.fn(_t12172.env, _t12171, 3));
         if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t12174, 1);
         gem_pop_frame();
@@ -53186,36 +53189,36 @@ static GemVal __anon_177(void *_env, GemVal *args, int argc) {
         _t12180 = gem_has_key_fn(NULL, _t12179, 2);
     }
     if (gem_truthy(_t12180)) {
-#line 1469 "compiler/codegen.gem"
-        gem_set_line(1469);
-        GemVal gem_v_stmts = gem_table_get(gem_v___match_312, GEM_STR_LIT("stmts", 5));
 #line 1470 "compiler/codegen.gem"
         gem_set_line(1470);
-        GemVal gem_v_b = gem_buf_new_fn(NULL, NULL, 0);
+        GemVal gem_v_stmts = gem_table_get(gem_v___match_312, GEM_STR_LIT("stmts", 5));
 #line 1471 "compiler/codegen.gem"
         gem_set_line(1471);
+        GemVal gem_v_b = gem_buf_new_fn(NULL, NULL, 0);
+#line 1472 "compiler/codegen.gem"
+        gem_set_line(1472);
     GemVal _t12182 = gem_v_b;
     GemVal _t12181[] = {gem_v_p, GEM_STR_LIT("{\n", 2)};
     GemVal _t12183[] = {_t12182, gem_interp(2, _t12181)};
         (void)(gem_buf_push_fn(NULL, _t12183, 2));
-#line 1472 "compiler/codegen.gem"
-        gem_set_line(1472);
+#line 1473 "compiler/codegen.gem"
+        gem_set_line(1473);
     GemVal _t12188 = gem_g___mod_codegen_set_union;
     GemVal _t12184 = (*gem_v_fs);
     static GemICacheSlot _ic_2056 = {0};
     GemVal _t12186 = gem_table_get_cached(_t12184, "fn_scope_locals", &_ic_2056);
     GemVal _t12185 = gem_table_new_braces();
     GemVal _t12187[] = {_t12186, _t12185};
-    gem_check_callable(_t12188, "compiler/codegen.gem", 1472);
+    gem_check_callable(_t12188, "compiler/codegen.gem", 1473);
         GemVal gem_v_saved_block = _t12188.fn(_t12188.env, _t12187, 2);
-#line 1473 "compiler/codegen.gem"
-        gem_set_line(1473);
+#line 1474 "compiler/codegen.gem"
+        gem_set_line(1474);
         GemVal gem_v___for_i_313 = gem_int(0);
-#line 1473 "compiler/codegen.gem"
-        gem_set_line(1473);
+#line 1474 "compiler/codegen.gem"
+        gem_set_line(1474);
         GemVal gem_v___for_limit_313 = gem_sub(gem_len_1(gem_v_stmts), gem_int(1));
-#line 1473 "compiler/codegen.gem"
-        gem_set_line(1473);
+#line 1474 "compiler/codegen.gem"
+        gem_set_line(1474);
         GemArenaMark _mk326;
         gem_arena_mark(&_mk326);
         while (1) {
@@ -53226,57 +53229,57 @@ static GemVal __anon_177(void *_env, GemVal *args, int argc) {
             }
     GemVal _t12189 = gem_v___for_i_313;
             if (!gem_truthy(gem_lt(_t12189, gem_v___for_limit_313))) break;
-#line 1473 "compiler/codegen.gem"
-            gem_set_line(1473);
-            GemVal gem_v_i = gem_v___for_i_313;
-#line 1473 "compiler/codegen.gem"
-            gem_set_line(1473);
-            gem_v___for_i_313 = gem_add(gem_v___for_i_313, gem_int(1));
 #line 1474 "compiler/codegen.gem"
             gem_set_line(1474);
+            GemVal gem_v_i = gem_v___for_i_313;
+#line 1474 "compiler/codegen.gem"
+            gem_set_line(1474);
+            gem_v___for_i_313 = gem_add(gem_v___for_i_313, gem_int(1));
+#line 1475 "compiler/codegen.gem"
+            gem_set_line(1475);
     GemVal _t12194 = gem_v_b;
     GemVal _t12193 = (*gem_v_compile_stmt);
     GemVal _t12190 = gem_v_stmts;
     GemVal _t12191 = gem_table_get(_t12190, gem_v_i);
     GemVal _t12192[] = {_t12191, gem_add(gem_v_indent, gem_int(1))};
-    gem_check_callable(_t12193, "compiler/codegen.gem", 1474);
+    gem_check_callable(_t12193, "compiler/codegen.gem", 1475);
     GemVal _t12195[] = {_t12194, _t12193.fn(_t12193.env, _t12192, 2)};
             (void)(gem_buf_push_fn(NULL, _t12195, 2));
-#line 1475 "compiler/codegen.gem"
-            gem_set_line(1475);
+#line 1476 "compiler/codegen.gem"
+            gem_set_line(1476);
     GemVal _t12196[] = {gem_v_b, GEM_STR_LIT("\n", 1)};
             (void)(gem_buf_push_fn(NULL, _t12196, 2));
         }
 
-#line 1477 "compiler/codegen.gem"
-        gem_set_line(1477);
-        if (gem_truthy(gem_gt(gem_len_1(gem_v_stmts), gem_int(0)))) {
 #line 1478 "compiler/codegen.gem"
-            gem_set_line(1478);
+        gem_set_line(1478);
+        if (gem_truthy(gem_gt(gem_len_1(gem_v_stmts), gem_int(0)))) {
+#line 1479 "compiler/codegen.gem"
+            gem_set_line(1479);
     GemVal _t12200 = gem_v_b;
     GemVal _t12199 = (*gem_v_compile_stmt_return);
     GemVal _t12197 = gem_table_get(gem_v_stmts, gem_int(-1));
     GemVal _t12198[] = {_t12197, gem_add(gem_v_indent, gem_int(1))};
-    gem_check_callable(_t12199, "compiler/codegen.gem", 1478);
+    gem_check_callable(_t12199, "compiler/codegen.gem", 1479);
     GemVal _t12201[] = {_t12200, _t12199.fn(_t12199.env, _t12198, 2)};
             (void)(gem_buf_push_fn(NULL, _t12201, 2));
-#line 1479 "compiler/codegen.gem"
-            gem_set_line(1479);
+#line 1480 "compiler/codegen.gem"
+            gem_set_line(1480);
     GemVal _t12202[] = {gem_v_b, GEM_STR_LIT("\n", 1)};
             (void)(gem_buf_push_fn(NULL, _t12202, 2));
         }
-#line 1481 "compiler/codegen.gem"
-        gem_set_line(1481);
-    GemVal _t12203 = (*gem_v_fs);
-        gem_table_set(_t12203, GEM_STR_LIT("fn_scope_locals", 15), gem_v_saved_block);
 #line 1482 "compiler/codegen.gem"
         gem_set_line(1482);
+    GemVal _t12203 = (*gem_v_fs);
+        gem_table_set(_t12203, GEM_STR_LIT("fn_scope_locals", 15), gem_v_saved_block);
+#line 1483 "compiler/codegen.gem"
+        gem_set_line(1483);
     GemVal _t12205 = gem_v_b;
     GemVal _t12204[] = {gem_v_p, GEM_STR_LIT("}", 1)};
     GemVal _t12206[] = {_t12205, gem_interp(2, _t12204)};
         (void)(gem_buf_push_fn(NULL, _t12206, 2));
-#line 1483 "compiler/codegen.gem"
-        gem_set_line(1483);
+#line 1484 "compiler/codegen.gem"
+        gem_set_line(1484);
     GemVal _t12207[] = {gem_v_b};
         GemVal _t12208 = gem_to_string_fn(NULL, _t12207, 1);
         if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t12208, 1);
@@ -53298,16 +53301,16 @@ static GemVal __anon_177(void *_env, GemVal *args, int argc) {
         _t12212 = gem_eq(gem_table_get(gem_v___match_312, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("dot_assign", 10));
     }
     if (gem_truthy(_t12212)) {
-#line 1485 "compiler/codegen.gem"
-        gem_set_line(1485);
+#line 1486 "compiler/codegen.gem"
+        gem_set_line(1486);
     GemVal _t12215 = (*gem_v_compile_stmt);
     GemVal _t12213 = gem_v_node;
     GemVal _t12214[] = {_t12213, gem_v_indent};
-    gem_check_callable(_t12215, "compiler/codegen.gem", 1485);
+    gem_check_callable(_t12215, "compiler/codegen.gem", 1486);
     GemVal _t12218 = _t12215.fn(_t12215.env, _t12214, 2);
     GemVal _t12217 = (*gem_v_return_nil_str);
     GemVal _t12216[] = {gem_v_p};
-    gem_check_callable(_t12217, "compiler/codegen.gem", 1485);
+    gem_check_callable(_t12217, "compiler/codegen.gem", 1486);
     GemVal _t12219[] = {_t12218, GEM_STR_LIT("\n", 1), _t12217.fn(_t12217.env, _t12216, 1)};
         GemVal _t12220 = gem_interp(3, _t12219);
         if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t12220, 1);
@@ -53329,16 +53332,16 @@ static GemVal __anon_177(void *_env, GemVal *args, int argc) {
         _t12224 = gem_eq(gem_table_get(gem_v___match_312, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("index_assign", 12));
     }
     if (gem_truthy(_t12224)) {
-#line 1487 "compiler/codegen.gem"
-        gem_set_line(1487);
+#line 1488 "compiler/codegen.gem"
+        gem_set_line(1488);
     GemVal _t12227 = (*gem_v_compile_stmt);
     GemVal _t12225 = gem_v_node;
     GemVal _t12226[] = {_t12225, gem_v_indent};
-    gem_check_callable(_t12227, "compiler/codegen.gem", 1487);
+    gem_check_callable(_t12227, "compiler/codegen.gem", 1488);
     GemVal _t12230 = _t12227.fn(_t12227.env, _t12226, 2);
     GemVal _t12229 = (*gem_v_return_nil_str);
     GemVal _t12228[] = {gem_v_p};
-    gem_check_callable(_t12229, "compiler/codegen.gem", 1487);
+    gem_check_callable(_t12229, "compiler/codegen.gem", 1488);
     GemVal _t12231[] = {_t12230, GEM_STR_LIT("\n", 1), _t12229.fn(_t12229.env, _t12228, 1)};
         GemVal _t12232 = gem_interp(3, _t12231);
         if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t12232, 1);
@@ -53360,16 +53363,16 @@ static GemVal __anon_177(void *_env, GemVal *args, int argc) {
         _t12236 = gem_eq(gem_table_get(gem_v___match_312, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("break", 5));
     }
     if (gem_truthy(_t12236)) {
-#line 1489 "compiler/codegen.gem"
-        gem_set_line(1489);
+#line 1490 "compiler/codegen.gem"
+        gem_set_line(1490);
     GemVal _t12239 = (*gem_v_compile_stmt);
     GemVal _t12237 = gem_v_node;
     GemVal _t12238[] = {_t12237, gem_v_indent};
-    gem_check_callable(_t12239, "compiler/codegen.gem", 1489);
+    gem_check_callable(_t12239, "compiler/codegen.gem", 1490);
     GemVal _t12242 = _t12239.fn(_t12239.env, _t12238, 2);
     GemVal _t12241 = (*gem_v_return_nil_str);
     GemVal _t12240[] = {gem_v_p};
-    gem_check_callable(_t12241, "compiler/codegen.gem", 1489);
+    gem_check_callable(_t12241, "compiler/codegen.gem", 1490);
     GemVal _t12243[] = {_t12242, GEM_STR_LIT("\n", 1), _t12241.fn(_t12241.env, _t12240, 1)};
         GemVal _t12244 = gem_interp(3, _t12243);
         if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t12244, 1);
@@ -53391,16 +53394,16 @@ static GemVal __anon_177(void *_env, GemVal *args, int argc) {
         _t12248 = gem_eq(gem_table_get(gem_v___match_312, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("continue", 8));
     }
     if (gem_truthy(_t12248)) {
-#line 1491 "compiler/codegen.gem"
-        gem_set_line(1491);
+#line 1492 "compiler/codegen.gem"
+        gem_set_line(1492);
     GemVal _t12251 = (*gem_v_compile_stmt);
     GemVal _t12249 = gem_v_node;
     GemVal _t12250[] = {_t12249, gem_v_indent};
-    gem_check_callable(_t12251, "compiler/codegen.gem", 1491);
+    gem_check_callable(_t12251, "compiler/codegen.gem", 1492);
     GemVal _t12254 = _t12251.fn(_t12251.env, _t12250, 2);
     GemVal _t12253 = (*gem_v_return_nil_str);
     GemVal _t12252[] = {gem_v_p};
-    gem_check_callable(_t12253, "compiler/codegen.gem", 1491);
+    gem_check_callable(_t12253, "compiler/codegen.gem", 1492);
     GemVal _t12255[] = {_t12254, GEM_STR_LIT("\n", 1), _t12253.fn(_t12253.env, _t12252, 1)};
         GemVal _t12256 = gem_interp(3, _t12255);
         if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t12256, 1);
@@ -53422,24 +53425,24 @@ static GemVal __anon_177(void *_env, GemVal *args, int argc) {
         _t12260 = gem_eq(gem_table_get(gem_v___match_312, GEM_STR_LIT("tag", 3)), GEM_STR_LIT("fn_def", 6));
     }
     if (gem_truthy(_t12260)) {
-#line 1493 "compiler/codegen.gem"
-        gem_set_line(1493);
+#line 1494 "compiler/codegen.gem"
+        gem_set_line(1494);
     GemVal _t12263 = (*gem_v_compile_stmt);
     GemVal _t12261 = gem_v_node;
     GemVal _t12262[] = {_t12261, gem_v_indent};
-    gem_check_callable(_t12263, "compiler/codegen.gem", 1493);
+    gem_check_callable(_t12263, "compiler/codegen.gem", 1494);
     GemVal _t12266 = _t12263.fn(_t12263.env, _t12262, 2);
     GemVal _t12265 = (*gem_v_return_nil_str);
     GemVal _t12264[] = {gem_v_p};
-    gem_check_callable(_t12265, "compiler/codegen.gem", 1493);
+    gem_check_callable(_t12265, "compiler/codegen.gem", 1494);
     GemVal _t12267[] = {_t12266, GEM_STR_LIT("\n", 1), _t12265.fn(_t12265.env, _t12264, 1)};
         GemVal _t12268 = gem_interp(3, _t12267);
         if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t12268, 1);
         gem_pop_frame();
         return _t12268;
     } else {
-#line 1495 "compiler/codegen.gem"
-        gem_set_line(1495);
+#line 1496 "compiler/codegen.gem"
+        gem_set_line(1496);
         (void)(GEM_NIL);
     }
     }
@@ -53454,19 +53457,19 @@ static GemVal __anon_177(void *_env, GemVal *args, int argc) {
     }
     }
     }
-#line 1498 "compiler/codegen.gem"
-    gem_set_line(1498);
-    GemVal _t12270 = (*gem_v_compile_expr);
-    GemVal _t12269[] = {gem_v_node};
-    gem_check_callable(_t12270, "compiler/codegen.gem", 1498);
-    GemVal gem_v_r = _t12270.fn(_t12270.env, _t12269, 1);
 #line 1499 "compiler/codegen.gem"
     gem_set_line(1499);
-    GemVal _t12271 = (*gem_v_tmp);
-    gem_check_callable(_t12271, "compiler/codegen.gem", 1499);
-    GemVal gem_v_t = _t12271.fn(_t12271.env, NULL, 0);
+    GemVal _t12270 = (*gem_v_compile_expr);
+    GemVal _t12269[] = {gem_v_node};
+    gem_check_callable(_t12270, "compiler/codegen.gem", 1499);
+    GemVal gem_v_r = _t12270.fn(_t12270.env, _t12269, 1);
 #line 1500 "compiler/codegen.gem"
     gem_set_line(1500);
+    GemVal _t12271 = (*gem_v_tmp);
+    gem_check_callable(_t12271, "compiler/codegen.gem", 1500);
+    GemVal gem_v_t = _t12271.fn(_t12271.env, NULL, 0);
+#line 1501 "compiler/codegen.gem"
+    gem_set_line(1501);
     GemVal _t12281 = gem_v_line_dir;
     GemVal _t12272 = gem_v_r;
     static GemICacheSlot _ic_2057 = {0};
@@ -53479,7 +53482,7 @@ static GemVal __anon_177(void *_env, GemVal *args, int argc) {
     GemVal _t12276 = (*gem_v_return_str);
     GemVal _t12274 = gem_v_p;
     GemVal _t12275[] = {_t12274, gem_v_t};
-    gem_check_callable(_t12276, "compiler/codegen.gem", 1500);
+    gem_check_callable(_t12276, "compiler/codegen.gem", 1501);
     GemVal _t12282[] = {_t12281, _t12280, _t12279, GEM_STR_LIT("GemVal ", 7), _t12278, GEM_STR_LIT(" = ", 3), _t12277, GEM_STR_LIT(";\n", 2), _t12276.fn(_t12276.env, _t12275, 2)};
     GemVal _t12283 = gem_interp(9, _t12282);
     if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t12283, 1);
@@ -53498,38 +53501,38 @@ static GemVal __anon_178(void *_env, GemVal *args, int argc) {
     GemVal *gem_v_compile_expr = _cls->gem_v_compile_expr;
     GemVal *gem_v_compile_stmts_tail = _cls->gem_v_compile_stmts_tail;
     GemVal *gem_v_fs = _cls->gem_v_fs;
-    gem_push_frame("anonymous fn", "compiler/codegen.gem", 1503);
+    gem_push_frame("anonymous fn", "compiler/codegen.gem", 1504);
     GemVal gem_v_node = (argc > 0) ? args[0] : GEM_NIL;
     GemVal gem_v_indent = (argc > 1) ? args[1] : GEM_NIL;
     GemVal gem_v_return_pos = (argc > 2) ? args[2] : GEM_NIL;
     GemArenaPoint _ret_pt;
     gem_arena_point(&_ret_pt);
-#line 1504 "compiler/codegen.gem"
-    gem_set_line(1504);
-    GemVal _t12298 = gem_g___mod_codegen_pad_for;
-    GemVal _t12297[] = {gem_v_indent};
-    gem_check_callable(_t12298, "compiler/codegen.gem", 1504);
-    GemVal gem_v_p = _t12298.fn(_t12298.env, _t12297, 1);
 #line 1505 "compiler/codegen.gem"
     gem_set_line(1505);
+    GemVal _t12298 = gem_g___mod_codegen_pad_for;
+    GemVal _t12297[] = {gem_v_indent};
+    gem_check_callable(_t12298, "compiler/codegen.gem", 1505);
+    GemVal gem_v_p = _t12298.fn(_t12298.env, _t12297, 1);
+#line 1506 "compiler/codegen.gem"
+    gem_set_line(1506);
     GemVal _t12301 = (*gem_v_compile_expr);
     GemVal _t12299 = gem_v_node;
     static GemICacheSlot _ic_2059 = {0};
     GemVal _t12300[] = {gem_table_get_cached(_t12299, "cond", &_ic_2059)};
-    gem_check_callable(_t12301, "compiler/codegen.gem", 1505);
+    gem_check_callable(_t12301, "compiler/codegen.gem", 1506);
     GemVal gem_v_cond_r = _t12301.fn(_t12301.env, _t12300, 1);
-#line 1506 "compiler/codegen.gem"
-    gem_set_line(1506);
-    GemVal gem_v_b = gem_buf_new_fn(NULL, NULL, 0);
 #line 1507 "compiler/codegen.gem"
     gem_set_line(1507);
+    GemVal gem_v_b = gem_buf_new_fn(NULL, NULL, 0);
+#line 1508 "compiler/codegen.gem"
+    gem_set_line(1508);
     GemVal _t12303 = gem_v_b;
     GemVal _t12302 = gem_v_cond_r;
     static GemICacheSlot _ic_2060 = {0};
     GemVal _t12304[] = {_t12303, gem_table_get_cached(_t12302, "setup", &_ic_2060)};
     (void)(gem_buf_push_fn(NULL, _t12304, 2));
-#line 1508 "compiler/codegen.gem"
-    gem_set_line(1508);
+#line 1509 "compiler/codegen.gem"
+    gem_set_line(1509);
     GemVal _t12308 = gem_v_b;
     GemVal _t12306 = gem_v_p;
     GemVal _t12305 = gem_v_cond_r;
@@ -53537,18 +53540,18 @@ static GemVal __anon_178(void *_env, GemVal *args, int argc) {
     GemVal _t12307[] = {_t12306, GEM_STR_LIT("if (gem_truthy(", 15), gem_table_get_cached(_t12305, "expr", &_ic_2061), GEM_STR_LIT(")) {\n", 5)};
     GemVal _t12309[] = {_t12308, gem_interp(4, _t12307)};
     (void)(gem_buf_push_fn(NULL, _t12309, 2));
-#line 1509 "compiler/codegen.gem"
-    gem_set_line(1509);
+#line 1510 "compiler/codegen.gem"
+    gem_set_line(1510);
     GemVal _t12314 = gem_g___mod_codegen_set_union;
     GemVal _t12310 = (*gem_v_fs);
     static GemICacheSlot _ic_2062 = {0};
     GemVal _t12312 = gem_table_get_cached(_t12310, "fn_scope_locals", &_ic_2062);
     GemVal _t12311 = gem_table_new_braces();
     GemVal _t12313[] = {_t12312, _t12311};
-    gem_check_callable(_t12314, "compiler/codegen.gem", 1509);
+    gem_check_callable(_t12314, "compiler/codegen.gem", 1510);
     GemVal gem_v_saved_then = _t12314.fn(_t12314.env, _t12313, 2);
-#line 1510 "compiler/codegen.gem"
-    gem_set_line(1510);
+#line 1511 "compiler/codegen.gem"
+    gem_set_line(1511);
     GemVal _t12320 = gem_v_b;
     GemVal _t12319 = (*gem_v_compile_stmts_tail);
     GemVal _t12315 = gem_v_node;
@@ -53556,36 +53559,36 @@ static GemVal __anon_178(void *_env, GemVal *args, int argc) {
     GemVal _t12317 = gem_table_get_cached(_t12315, "then", &_ic_2063);
     GemVal _t12316 = gem_add(gem_v_indent, gem_int(1));
     GemVal _t12318[] = {_t12317, _t12316, gem_v_return_pos};
-    gem_check_callable(_t12319, "compiler/codegen.gem", 1510);
+    gem_check_callable(_t12319, "compiler/codegen.gem", 1511);
     GemVal _t12321[] = {_t12320, _t12319.fn(_t12319.env, _t12318, 3)};
     (void)(gem_buf_push_fn(NULL, _t12321, 2));
-#line 1511 "compiler/codegen.gem"
-    gem_set_line(1511);
-    GemVal _t12322 = (*gem_v_fs);
-    gem_table_set(_t12322, GEM_STR_LIT("fn_scope_locals", 15), gem_v_saved_then);
 #line 1512 "compiler/codegen.gem"
     gem_set_line(1512);
+    GemVal _t12322 = (*gem_v_fs);
+    gem_table_set(_t12322, GEM_STR_LIT("fn_scope_locals", 15), gem_v_saved_then);
+#line 1513 "compiler/codegen.gem"
+    gem_set_line(1513);
     GemVal _t12323 = gem_v_node;
     static GemICacheSlot _ic_2064 = {0};
     if (gem_truthy(gem_neq(gem_table_get_cached(_t12323, "else", &_ic_2064), GEM_NIL))) {
-#line 1513 "compiler/codegen.gem"
-        gem_set_line(1513);
+#line 1514 "compiler/codegen.gem"
+        gem_set_line(1514);
     GemVal _t12325 = gem_v_b;
     GemVal _t12324[] = {gem_v_p, GEM_STR_LIT("} else {\n", 9)};
     GemVal _t12326[] = {_t12325, gem_interp(2, _t12324)};
         (void)(gem_buf_push_fn(NULL, _t12326, 2));
-#line 1514 "compiler/codegen.gem"
-        gem_set_line(1514);
+#line 1515 "compiler/codegen.gem"
+        gem_set_line(1515);
     GemVal _t12331 = gem_g___mod_codegen_set_union;
     GemVal _t12327 = (*gem_v_fs);
     static GemICacheSlot _ic_2065 = {0};
     GemVal _t12329 = gem_table_get_cached(_t12327, "fn_scope_locals", &_ic_2065);
     GemVal _t12328 = gem_table_new_braces();
     GemVal _t12330[] = {_t12329, _t12328};
-    gem_check_callable(_t12331, "compiler/codegen.gem", 1514);
+    gem_check_callable(_t12331, "compiler/codegen.gem", 1515);
         GemVal gem_v_saved_else = _t12331.fn(_t12331.env, _t12330, 2);
-#line 1515 "compiler/codegen.gem"
-        gem_set_line(1515);
+#line 1516 "compiler/codegen.gem"
+        gem_set_line(1516);
     GemVal _t12337 = gem_v_b;
     GemVal _t12336 = (*gem_v_compile_stmts_tail);
     GemVal _t12332 = gem_v_node;
@@ -53593,42 +53596,42 @@ static GemVal __anon_178(void *_env, GemVal *args, int argc) {
     GemVal _t12334 = gem_table_get_cached(_t12332, "else", &_ic_2066);
     GemVal _t12333 = gem_add(gem_v_indent, gem_int(1));
     GemVal _t12335[] = {_t12334, _t12333, gem_v_return_pos};
-    gem_check_callable(_t12336, "compiler/codegen.gem", 1515);
+    gem_check_callable(_t12336, "compiler/codegen.gem", 1516);
     GemVal _t12338[] = {_t12337, _t12336.fn(_t12336.env, _t12335, 3)};
         (void)(gem_buf_push_fn(NULL, _t12338, 2));
-#line 1516 "compiler/codegen.gem"
-        gem_set_line(1516);
+#line 1517 "compiler/codegen.gem"
+        gem_set_line(1517);
     GemVal _t12339 = (*gem_v_fs);
         gem_table_set(_t12339, GEM_STR_LIT("fn_scope_locals", 15), gem_v_saved_else);
     } else {
-#line 1517 "compiler/codegen.gem"
-        gem_set_line(1517);
-        if (gem_truthy(gem_v_return_pos)) {
 #line 1518 "compiler/codegen.gem"
-            gem_set_line(1518);
+        gem_set_line(1518);
+        if (gem_truthy(gem_v_return_pos)) {
+#line 1519 "compiler/codegen.gem"
+            gem_set_line(1519);
     GemVal _t12341 = gem_v_b;
     GemVal _t12340[] = {gem_v_p, GEM_STR_LIT("} else {\n", 9)};
     GemVal _t12342[] = {_t12341, gem_interp(2, _t12340)};
             (void)(gem_buf_push_fn(NULL, _t12342, 2));
-#line 1519 "compiler/codegen.gem"
-            gem_set_line(1519);
+#line 1520 "compiler/codegen.gem"
+            gem_set_line(1520);
     GemVal _t12346 = gem_v_b;
     GemVal _t12345 = (*gem_v_compile_stmts_tail);
     GemVal _t12343 = gem_table_new();
     GemVal _t12344[] = {_t12343, gem_add(gem_v_indent, gem_int(1)), gem_bool(1)};
-    gem_check_callable(_t12345, "compiler/codegen.gem", 1519);
+    gem_check_callable(_t12345, "compiler/codegen.gem", 1520);
     GemVal _t12347[] = {_t12346, _t12345.fn(_t12345.env, _t12344, 3)};
             (void)(gem_buf_push_fn(NULL, _t12347, 2));
         }
     }
-#line 1521 "compiler/codegen.gem"
-    gem_set_line(1521);
+#line 1522 "compiler/codegen.gem"
+    gem_set_line(1522);
     GemVal _t12349 = gem_v_b;
     GemVal _t12348[] = {gem_v_p, GEM_STR_LIT("}", 1)};
     GemVal _t12350[] = {_t12349, gem_interp(2, _t12348)};
     (void)(gem_buf_push_fn(NULL, _t12350, 2));
-#line 1522 "compiler/codegen.gem"
-    gem_set_line(1522);
+#line 1523 "compiler/codegen.gem"
+    gem_set_line(1523);
     GemVal _t12351[] = {gem_v_b};
     GemVal _t12352 = gem_to_string_fn(NULL, _t12351, 1);
     if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t12352, 1);
@@ -53651,30 +53654,30 @@ static GemVal __anon_179(void *_env, GemVal *args, int argc) {
     GemVal *gem_v_fs = _cls->gem_v_fs;
     GemVal *gem_v_is_global_ref = _cls->gem_v_is_global_ref;
     GemVal *gem_v_mangle = _cls->gem_v_mangle;
-    gem_push_frame("anonymous fn", "compiler/codegen.gem", 1528);
+    gem_push_frame("anonymous fn", "compiler/codegen.gem", 1529);
     GemVal gem_v_live_set = (argc > 0) ? args[0] : GEM_NIL;
     GemArenaPoint _ret_pt;
     gem_arena_point(&_ret_pt);
-#line 1529 "compiler/codegen.gem"
-    gem_set_line(1529);
-    GemVal _t12354 = gem_table_new();
-    GemVal gem_v_roots = _t12354;
 #line 1530 "compiler/codegen.gem"
     gem_set_line(1530);
-    GemVal _t12355 = gem_table_new();
-    GemVal gem_v_pinned_roots = _t12355;
+    GemVal _t12354 = gem_table_new();
+    GemVal gem_v_roots = _t12354;
 #line 1531 "compiler/codegen.gem"
     gem_set_line(1531);
+    GemVal _t12355 = gem_table_new();
+    GemVal gem_v_pinned_roots = _t12355;
+#line 1532 "compiler/codegen.gem"
+    gem_set_line(1532);
     GemVal _t12356[] = {gem_v_live_set};
     GemVal gem_v_lk = gem_keys_fn(NULL, _t12356, 1);
-#line 1532 "compiler/codegen.gem"
-    gem_set_line(1532);
+#line 1533 "compiler/codegen.gem"
+    gem_set_line(1533);
     GemVal gem_v___for_items_314 = gem_for_items_1(gem_v_lk);
-#line 1532 "compiler/codegen.gem"
-    gem_set_line(1532);
+#line 1533 "compiler/codegen.gem"
+    gem_set_line(1533);
     GemVal gem_v___for_i_314 = gem_int(0);
-#line 1532 "compiler/codegen.gem"
-    gem_set_line(1532);
+#line 1533 "compiler/codegen.gem"
+    gem_set_line(1533);
     GemArenaMark _mk327;
     gem_arena_mark(&_mk327);
     while (1) {
@@ -53685,58 +53688,58 @@ static GemVal __anon_179(void *_env, GemVal *args, int argc) {
         }
     GemVal _t12357 = gem_v___for_i_314;
         if (!gem_truthy(gem_lt(_t12357, gem_for_len_1(gem_v___for_items_314)))) break;
-#line 1532 "compiler/codegen.gem"
-        gem_set_line(1532);
-    GemVal _t12358 = gem_v___for_items_314;
-        GemVal gem_v_name = gem_table_get(_t12358, gem_v___for_i_314);
-#line 1532 "compiler/codegen.gem"
-        gem_set_line(1532);
-        gem_v___for_i_314 = gem_add(gem_v___for_i_314, gem_int(1));
 #line 1533 "compiler/codegen.gem"
         gem_set_line(1533);
+    GemVal _t12358 = gem_v___for_items_314;
+        GemVal gem_v_name = gem_table_get(_t12358, gem_v___for_i_314);
+#line 1533 "compiler/codegen.gem"
+        gem_set_line(1533);
+        gem_v___for_i_314 = gem_add(gem_v___for_i_314, gem_int(1));
+#line 1534 "compiler/codegen.gem"
+        gem_set_line(1534);
     GemVal _t12360 = (*gem_v_is_global_ref);
     GemVal _t12359[] = {gem_v_name};
-    gem_check_callable(_t12360, "compiler/codegen.gem", 1533);
+    gem_check_callable(_t12360, "compiler/codegen.gem", 1534);
         if (gem_truthy(_t12360.fn(_t12360.env, _t12359, 1))) {
         } else {
-#line 1535 "compiler/codegen.gem"
-            gem_set_line(1535);
+#line 1536 "compiler/codegen.gem"
+            gem_set_line(1536);
     GemVal _t12364 = gem_g___mod_codegen_set_contains;
     GemVal _t12361 = (*gem_v_fs);
     static GemICacheSlot _ic_2067 = {0};
     GemVal _t12362 = gem_table_get_cached(_t12361, "local_names", &_ic_2067);
     GemVal _t12363[] = {_t12362, gem_v_name};
-    gem_check_callable(_t12364, "compiler/codegen.gem", 1535);
+    gem_check_callable(_t12364, "compiler/codegen.gem", 1536);
             if (gem_truthy(_t12364.fn(_t12364.env, _t12363, 2))) {
-#line 1536 "compiler/codegen.gem"
-                gem_set_line(1536);
+#line 1537 "compiler/codegen.gem"
+                gem_set_line(1537);
     GemVal _t12368 = gem_g___mod_codegen_set_contains;
     GemVal _t12365 = (*gem_v_fs);
     static GemICacheSlot _ic_2068 = {0};
     GemVal _t12366 = gem_table_get_cached(_t12365, "closure_captures", &_ic_2068);
     GemVal _t12367[] = {_t12366, gem_v_name};
-    gem_check_callable(_t12368, "compiler/codegen.gem", 1536);
+    gem_check_callable(_t12368, "compiler/codegen.gem", 1537);
                 if (gem_truthy(_t12368.fn(_t12368.env, _t12367, 2))) {
-#line 1537 "compiler/codegen.gem"
-                    gem_set_line(1537);
+#line 1538 "compiler/codegen.gem"
+                    gem_set_line(1538);
     GemVal _t12371 = gem_v_roots;
     GemVal _t12370 = (*gem_v_mangle);
     GemVal _t12369[] = {gem_v_name};
-    gem_check_callable(_t12370, "compiler/codegen.gem", 1537);
+    gem_check_callable(_t12370, "compiler/codegen.gem", 1538);
     GemVal _t12372[] = {_t12371, _t12370.fn(_t12370.env, _t12369, 1)};
                     (void)(gem_push_fn(NULL, _t12372, 2));
                 } else {
-#line 1538 "compiler/codegen.gem"
-                    gem_set_line(1538);
+#line 1539 "compiler/codegen.gem"
+                    gem_set_line(1539);
     GemVal _t12376 = gem_g___mod_codegen_set_contains;
     GemVal _t12373 = (*gem_v_fs);
     static GemICacheSlot _ic_2069 = {0};
     GemVal _t12374 = gem_table_get_cached(_t12373, "fn_scope_locals", &_ic_2069);
     GemVal _t12375[] = {_t12374, gem_v_name};
-    gem_check_callable(_t12376, "compiler/codegen.gem", 1538);
+    gem_check_callable(_t12376, "compiler/codegen.gem", 1539);
                     if (gem_truthy(gem_not(_t12376.fn(_t12376.env, _t12375, 2)))) {
-#line 1539 "compiler/codegen.gem"
-                        gem_set_line(1539);
+#line 1540 "compiler/codegen.gem"
+                        gem_set_line(1540);
     GemVal _t12377 = gem_table_new_braces();
     gem_table_set(_t12377, GEM_STR_LIT("ok", 2), gem_bool(0));
     GemVal _t12378[] = {GEM_STR_LIT("live var `", 10), gem_v_name, GEM_STR_LIT("` has no C local at this loop's back-edge (declared in a nested if/match arm?)", 78)};
@@ -53746,30 +53749,30 @@ static GemVal __anon_179(void *_env, GemVal *args, int argc) {
                         gem_pop_frame();
                         return _t12379;
                     } else {
-#line 1540 "compiler/codegen.gem"
-                        gem_set_line(1540);
+#line 1541 "compiler/codegen.gem"
+                        gem_set_line(1541);
     GemVal _t12383 = gem_g___mod_codegen_set_contains;
     GemVal _t12380 = (*gem_v_fs);
     static GemICacheSlot _ic_2070 = {0};
     GemVal _t12381 = gem_table_get_cached(_t12380, "boxed_vars", &_ic_2070);
     GemVal _t12382[] = {_t12381, gem_v_name};
-    gem_check_callable(_t12383, "compiler/codegen.gem", 1540);
+    gem_check_callable(_t12383, "compiler/codegen.gem", 1541);
                         if (gem_truthy(_t12383.fn(_t12383.env, _t12382, 2))) {
-#line 1541 "compiler/codegen.gem"
-                            gem_set_line(1541);
+#line 1542 "compiler/codegen.gem"
+                            gem_set_line(1542);
     GemVal _t12386 = gem_v_pinned_roots;
     GemVal _t12385 = (*gem_v_mangle);
     GemVal _t12384[] = {gem_v_name};
-    gem_check_callable(_t12385, "compiler/codegen.gem", 1541);
+    gem_check_callable(_t12385, "compiler/codegen.gem", 1542);
     GemVal _t12387[] = {_t12386, _t12385.fn(_t12385.env, _t12384, 1)};
                             (void)(gem_push_fn(NULL, _t12387, 2));
                         } else {
-#line 1543 "compiler/codegen.gem"
-                            gem_set_line(1543);
+#line 1544 "compiler/codegen.gem"
+                            gem_set_line(1544);
     GemVal _t12391 = gem_v_roots;
     GemVal _t12389 = (*gem_v_mangle);
     GemVal _t12388[] = {gem_v_name};
-    gem_check_callable(_t12389, "compiler/codegen.gem", 1543);
+    gem_check_callable(_t12389, "compiler/codegen.gem", 1544);
     GemVal _t12390[] = {GEM_STR_LIT("&", 1), _t12389.fn(_t12389.env, _t12388, 1)};
     GemVal _t12392[] = {_t12391, gem_interp(2, _t12390)};
                             (void)(gem_push_fn(NULL, _t12392, 2));
@@ -53777,20 +53780,20 @@ static GemVal __anon_179(void *_env, GemVal *args, int argc) {
                     }
                 }
             } else {
-#line 1545 "compiler/codegen.gem"
-                gem_set_line(1545);
+#line 1546 "compiler/codegen.gem"
+                gem_set_line(1546);
     GemVal _t12395 = gem_g___mod_codegen_set_contains;
     GemVal _t12393 = (*gem_v_builtins);
     GemVal _t12394[] = {_t12393, gem_v_name};
-    gem_check_callable(_t12395, "compiler/codegen.gem", 1545);
+    gem_check_callable(_t12395, "compiler/codegen.gem", 1546);
                 if (gem_truthy(_t12395.fn(_t12395.env, _t12394, 2))) {
                 } else {
-#line 1547 "compiler/codegen.gem"
-                    gem_set_line(1547);
+#line 1548 "compiler/codegen.gem"
+                    gem_set_line(1548);
     GemVal _t12398 = gem_g___mod_codegen_set_contains;
     GemVal _t12396 = (*gem_v_defined_fns);
     GemVal _t12397[] = {_t12396, gem_v_name};
-    gem_check_callable(_t12398, "compiler/codegen.gem", 1547);
+    gem_check_callable(_t12398, "compiler/codegen.gem", 1548);
                     if (gem_truthy(_t12398.fn(_t12398.env, _t12397, 2))) {
                     } else {
                     }
@@ -53799,8 +53802,8 @@ static GemVal __anon_179(void *_env, GemVal *args, int argc) {
         }
     }
 
-#line 1553 "compiler/codegen.gem"
-    gem_set_line(1553);
+#line 1554 "compiler/codegen.gem"
+    gem_set_line(1554);
     GemVal _t12399 = gem_table_new_braces();
     gem_table_set(_t12399, GEM_STR_LIT("ok", 2), gem_bool(1));
     gem_table_set(_t12399, GEM_STR_LIT("roots", 5), gem_v_roots);
@@ -53824,99 +53827,99 @@ static GemVal __anon_180(void *_env, GemVal *args, int argc) {
     GemVal *gem_v_filter_live_for_rescue = _cls->gem_v_filter_live_for_rescue;
     GemVal *gem_v_fs = _cls->gem_v_fs;
     GemVal *gem_v_rel_path = _cls->gem_v_rel_path;
-    gem_push_frame("anonymous fn", "compiler/codegen.gem", 1556);
+    gem_push_frame("anonymous fn", "compiler/codegen.gem", 1557);
     GemVal gem_v_node = (argc > 0) ? args[0] : GEM_NIL;
     GemArenaPoint _ret_pt;
     gem_arena_point(&_ret_pt);
-#line 1557 "compiler/codegen.gem"
-    gem_set_line(1557);
-    GemVal gem_v_do_rescue = gem_bool(0);
 #line 1558 "compiler/codegen.gem"
     gem_set_line(1558);
-    GemVal _t12406 = gem_table_new();
-    GemVal gem_v_rescue_roots = _t12406;
+    GemVal gem_v_do_rescue = gem_bool(0);
 #line 1559 "compiler/codegen.gem"
     gem_set_line(1559);
-    GemVal _t12407 = gem_table_new();
-    GemVal gem_v_pinned_rescue_roots = _t12407;
+    GemVal _t12406 = gem_table_new();
+    GemVal gem_v_rescue_roots = _t12406;
 #line 1560 "compiler/codegen.gem"
     gem_set_line(1560);
-    GemVal gem_v_refuse_reason = GEM_NIL;
+    GemVal _t12407 = gem_table_new();
+    GemVal gem_v_pinned_rescue_roots = _t12407;
 #line 1561 "compiler/codegen.gem"
     gem_set_line(1561);
+    GemVal gem_v_refuse_reason = GEM_NIL;
+#line 1562 "compiler/codegen.gem"
+    gem_set_line(1562);
     GemVal _t12408 = gem_v_node;
     static GemICacheSlot _ic_2071 = {0};
     GemVal gem_v_lr = gem_table_get_cached(_t12408, "liveness_result", &_ic_2071);
-#line 1562 "compiler/codegen.gem"
-    gem_set_line(1562);
+#line 1563 "compiler/codegen.gem"
+    gem_set_line(1563);
     GemVal _t12409 = gem_v_lr;
     static GemICacheSlot _ic_2072 = {0};
     if (gem_truthy(gem_table_get_cached(_t12409, "ok", &_ic_2072))) {
-#line 1563 "compiler/codegen.gem"
-        gem_set_line(1563);
+#line 1564 "compiler/codegen.gem"
+        gem_set_line(1564);
     GemVal _t12410 = gem_v_lr;
     static GemICacheSlot _ic_2073 = {0};
         GemVal gem_v_live = gem_table_get_cached(_t12410, "live", &_ic_2073);
-#line 1564 "compiler/codegen.gem"
-        gem_set_line(1564);
+#line 1565 "compiler/codegen.gem"
+        gem_set_line(1565);
     GemVal _t12411 = (*gem_v_fs);
     static GemICacheSlot _ic_2074 = {0};
         if (gem_truthy(gem_gt(gem_len_1(gem_table_get_cached(_t12411, "stack_env_writes", &_ic_2074)), gem_int(0)))) {
-#line 1565 "compiler/codegen.gem"
-            gem_set_line(1565);
+#line 1566 "compiler/codegen.gem"
+            gem_set_line(1566);
     GemVal _t12415 = gem_g___mod_codegen_set_union;
     GemVal _t12413 = gem_v_live;
     GemVal _t12412 = (*gem_v_fs);
     static GemICacheSlot _ic_2075 = {0};
     GemVal _t12414[] = {_t12413, gem_table_get_cached(_t12412, "stack_env_writes", &_ic_2075)};
-    gem_check_callable(_t12415, "compiler/codegen.gem", 1565);
+    gem_check_callable(_t12415, "compiler/codegen.gem", 1566);
             gem_v_live = _t12415.fn(_t12415.env, _t12414, 2);
         }
-#line 1567 "compiler/codegen.gem"
-        gem_set_line(1567);
-    GemVal _t12417 = (*gem_v_filter_live_for_rescue);
-    GemVal _t12416[] = {gem_v_live};
-    gem_check_callable(_t12417, "compiler/codegen.gem", 1567);
-        GemVal gem_v_fr = _t12417.fn(_t12417.env, _t12416, 1);
 #line 1568 "compiler/codegen.gem"
         gem_set_line(1568);
+    GemVal _t12417 = (*gem_v_filter_live_for_rescue);
+    GemVal _t12416[] = {gem_v_live};
+    gem_check_callable(_t12417, "compiler/codegen.gem", 1568);
+        GemVal gem_v_fr = _t12417.fn(_t12417.env, _t12416, 1);
+#line 1569 "compiler/codegen.gem"
+        gem_set_line(1569);
     GemVal _t12418 = gem_v_fr;
     static GemICacheSlot _ic_2076 = {0};
         if (gem_truthy(gem_table_get_cached(_t12418, "ok", &_ic_2076))) {
-#line 1569 "compiler/codegen.gem"
-            gem_set_line(1569);
-            gem_v_do_rescue = gem_bool(1);
 #line 1570 "compiler/codegen.gem"
             gem_set_line(1570);
+            gem_v_do_rescue = gem_bool(1);
+#line 1571 "compiler/codegen.gem"
+            gem_set_line(1571);
     GemVal _t12419 = gem_v_fr;
     static GemICacheSlot _ic_2077 = {0};
             gem_v_rescue_roots = gem_table_get_cached(_t12419, "roots", &_ic_2077);
-#line 1571 "compiler/codegen.gem"
-            gem_set_line(1571);
+#line 1572 "compiler/codegen.gem"
+            gem_set_line(1572);
     GemVal _t12420 = gem_v_fr;
     static GemICacheSlot _ic_2078 = {0};
             gem_v_pinned_rescue_roots = gem_table_get_cached(_t12420, "pinned_roots", &_ic_2078);
         } else {
-#line 1573 "compiler/codegen.gem"
-            gem_set_line(1573);
+#line 1574 "compiler/codegen.gem"
+            gem_set_line(1574);
     GemVal _t12421 = gem_v_fr;
     static GemICacheSlot _ic_2079 = {0};
             gem_v_refuse_reason = gem_table_get_cached(_t12421, "reason", &_ic_2079);
         }
     } else {
-#line 1576 "compiler/codegen.gem"
-        gem_set_line(1576);
+#line 1577 "compiler/codegen.gem"
+        gem_set_line(1577);
     GemVal _t12422 = gem_v_lr;
     static GemICacheSlot _ic_2080 = {0};
         gem_v_refuse_reason = gem_table_get_cached(_t12422, "reason", &_ic_2080);
     }
-#line 1579 "compiler/codegen.gem"
-    gem_set_line(1579);
+#line 1580 "compiler/codegen.gem"
+    gem_set_line(1580);
     GemVal _t12425 = gem_g___mod_codegen_is_node;
     GemVal _t12423 = gem_v_node;
     static GemICacheSlot _ic_2081 = {0};
     GemVal _t12424[] = {gem_table_get_cached(_t12423, "cond", &_ic_2081), GEM_STR_LIT("bool", 4)};
-    gem_check_callable(_t12425, "compiler/codegen.gem", 1579);
+    gem_check_callable(_t12425, "compiler/codegen.gem", 1580);
     GemVal _t12426 = _t12425.fn(_t12425.env, _t12424, 2);
     GemVal _t12429;
     if (!gem_truthy(_t12426)) {
@@ -53937,8 +53940,8 @@ static GemVal __anon_180(void *_env, GemVal *args, int argc) {
         _t12431 = gem_neq(gem_table_get_cached(_t12430, "cond_moved", &_ic_2084), gem_bool(1));
     }
     GemVal gem_v_infinite = _t12431;
-#line 1580 "compiler/codegen.gem"
-    gem_set_line(1580);
+#line 1581 "compiler/codegen.gem"
+    gem_set_line(1581);
     GemVal _t12432 = gem_not(gem_v_do_rescue);
     GemVal _t12433;
     if (!gem_truthy(_t12432)) {
@@ -53947,44 +53950,44 @@ static GemVal __anon_180(void *_env, GemVal *args, int argc) {
         _t12433 = gem_v_infinite;
     }
     if (gem_truthy(_t12433)) {
-#line 1581 "compiler/codegen.gem"
-        gem_set_line(1581);
+#line 1582 "compiler/codegen.gem"
+        gem_set_line(1582);
         GemVal gem_v___val_315 = GEM_NIL;
-#line 1581 "compiler/codegen.gem"
-        gem_set_line(1581);
+#line 1582 "compiler/codegen.gem"
+        gem_set_line(1582);
     GemVal _t12434 = gem_v_node;
     static GemICacheSlot _ic_2085 = {0};
         if (gem_truthy(gem_neq(gem_table_get_cached(_t12434, "line", &_ic_2085), GEM_NIL))) {
-#line 1581 "compiler/codegen.gem"
-            gem_set_line(1581);
+#line 1582 "compiler/codegen.gem"
+            gem_set_line(1582);
     GemVal _t12435 = gem_v_node;
     static GemICacheSlot _ic_2086 = {0};
     GemVal _t12436[] = {gem_table_get_cached(_t12435, "line", &_ic_2086)};
             gem_v___val_315 = gem_to_string_fn(NULL, _t12436, 1);
         } else {
-#line 1581 "compiler/codegen.gem"
-            gem_set_line(1581);
+#line 1582 "compiler/codegen.gem"
+            gem_set_line(1582);
             gem_v___val_315 = GEM_STR_LIT("?", 1);
         }
-#line 1581 "compiler/codegen.gem"
-        gem_set_line(1581);
-        GemVal gem_v_line_str = gem_v___val_315;
 #line 1582 "compiler/codegen.gem"
         gem_set_line(1582);
+        GemVal gem_v_line_str = gem_v___val_315;
+#line 1583 "compiler/codegen.gem"
+        gem_set_line(1583);
     GemVal _t12440 = (*gem_v_rel_path);
     GemVal _t12438 = (*gem_v_file_of);
     GemVal _t12437[] = {gem_v_node};
-    gem_check_callable(_t12438, "compiler/codegen.gem", 1582);
+    gem_check_callable(_t12438, "compiler/codegen.gem", 1583);
     GemVal _t12439[] = {_t12438.fn(_t12438.env, _t12437, 1)};
-    gem_check_callable(_t12440, "compiler/codegen.gem", 1582);
+    gem_check_callable(_t12440, "compiler/codegen.gem", 1583);
     GemVal _t12442 = _t12440.fn(_t12440.env, _t12439, 1);
     GemVal _t12441 = gem_v_line_str;
     GemVal _t12443[] = {GEM_STR_LIT("warning: ", 9), _t12442, GEM_STR_LIT(":", 1), _t12441, GEM_STR_LIT(": cannot reset per-process arena at this loop's back-edge: ", 59), gem_v_refuse_reason, GEM_STR_LIT(". Memory will grow unbounded across iterations. This pattern isn't supported in long-running loops yet; please file an issue if it blocks you.\n", 143)};
     GemVal _t12444[] = {gem_interp(7, _t12443)};
         (void)(gem_eprint_fn(NULL, _t12444, 1));
     }
-#line 1584 "compiler/codegen.gem"
-    gem_set_line(1584);
+#line 1585 "compiler/codegen.gem"
+    gem_set_line(1585);
     GemVal _t12445 = gem_table_new_braces();
     gem_table_set(_t12445, GEM_STR_LIT("do_rescue", 9), gem_v_do_rescue);
     gem_table_set(_t12445, GEM_STR_LIT("rescue_roots", 12), gem_v_rescue_roots);
@@ -54022,85 +54025,85 @@ static GemVal __anon_181(void *_env, GemVal *args, int argc) {
     GemVal *gem_v_ns_refresh = _cls->gem_v_ns_refresh;
     GemVal *gem_v_tmp = _cls->gem_v_tmp;
     GemVal *gem_v_var_lvalue = _cls->gem_v_var_lvalue;
-    gem_push_frame("anonymous fn", "compiler/codegen.gem", 1587);
+    gem_push_frame("anonymous fn", "compiler/codegen.gem", 1588);
     GemVal gem_v_node = (argc > 0) ? args[0] : GEM_NIL;
     GemVal gem_v_indent = (argc > 1) ? args[1] : GEM_NIL;
     GemArenaPoint _ret_pt;
     gem_arena_point(&_ret_pt);
-#line 1588 "compiler/codegen.gem"
-    gem_set_line(1588);
-    GemVal _t12452 = gem_g___mod_codegen_pad_for;
-    GemVal _t12451[] = {gem_v_indent};
-    gem_check_callable(_t12452, "compiler/codegen.gem", 1588);
-    GemVal gem_v_p = _t12452.fn(_t12452.env, _t12451, 1);
 #line 1589 "compiler/codegen.gem"
     gem_set_line(1589);
+    GemVal _t12452 = gem_g___mod_codegen_pad_for;
+    GemVal _t12451[] = {gem_v_indent};
+    gem_check_callable(_t12452, "compiler/codegen.gem", 1589);
+    GemVal gem_v_p = _t12452.fn(_t12452.env, _t12451, 1);
+#line 1590 "compiler/codegen.gem"
+    gem_set_line(1590);
     GemVal _t12453 = gem_v_node;
     static GemICacheSlot _ic_2087 = {0};
     GemVal gem_v_is_pt_while = gem_eq(gem_table_get_cached(_t12453, "process_tail", &_ic_2087), gem_bool(1));
-#line 1591 "compiler/codegen.gem"
-    gem_set_line(1591);
-    GemVal gem_v_do_rescue = gem_bool(0);
 #line 1592 "compiler/codegen.gem"
     gem_set_line(1592);
-    GemVal _t12454 = gem_table_new();
-    GemVal gem_v_rescue_roots = _t12454;
+    GemVal gem_v_do_rescue = gem_bool(0);
 #line 1593 "compiler/codegen.gem"
     gem_set_line(1593);
-    GemVal _t12455 = gem_table_new();
-    GemVal gem_v_pinned_rescue_roots = _t12455;
+    GemVal _t12454 = gem_table_new();
+    GemVal gem_v_rescue_roots = _t12454;
 #line 1594 "compiler/codegen.gem"
     gem_set_line(1594);
-    if (gem_truthy(gem_v_is_pt_while)) {
+    GemVal _t12455 = gem_table_new();
+    GemVal gem_v_pinned_rescue_roots = _t12455;
 #line 1595 "compiler/codegen.gem"
-        gem_set_line(1595);
-    GemVal _t12457 = (*gem_v_build_rescue_roots);
-    GemVal _t12456[] = {gem_v_node};
-    gem_check_callable(_t12457, "compiler/codegen.gem", 1595);
-        GemVal gem_v_r = _t12457.fn(_t12457.env, _t12456, 1);
+    gem_set_line(1595);
+    if (gem_truthy(gem_v_is_pt_while)) {
 #line 1596 "compiler/codegen.gem"
         gem_set_line(1596);
+    GemVal _t12457 = (*gem_v_build_rescue_roots);
+    GemVal _t12456[] = {gem_v_node};
+    gem_check_callable(_t12457, "compiler/codegen.gem", 1596);
+        GemVal gem_v_r = _t12457.fn(_t12457.env, _t12456, 1);
+#line 1597 "compiler/codegen.gem"
+        gem_set_line(1597);
     GemVal _t12458 = gem_v_r;
     static GemICacheSlot _ic_2088 = {0};
         gem_v_do_rescue = gem_table_get_cached(_t12458, "do_rescue", &_ic_2088);
-#line 1597 "compiler/codegen.gem"
-        gem_set_line(1597);
+#line 1598 "compiler/codegen.gem"
+        gem_set_line(1598);
     GemVal _t12459 = gem_v_r;
     static GemICacheSlot _ic_2089 = {0};
         gem_v_rescue_roots = gem_table_get_cached(_t12459, "rescue_roots", &_ic_2089);
-#line 1598 "compiler/codegen.gem"
-        gem_set_line(1598);
+#line 1599 "compiler/codegen.gem"
+        gem_set_line(1599);
     GemVal _t12460 = gem_v_r;
     static GemICacheSlot _ic_2090 = {0};
         gem_v_pinned_rescue_roots = gem_table_get_cached(_t12460, "pinned_rescue_roots", &_ic_2090);
     }
-#line 1601 "compiler/codegen.gem"
-    gem_set_line(1601);
+#line 1602 "compiler/codegen.gem"
+    gem_set_line(1602);
     GemVal _t12463 = (*gem_v_compile_expr);
     GemVal _t12461 = gem_v_node;
     static GemICacheSlot _ic_2091 = {0};
     GemVal _t12462[] = {gem_table_get_cached(_t12461, "cond", &_ic_2091)};
-    gem_check_callable(_t12463, "compiler/codegen.gem", 1601);
+    gem_check_callable(_t12463, "compiler/codegen.gem", 1602);
     GemVal gem_v_cond_r = _t12463.fn(_t12463.env, _t12462, 1);
-#line 1603 "compiler/codegen.gem"
-    gem_set_line(1603);
+#line 1604 "compiler/codegen.gem"
+    gem_set_line(1604);
     GemVal _t12466 = gem_g___mod_codegen_find_append_vars;
     GemVal _t12464 = gem_v_node;
     static GemICacheSlot _ic_2092 = {0};
     GemVal _t12465[] = {gem_table_get_cached(_t12464, "body", &_ic_2092)};
-    gem_check_callable(_t12466, "compiler/codegen.gem", 1603);
+    gem_check_callable(_t12466, "compiler/codegen.gem", 1604);
     GemVal gem_v_eligible = _t12466.fn(_t12466.env, _t12465, 1);
-#line 1604 "compiler/codegen.gem"
-    gem_set_line(1604);
+#line 1605 "compiler/codegen.gem"
+    gem_set_line(1605);
     GemVal gem_v___for_tbl_316 = gem_v_eligible;
-#line 1604 "compiler/codegen.gem"
-    gem_set_line(1604);
+#line 1605 "compiler/codegen.gem"
+    gem_set_line(1605);
     GemVal gem_v___for_len_316 = gem_for_len_1(gem_v___for_tbl_316);
-#line 1604 "compiler/codegen.gem"
-    gem_set_line(1604);
+#line 1605 "compiler/codegen.gem"
+    gem_set_line(1605);
     GemVal gem_v___for_i_316 = gem_int(0);
-#line 1604 "compiler/codegen.gem"
-    gem_set_line(1604);
+#line 1605 "compiler/codegen.gem"
+    gem_set_line(1605);
     GemArenaMark _mk328;
     gem_arena_mark(&_mk328);
     while (1) {
@@ -54111,40 +54114,40 @@ static GemVal __anon_181(void *_env, GemVal *args, int argc) {
         }
     GemVal _t12467 = gem_v___for_i_316;
         if (!gem_truthy(gem_lt(_t12467, gem_v___for_len_316))) break;
-#line 1604 "compiler/codegen.gem"
-        gem_set_line(1604);
-    GemVal _t12468 = gem_v___for_tbl_316;
-        GemVal gem_v_name = gem_table_key_at_2(_t12468, gem_v___for_i_316);
-#line 1604 "compiler/codegen.gem"
-        gem_set_line(1604);
-    GemVal _t12469 = gem_v___for_tbl_316;
-        GemVal gem_v__ = gem_table_val_at_2(_t12469, gem_v___for_i_316);
-#line 1604 "compiler/codegen.gem"
-        gem_set_line(1604);
-        gem_v___for_i_316 = gem_add(gem_v___for_i_316, gem_int(1));
 #line 1605 "compiler/codegen.gem"
         gem_set_line(1605);
+    GemVal _t12468 = gem_v___for_tbl_316;
+        GemVal gem_v_name = gem_table_key_at_2(_t12468, gem_v___for_i_316);
+#line 1605 "compiler/codegen.gem"
+        gem_set_line(1605);
+    GemVal _t12469 = gem_v___for_tbl_316;
+        GemVal gem_v__ = gem_table_val_at_2(_t12469, gem_v___for_i_316);
+#line 1605 "compiler/codegen.gem"
+        gem_set_line(1605);
+        gem_v___for_i_316 = gem_add(gem_v___for_i_316, gem_int(1));
+#line 1606 "compiler/codegen.gem"
+        gem_set_line(1606);
     GemVal _t12473 = gem_g___mod_codegen_expr_has_var;
     GemVal _t12470 = gem_v_node;
     static GemICacheSlot _ic_2093 = {0};
     GemVal _t12471 = gem_table_get_cached(_t12470, "cond", &_ic_2093);
     GemVal _t12472[] = {_t12471, gem_v_name};
-    gem_check_callable(_t12473, "compiler/codegen.gem", 1605);
+    gem_check_callable(_t12473, "compiler/codegen.gem", 1606);
         if (gem_truthy(_t12473.fn(_t12473.env, _t12472, 2))) {
-#line 1606 "compiler/codegen.gem"
-            gem_set_line(1606);
+#line 1607 "compiler/codegen.gem"
+            gem_set_line(1607);
     GemVal _t12474 = gem_v_eligible;
     GemVal _t12475[] = {_t12474, gem_v_name};
             (void)(gem_delete_fn(NULL, _t12475, 2));
         }
-#line 1609 "compiler/codegen.gem"
-        gem_set_line(1609);
+#line 1610 "compiler/codegen.gem"
+        gem_set_line(1610);
     GemVal _t12479 = gem_g___mod_codegen_set_contains;
     GemVal _t12476 = (*gem_v_fs);
     static GemICacheSlot _ic_2094 = {0};
     GemVal _t12477 = gem_table_get_cached(_t12476, "boxed_vars", &_ic_2094);
     GemVal _t12478[] = {_t12477, gem_v_name};
-    gem_check_callable(_t12479, "compiler/codegen.gem", 1609);
+    gem_check_callable(_t12479, "compiler/codegen.gem", 1610);
     GemVal _t12480 = _t12479.fn(_t12479.env, _t12478, 2);
     GemVal _t12490;
     if (gem_truthy(_t12480)) {
@@ -54152,7 +54155,7 @@ static GemVal __anon_181(void *_env, GemVal *args, int argc) {
     } else {
     GemVal _t12482 = (*gem_v_is_global_ref);
     GemVal _t12481[] = {gem_v_name};
-    gem_check_callable(_t12482, "compiler/codegen.gem", 1609);
+    gem_check_callable(_t12482, "compiler/codegen.gem", 1610);
     GemVal _t12483 = _t12482.fn(_t12482.env, _t12481, 1);
     GemVal _t12489;
     if (!gem_truthy(_t12483)) {
@@ -54167,7 +54170,7 @@ static GemVal __anon_181(void *_env, GemVal *args, int argc) {
     } else {
     GemVal _t12487 = (*gem_v_node_may_read_slots);
     GemVal _t12486[] = {gem_v_node};
-    gem_check_callable(_t12487, "compiler/codegen.gem", 1609);
+    gem_check_callable(_t12487, "compiler/codegen.gem", 1610);
         _t12488 = gem_not(_t12487.fn(_t12487.env, _t12486, 1));
     }
         _t12489 = gem_not(_t12488);
@@ -54175,31 +54178,31 @@ static GemVal __anon_181(void *_env, GemVal *args, int argc) {
         _t12490 = _t12489;
     }
         if (gem_truthy(_t12490)) {
-#line 1610 "compiler/codegen.gem"
-            gem_set_line(1610);
+#line 1611 "compiler/codegen.gem"
+            gem_set_line(1611);
     GemVal _t12491 = gem_v_eligible;
     GemVal _t12492[] = {_t12491, gem_v_name};
             (void)(gem_delete_fn(NULL, _t12492, 2));
         }
     }
 
-#line 1614 "compiler/codegen.gem"
-    gem_set_line(1614);
-    GemVal _t12493 = gem_table_new_braces();
-    GemVal gem_v_saved_append = _t12493;
 #line 1615 "compiler/codegen.gem"
     gem_set_line(1615);
+    GemVal _t12493 = gem_table_new_braces();
+    GemVal gem_v_saved_append = _t12493;
+#line 1616 "compiler/codegen.gem"
+    gem_set_line(1616);
     GemVal _t12494 = (*gem_v_fs);
     static GemICacheSlot _ic_2096 = {0};
     GemVal gem_v___for_tbl_317 = gem_table_get_cached(_t12494, "append_buf_vars", &_ic_2096);
-#line 1615 "compiler/codegen.gem"
-    gem_set_line(1615);
+#line 1616 "compiler/codegen.gem"
+    gem_set_line(1616);
     GemVal gem_v___for_len_317 = gem_for_len_1(gem_v___for_tbl_317);
-#line 1615 "compiler/codegen.gem"
-    gem_set_line(1615);
+#line 1616 "compiler/codegen.gem"
+    gem_set_line(1616);
     GemVal gem_v___for_i_317 = gem_int(0);
-#line 1615 "compiler/codegen.gem"
-    gem_set_line(1615);
+#line 1616 "compiler/codegen.gem"
+    gem_set_line(1616);
     GemArenaMark _mk329;
     gem_arena_mark(&_mk329);
     while (1) {
@@ -54210,39 +54213,39 @@ static GemVal __anon_181(void *_env, GemVal *args, int argc) {
         }
     GemVal _t12495 = gem_v___for_i_317;
         if (!gem_truthy(gem_lt(_t12495, gem_v___for_len_317))) break;
-#line 1615 "compiler/codegen.gem"
-        gem_set_line(1615);
-    GemVal _t12496 = gem_v___for_tbl_317;
-        GemVal gem_v_k = gem_table_key_at_2(_t12496, gem_v___for_i_317);
-#line 1615 "compiler/codegen.gem"
-        gem_set_line(1615);
-    GemVal _t12497 = gem_v___for_tbl_317;
-        GemVal gem_v_v = gem_table_val_at_2(_t12497, gem_v___for_i_317);
-#line 1615 "compiler/codegen.gem"
-        gem_set_line(1615);
-        gem_v___for_i_317 = gem_add(gem_v___for_i_317, gem_int(1));
 #line 1616 "compiler/codegen.gem"
         gem_set_line(1616);
+    GemVal _t12496 = gem_v___for_tbl_317;
+        GemVal gem_v_k = gem_table_key_at_2(_t12496, gem_v___for_i_317);
+#line 1616 "compiler/codegen.gem"
+        gem_set_line(1616);
+    GemVal _t12497 = gem_v___for_tbl_317;
+        GemVal gem_v_v = gem_table_val_at_2(_t12497, gem_v___for_i_317);
+#line 1616 "compiler/codegen.gem"
+        gem_set_line(1616);
+        gem_v___for_i_317 = gem_add(gem_v___for_i_317, gem_int(1));
+#line 1617 "compiler/codegen.gem"
+        gem_set_line(1617);
     GemVal _t12499 = gem_v_saved_append;
     GemVal _t12498 = gem_v_k;
         gem_table_set(_t12499, _t12498, gem_v_v);
     }
 
-#line 1619 "compiler/codegen.gem"
-    gem_set_line(1619);
+#line 1620 "compiler/codegen.gem"
+    gem_set_line(1620);
     GemVal _t12500 = gem_table_new();
     GemVal gem_v_owned = _t12500;
-#line 1620 "compiler/codegen.gem"
-    gem_set_line(1620);
+#line 1621 "compiler/codegen.gem"
+    gem_set_line(1621);
     GemVal gem_v___for_tbl_318 = gem_v_eligible;
-#line 1620 "compiler/codegen.gem"
-    gem_set_line(1620);
+#line 1621 "compiler/codegen.gem"
+    gem_set_line(1621);
     GemVal gem_v___for_len_318 = gem_for_len_1(gem_v___for_tbl_318);
-#line 1620 "compiler/codegen.gem"
-    gem_set_line(1620);
+#line 1621 "compiler/codegen.gem"
+    gem_set_line(1621);
     GemVal gem_v___for_i_318 = gem_int(0);
-#line 1620 "compiler/codegen.gem"
-    gem_set_line(1620);
+#line 1621 "compiler/codegen.gem"
+    gem_set_line(1621);
     GemArenaMark _mk330;
     gem_arena_mark(&_mk330);
     while (1) {
@@ -54253,55 +54256,55 @@ static GemVal __anon_181(void *_env, GemVal *args, int argc) {
         }
     GemVal _t12501 = gem_v___for_i_318;
         if (!gem_truthy(gem_lt(_t12501, gem_v___for_len_318))) break;
-#line 1620 "compiler/codegen.gem"
-        gem_set_line(1620);
-    GemVal _t12502 = gem_v___for_tbl_318;
-        GemVal gem_v_name = gem_table_key_at_2(_t12502, gem_v___for_i_318);
-#line 1620 "compiler/codegen.gem"
-        gem_set_line(1620);
-    GemVal _t12503 = gem_v___for_tbl_318;
-        GemVal gem_v__ = gem_table_val_at_2(_t12503, gem_v___for_i_318);
-#line 1620 "compiler/codegen.gem"
-        gem_set_line(1620);
-        gem_v___for_i_318 = gem_add(gem_v___for_i_318, gem_int(1));
 #line 1621 "compiler/codegen.gem"
         gem_set_line(1621);
+    GemVal _t12502 = gem_v___for_tbl_318;
+        GemVal gem_v_name = gem_table_key_at_2(_t12502, gem_v___for_i_318);
+#line 1621 "compiler/codegen.gem"
+        gem_set_line(1621);
+    GemVal _t12503 = gem_v___for_tbl_318;
+        GemVal gem_v__ = gem_table_val_at_2(_t12503, gem_v___for_i_318);
+#line 1621 "compiler/codegen.gem"
+        gem_set_line(1621);
+        gem_v___for_i_318 = gem_add(gem_v___for_i_318, gem_int(1));
+#line 1622 "compiler/codegen.gem"
+        gem_set_line(1622);
     GemVal _t12504 = (*gem_v_fs);
     static GemICacheSlot _ic_2097 = {0};
     GemVal _t12505 = gem_table_get_cached(_t12504, "append_buf_vars", &_ic_2097);
     GemVal _t12506[] = {_t12505, gem_v_name};
         if (gem_truthy(gem_not(gem_has_key_fn(NULL, _t12506, 2)))) {
-#line 1622 "compiler/codegen.gem"
-            gem_set_line(1622);
-    GemVal _t12507 = (*gem_v_tmp);
-    gem_check_callable(_t12507, "compiler/codegen.gem", 1622);
-            GemVal gem_v_flag = _t12507.fn(_t12507.env, NULL, 0);
 #line 1623 "compiler/codegen.gem"
             gem_set_line(1623);
+    GemVal _t12507 = (*gem_v_tmp);
+    gem_check_callable(_t12507, "compiler/codegen.gem", 1623);
+            GemVal gem_v_flag = _t12507.fn(_t12507.env, NULL, 0);
+#line 1624 "compiler/codegen.gem"
+            gem_set_line(1624);
     GemVal _t12508 = (*gem_v_fs);
     static GemICacheSlot _ic_2098 = {0};
     GemVal _t12510 = gem_table_get_cached(_t12508, "append_buf_vars", &_ic_2098);
     GemVal _t12509 = gem_v_name;
             gem_table_set(_t12510, _t12509, gem_v_flag);
-#line 1624 "compiler/codegen.gem"
-            gem_set_line(1624);
+#line 1625 "compiler/codegen.gem"
+            gem_set_line(1625);
     GemVal _t12511 = gem_v_owned;
     GemVal _t12512[] = {_t12511, gem_v_name};
             (void)(gem_push_fn(NULL, _t12512, 2));
         }
     }
 
-#line 1628 "compiler/codegen.gem"
-    gem_set_line(1628);
+#line 1629 "compiler/codegen.gem"
+    gem_set_line(1629);
     GemVal gem_v_b = gem_buf_new_fn(NULL, NULL, 0);
-#line 1629 "compiler/codegen.gem"
-    gem_set_line(1629);
+#line 1630 "compiler/codegen.gem"
+    gem_set_line(1630);
     GemVal gem_v___for_items_319 = gem_for_items_1(gem_v_owned);
-#line 1629 "compiler/codegen.gem"
-    gem_set_line(1629);
+#line 1630 "compiler/codegen.gem"
+    gem_set_line(1630);
     GemVal gem_v___for_i_319 = gem_int(0);
-#line 1629 "compiler/codegen.gem"
-    gem_set_line(1629);
+#line 1630 "compiler/codegen.gem"
+    gem_set_line(1630);
     GemArenaMark _mk331;
     gem_arena_mark(&_mk331);
     while (1) {
@@ -54312,15 +54315,15 @@ static GemVal __anon_181(void *_env, GemVal *args, int argc) {
         }
     GemVal _t12513 = gem_v___for_i_319;
         if (!gem_truthy(gem_lt(_t12513, gem_for_len_1(gem_v___for_items_319)))) break;
-#line 1629 "compiler/codegen.gem"
-        gem_set_line(1629);
-    GemVal _t12514 = gem_v___for_items_319;
-        GemVal gem_v_name = gem_table_get(_t12514, gem_v___for_i_319);
-#line 1629 "compiler/codegen.gem"
-        gem_set_line(1629);
-        gem_v___for_i_319 = gem_add(gem_v___for_i_319, gem_int(1));
 #line 1630 "compiler/codegen.gem"
         gem_set_line(1630);
+    GemVal _t12514 = gem_v___for_items_319;
+        GemVal gem_v_name = gem_table_get(_t12514, gem_v___for_i_319);
+#line 1630 "compiler/codegen.gem"
+        gem_set_line(1630);
+        gem_v___for_i_319 = gem_add(gem_v___for_i_319, gem_int(1));
+#line 1631 "compiler/codegen.gem"
+        gem_set_line(1631);
     GemVal _t12519 = gem_v_b;
     GemVal _t12517 = gem_v_p;
     GemVal _t12515 = (*gem_v_fs);
@@ -54331,51 +54334,51 @@ static GemVal __anon_181(void *_env, GemVal *args, int argc) {
         (void)(gem_buf_push_fn(NULL, _t12520, 2));
     }
 
-#line 1632 "compiler/codegen.gem"
-    gem_set_line(1632);
-    GemVal gem_v_mark = GEM_NIL;
 #line 1633 "compiler/codegen.gem"
     gem_set_line(1633);
+    GemVal gem_v_mark = GEM_NIL;
+#line 1634 "compiler/codegen.gem"
+    gem_set_line(1634);
     if (gem_truthy(gem_v_do_rescue)) {
-#line 1636 "compiler/codegen.gem"
-        gem_set_line(1636);
-        (*gem_v_mark_counter) = gem_add((*gem_v_mark_counter), gem_int(1));
 #line 1637 "compiler/codegen.gem"
         gem_set_line(1637);
-    GemVal _t12521[] = {GEM_STR_LIT("_mk", 3), (*gem_v_mark_counter)};
-        gem_v_mark = gem_interp(2, _t12521);
+        (*gem_v_mark_counter) = gem_add((*gem_v_mark_counter), gem_int(1));
 #line 1638 "compiler/codegen.gem"
         gem_set_line(1638);
+    GemVal _t12521[] = {GEM_STR_LIT("_mk", 3), (*gem_v_mark_counter)};
+        gem_v_mark = gem_interp(2, _t12521);
+#line 1639 "compiler/codegen.gem"
+        gem_set_line(1639);
     GemVal _t12524 = gem_v_b;
     GemVal _t12522 = gem_v_p;
     GemVal _t12523[] = {_t12522, GEM_STR_LIT("GemArenaMark ", 13), gem_v_mark, GEM_STR_LIT(";\n", 2)};
     GemVal _t12525[] = {_t12524, gem_interp(4, _t12523)};
         (void)(gem_buf_push_fn(NULL, _t12525, 2));
-#line 1639 "compiler/codegen.gem"
-        gem_set_line(1639);
+#line 1640 "compiler/codegen.gem"
+        gem_set_line(1640);
     GemVal _t12528 = gem_v_b;
     GemVal _t12526 = gem_v_p;
     GemVal _t12527[] = {_t12526, GEM_STR_LIT("gem_arena_mark(&", 16), gem_v_mark, GEM_STR_LIT(");\n", 3)};
     GemVal _t12529[] = {_t12528, gem_interp(4, _t12527)};
         (void)(gem_buf_push_fn(NULL, _t12529, 2));
     }
-#line 1641 "compiler/codegen.gem"
-    gem_set_line(1641);
+#line 1642 "compiler/codegen.gem"
+    gem_set_line(1642);
     GemVal _t12531 = gem_v_b;
     GemVal _t12530[] = {gem_v_p, GEM_STR_LIT("while (1) {\n", 12)};
     GemVal _t12532[] = {_t12531, gem_interp(2, _t12530)};
     (void)(gem_buf_push_fn(NULL, _t12532, 2));
-#line 1642 "compiler/codegen.gem"
-    gem_set_line(1642);
+#line 1643 "compiler/codegen.gem"
+    gem_set_line(1643);
     GemVal _t12534 = gem_v_b;
     GemVal _t12533[] = {gem_v_p, GEM_STR_LIT("    gem_yield_check();\n", 23)};
     GemVal _t12535[] = {_t12534, gem_interp(2, _t12533)};
     (void)(gem_buf_push_fn(NULL, _t12535, 2));
-#line 1643 "compiler/codegen.gem"
-    gem_set_line(1643);
-    if (gem_truthy(gem_v_do_rescue)) {
 #line 1644 "compiler/codegen.gem"
-        gem_set_line(1644);
+    gem_set_line(1644);
+    if (gem_truthy(gem_v_do_rescue)) {
+#line 1645 "compiler/codegen.gem"
+        gem_set_line(1645);
     GemVal _t12542 = gem_v_b;
     GemVal _t12541 = (*gem_v_emit_region_reset);
     GemVal _t12536[] = {gem_v_p, GEM_STR_LIT("    ", 4)};
@@ -54383,25 +54386,25 @@ static GemVal __anon_181(void *_env, GemVal *args, int argc) {
     GemVal _t12538 = gem_v_mark;
     GemVal _t12537 = gem_v_rescue_roots;
     GemVal _t12540[] = {_t12539, _t12538, _t12537, gem_v_pinned_rescue_roots};
-    gem_check_callable(_t12541, "compiler/codegen.gem", 1644);
+    gem_check_callable(_t12541, "compiler/codegen.gem", 1645);
     GemVal _t12543[] = {_t12542, _t12541.fn(_t12541.env, _t12540, 4)};
         (void)(gem_buf_push_fn(NULL, _t12543, 2));
     }
-#line 1646 "compiler/codegen.gem"
-    gem_set_line(1646);
+#line 1647 "compiler/codegen.gem"
+    gem_set_line(1647);
     GemVal _t12544 = gem_v_cond_r;
     static GemICacheSlot _ic_2100 = {0};
     if (gem_truthy(gem_neq(gem_table_get_cached(_t12544, "setup", &_ic_2100), GEM_STR_LIT("", 0)))) {
-#line 1647 "compiler/codegen.gem"
-        gem_set_line(1647);
+#line 1648 "compiler/codegen.gem"
+        gem_set_line(1648);
     GemVal _t12546 = gem_v_b;
     GemVal _t12545 = gem_v_cond_r;
     static GemICacheSlot _ic_2101 = {0};
     GemVal _t12547[] = {_t12546, gem_table_get_cached(_t12545, "setup", &_ic_2101)};
         (void)(gem_buf_push_fn(NULL, _t12547, 2));
     }
-#line 1649 "compiler/codegen.gem"
-    gem_set_line(1649);
+#line 1650 "compiler/codegen.gem"
+    gem_set_line(1650);
     GemVal _t12551 = gem_v_b;
     GemVal _t12549 = gem_v_p;
     GemVal _t12548 = gem_v_cond_r;
@@ -54409,57 +54412,57 @@ static GemVal __anon_181(void *_env, GemVal *args, int argc) {
     GemVal _t12550[] = {_t12549, GEM_STR_LIT("    if (!gem_truthy(", 20), gem_table_get_cached(_t12548, "expr", &_ic_2102), GEM_STR_LIT(")) break;\n", 10)};
     GemVal _t12552[] = {_t12551, gem_interp(4, _t12550)};
     (void)(gem_buf_push_fn(NULL, _t12552, 2));
-#line 1650 "compiler/codegen.gem"
-    gem_set_line(1650);
+#line 1651 "compiler/codegen.gem"
+    gem_set_line(1651);
     GemVal _t12557 = gem_g___mod_codegen_set_union;
     GemVal _t12553 = (*gem_v_fs);
     static GemICacheSlot _ic_2103 = {0};
     GemVal _t12555 = gem_table_get_cached(_t12553, "fn_scope_locals", &_ic_2103);
     GemVal _t12554 = gem_table_new_braces();
     GemVal _t12556[] = {_t12555, _t12554};
-    gem_check_callable(_t12557, "compiler/codegen.gem", 1650);
+    gem_check_callable(_t12557, "compiler/codegen.gem", 1651);
     GemVal gem_v_saved_while_scope = _t12557.fn(_t12557.env, _t12556, 2);
-#line 1651 "compiler/codegen.gem"
-    gem_set_line(1651);
+#line 1652 "compiler/codegen.gem"
+    gem_set_line(1652);
     GemVal _t12559 = (*gem_v_fs);
     GemVal _t12558 = (*gem_v_fs);
     static GemICacheSlot _ic_2104 = {0};
     gem_table_set(_t12559, GEM_STR_LIT("c_loop_depth", 12), gem_add(gem_table_get_cached(_t12558, "c_loop_depth", &_ic_2104), gem_int(1)));
-#line 1652 "compiler/codegen.gem"
-    gem_set_line(1652);
+#line 1653 "compiler/codegen.gem"
+    gem_set_line(1653);
     GemVal _t12564 = gem_v_b;
     GemVal _t12563 = (*gem_v_compile_stmts);
     GemVal _t12560 = gem_v_node;
     static GemICacheSlot _ic_2105 = {0};
     GemVal _t12561 = gem_table_get_cached(_t12560, "body", &_ic_2105);
     GemVal _t12562[] = {_t12561, gem_add(gem_v_indent, gem_int(1))};
-    gem_check_callable(_t12563, "compiler/codegen.gem", 1652);
+    gem_check_callable(_t12563, "compiler/codegen.gem", 1653);
     GemVal _t12565[] = {_t12564, _t12563.fn(_t12563.env, _t12562, 2)};
     (void)(gem_buf_push_fn(NULL, _t12565, 2));
-#line 1653 "compiler/codegen.gem"
-    gem_set_line(1653);
+#line 1654 "compiler/codegen.gem"
+    gem_set_line(1654);
     GemVal _t12567 = (*gem_v_fs);
     GemVal _t12566 = (*gem_v_fs);
     static GemICacheSlot _ic_2106 = {0};
     gem_table_set(_t12567, GEM_STR_LIT("c_loop_depth", 12), gem_sub(gem_table_get_cached(_t12566, "c_loop_depth", &_ic_2106), gem_int(1)));
-#line 1654 "compiler/codegen.gem"
-    gem_set_line(1654);
-    GemVal _t12568 = (*gem_v_fs);
-    gem_table_set(_t12568, GEM_STR_LIT("fn_scope_locals", 15), gem_v_saved_while_scope);
 #line 1655 "compiler/codegen.gem"
     gem_set_line(1655);
+    GemVal _t12568 = (*gem_v_fs);
+    gem_table_set(_t12568, GEM_STR_LIT("fn_scope_locals", 15), gem_v_saved_while_scope);
+#line 1656 "compiler/codegen.gem"
+    gem_set_line(1656);
     GemVal _t12570 = gem_v_b;
     GemVal _t12569[] = {gem_v_p, GEM_STR_LIT("}", 1)};
     GemVal _t12571[] = {_t12570, gem_interp(2, _t12569)};
     (void)(gem_buf_push_fn(NULL, _t12571, 2));
-#line 1657 "compiler/codegen.gem"
-    gem_set_line(1657);
+#line 1658 "compiler/codegen.gem"
+    gem_set_line(1658);
     GemVal gem_v___for_items_320 = gem_for_items_1(gem_v_owned);
-#line 1657 "compiler/codegen.gem"
-    gem_set_line(1657);
+#line 1658 "compiler/codegen.gem"
+    gem_set_line(1658);
     GemVal gem_v___for_i_320 = gem_int(0);
-#line 1657 "compiler/codegen.gem"
-    gem_set_line(1657);
+#line 1658 "compiler/codegen.gem"
+    gem_set_line(1658);
     GemArenaMark _mk332;
     gem_arena_mark(&_mk332);
     while (1) {
@@ -54470,21 +54473,21 @@ static GemVal __anon_181(void *_env, GemVal *args, int argc) {
         }
     GemVal _t12572 = gem_v___for_i_320;
         if (!gem_truthy(gem_lt(_t12572, gem_for_len_1(gem_v___for_items_320)))) break;
-#line 1657 "compiler/codegen.gem"
-        gem_set_line(1657);
-    GemVal _t12573 = gem_v___for_items_320;
-        GemVal gem_v_name = gem_table_get(_t12573, gem_v___for_i_320);
-#line 1657 "compiler/codegen.gem"
-        gem_set_line(1657);
-        gem_v___for_i_320 = gem_add(gem_v___for_i_320, gem_int(1));
 #line 1658 "compiler/codegen.gem"
         gem_set_line(1658);
-    GemVal _t12575 = (*gem_v_var_lvalue);
-    GemVal _t12574[] = {gem_v_name};
-    gem_check_callable(_t12575, "compiler/codegen.gem", 1658);
-        GemVal gem_v_mname = _t12575.fn(_t12575.env, _t12574, 1);
+    GemVal _t12573 = gem_v___for_items_320;
+        GemVal gem_v_name = gem_table_get(_t12573, gem_v___for_i_320);
+#line 1658 "compiler/codegen.gem"
+        gem_set_line(1658);
+        gem_v___for_i_320 = gem_add(gem_v___for_i_320, gem_int(1));
 #line 1659 "compiler/codegen.gem"
         gem_set_line(1659);
+    GemVal _t12575 = (*gem_v_var_lvalue);
+    GemVal _t12574[] = {gem_v_name};
+    gem_check_callable(_t12575, "compiler/codegen.gem", 1659);
+        GemVal gem_v_mname = _t12575.fn(_t12575.env, _t12574, 1);
+#line 1660 "compiler/codegen.gem"
+        gem_set_line(1660);
     GemVal _t12582 = gem_v_b;
     GemVal _t12580 = gem_v_p;
     GemVal _t12576 = (*gem_v_fs);
@@ -54495,18 +54498,18 @@ static GemVal __anon_181(void *_env, GemVal *args, int argc) {
     GemVal _t12581[] = {GEM_STR_LIT("\n", 1), _t12580, GEM_STR_LIT("if (", 4), _t12579, GEM_STR_LIT(") ", 2), _t12578, GEM_STR_LIT(" = gem_string_finish(", 21), gem_v_mname, GEM_STR_LIT(");", 2)};
     GemVal _t12583[] = {_t12582, gem_interp(9, _t12581)};
         (void)(gem_buf_push_fn(NULL, _t12583, 2));
-#line 1660 "compiler/codegen.gem"
-        gem_set_line(1660);
+#line 1661 "compiler/codegen.gem"
+        gem_set_line(1661);
     GemVal _t12586 = (*gem_v_ns_refresh);
     GemVal _t12584 = gem_v_name;
     GemVal _t12585[] = {_t12584, gem_v_p};
-    gem_check_callable(_t12586, "compiler/codegen.gem", 1660);
+    gem_check_callable(_t12586, "compiler/codegen.gem", 1661);
         GemVal gem_v_refresh = _t12586.fn(_t12586.env, _t12585, 2);
-#line 1661 "compiler/codegen.gem"
-        gem_set_line(1661);
-        if (gem_truthy(gem_neq(gem_v_refresh, GEM_STR_LIT("", 0)))) {
 #line 1662 "compiler/codegen.gem"
-            gem_set_line(1662);
+        gem_set_line(1662);
+        if (gem_truthy(gem_neq(gem_v_refresh, GEM_STR_LIT("", 0)))) {
+#line 1663 "compiler/codegen.gem"
+            gem_set_line(1663);
     GemVal _t12589 = gem_v_b;
     GemVal _t12587 = gem_v_refresh;
     GemVal _t12588[] = {_t12587, gem_int(0), gem_sub(gem_len_1(gem_v_refresh), gem_int(1))};
@@ -54515,12 +54518,12 @@ static GemVal __anon_181(void *_env, GemVal *args, int argc) {
         }
     }
 
-#line 1666 "compiler/codegen.gem"
-    gem_set_line(1666);
-    GemVal _t12591 = (*gem_v_fs);
-    gem_table_set(_t12591, GEM_STR_LIT("append_buf_vars", 15), gem_v_saved_append);
 #line 1667 "compiler/codegen.gem"
     gem_set_line(1667);
+    GemVal _t12591 = (*gem_v_fs);
+    gem_table_set(_t12591, GEM_STR_LIT("append_buf_vars", 15), gem_v_saved_append);
+#line 1668 "compiler/codegen.gem"
+    gem_set_line(1668);
     GemVal _t12592[] = {gem_v_b};
     GemVal _t12593 = gem_to_string_fn(NULL, _t12592, 1);
     if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t12593, 1);
@@ -54547,64 +54550,64 @@ static GemVal __anon_182(void *_env, GemVal *args, int argc) {
     GemVal *gem_v_mangle = _cls->gem_v_mangle;
     GemVal *gem_v_return_nil_str = _cls->gem_v_return_nil_str;
     GemVal *gem_v_tmp = _cls->gem_v_tmp;
-    gem_push_frame("anonymous fn", "compiler/codegen.gem", 1670);
+    gem_push_frame("anonymous fn", "compiler/codegen.gem", 1671);
     GemVal gem_v_node = (argc > 0) ? args[0] : GEM_NIL;
     GemVal gem_v_indent = (argc > 1) ? args[1] : GEM_NIL;
     GemVal gem_v_return_pos = (argc > 2) ? args[2] : GEM_NIL;
     GemArenaPoint _ret_pt;
     gem_arena_point(&_ret_pt);
-#line 1671 "compiler/codegen.gem"
-    gem_set_line(1671);
-    GemVal _t12602 = gem_g___mod_codegen_pad_for;
-    GemVal _t12601[] = {gem_v_indent};
-    gem_check_callable(_t12602, "compiler/codegen.gem", 1671);
-    GemVal gem_v_p = _t12602.fn(_t12602.env, _t12601, 1);
 #line 1672 "compiler/codegen.gem"
     gem_set_line(1672);
+    GemVal _t12602 = gem_g___mod_codegen_pad_for;
+    GemVal _t12601[] = {gem_v_indent};
+    gem_check_callable(_t12602, "compiler/codegen.gem", 1672);
+    GemVal gem_v_p = _t12602.fn(_t12602.env, _t12601, 1);
+#line 1673 "compiler/codegen.gem"
+    gem_set_line(1673);
     GemVal _t12605 = (*gem_v_compile_expr);
     GemVal _t12603 = gem_v_node;
     static GemICacheSlot _ic_2108 = {0};
     GemVal _t12604[] = {gem_table_get_cached(_t12603, "target", &_ic_2108)};
-    gem_check_callable(_t12605, "compiler/codegen.gem", 1672);
+    gem_check_callable(_t12605, "compiler/codegen.gem", 1673);
     GemVal gem_v_target_r = _t12605.fn(_t12605.env, _t12604, 1);
-#line 1673 "compiler/codegen.gem"
-    gem_set_line(1673);
+#line 1674 "compiler/codegen.gem"
+    gem_set_line(1674);
     GemVal gem_v___val_321 = GEM_NIL;
-#line 1673 "compiler/codegen.gem"
-    gem_set_line(1673);
+#line 1674 "compiler/codegen.gem"
+    gem_set_line(1674);
     GemVal _t12606 = gem_v_node;
     static GemICacheSlot _ic_2109 = {0};
     if (gem_truthy(gem_neq(gem_table_get_cached(_t12606, "target_var", &_ic_2109), GEM_NIL))) {
-#line 1673 "compiler/codegen.gem"
-        gem_set_line(1673);
+#line 1674 "compiler/codegen.gem"
+        gem_set_line(1674);
     GemVal _t12609 = (*gem_v_mangle);
     GemVal _t12607 = gem_v_node;
     static GemICacheSlot _ic_2110 = {0};
     GemVal _t12608[] = {gem_table_get_cached(_t12607, "target_var", &_ic_2110)};
-    gem_check_callable(_t12609, "compiler/codegen.gem", 1673);
+    gem_check_callable(_t12609, "compiler/codegen.gem", 1674);
         gem_v___val_321 = _t12609.fn(_t12609.env, _t12608, 1);
     } else {
-#line 1673 "compiler/codegen.gem"
-        gem_set_line(1673);
+#line 1674 "compiler/codegen.gem"
+        gem_set_line(1674);
     GemVal _t12610 = (*gem_v_tmp);
-    gem_check_callable(_t12610, "compiler/codegen.gem", 1673);
+    gem_check_callable(_t12610, "compiler/codegen.gem", 1674);
         gem_v___val_321 = _t12610.fn(_t12610.env, NULL, 0);
     }
-#line 1673 "compiler/codegen.gem"
-    gem_set_line(1673);
-    GemVal gem_v_t = gem_v___val_321;
 #line 1674 "compiler/codegen.gem"
     gem_set_line(1674);
-    GemVal gem_v_b = gem_buf_new_fn(NULL, NULL, 0);
+    GemVal gem_v_t = gem_v___val_321;
 #line 1675 "compiler/codegen.gem"
     gem_set_line(1675);
+    GemVal gem_v_b = gem_buf_new_fn(NULL, NULL, 0);
+#line 1676 "compiler/codegen.gem"
+    gem_set_line(1676);
     GemVal _t12612 = gem_v_b;
     GemVal _t12611 = gem_v_target_r;
     static GemICacheSlot _ic_2111 = {0};
     GemVal _t12613[] = {_t12612, gem_table_get_cached(_t12611, "setup", &_ic_2111)};
     (void)(gem_buf_push_fn(NULL, _t12613, 2));
-#line 1676 "compiler/codegen.gem"
-    gem_set_line(1676);
+#line 1677 "compiler/codegen.gem"
+    gem_set_line(1677);
     GemVal _t12618 = gem_v_b;
     GemVal _t12616 = gem_v_p;
     GemVal _t12615 = gem_v_t;
@@ -54613,18 +54616,18 @@ static GemVal __anon_182(void *_env, GemVal *args, int argc) {
     GemVal _t12617[] = {_t12616, GEM_STR_LIT("GemVal ", 7), _t12615, GEM_STR_LIT(" = ", 3), gem_table_get_cached(_t12614, "expr", &_ic_2112), GEM_STR_LIT(";\n", 2)};
     GemVal _t12619[] = {_t12618, gem_interp(6, _t12617)};
     (void)(gem_buf_push_fn(NULL, _t12619, 2));
-#line 1677 "compiler/codegen.gem"
-    gem_set_line(1677);
+#line 1678 "compiler/codegen.gem"
+    gem_set_line(1678);
     GemVal _t12620 = gem_v_node;
     static GemICacheSlot _ic_2113 = {0};
     if (gem_truthy(gem_eq(gem_len_1(gem_table_get_cached(_t12620, "whens", &_ic_2113)), gem_int(0)))) {
-#line 1678 "compiler/codegen.gem"
-        gem_set_line(1678);
+#line 1679 "compiler/codegen.gem"
+        gem_set_line(1679);
     GemVal _t12621 = gem_v_node;
     static GemICacheSlot _ic_2114 = {0};
         if (gem_truthy(gem_neq(gem_table_get_cached(_t12621, "else", &_ic_2114), GEM_NIL))) {
-#line 1679 "compiler/codegen.gem"
-            gem_set_line(1679);
+#line 1680 "compiler/codegen.gem"
+            gem_set_line(1680);
     GemVal _t12627 = gem_v_b;
     GemVal _t12626 = (*gem_v_compile_stmts_tail);
     GemVal _t12622 = gem_v_node;
@@ -54632,49 +54635,49 @@ static GemVal __anon_182(void *_env, GemVal *args, int argc) {
     GemVal _t12624 = gem_table_get_cached(_t12622, "else", &_ic_2115);
     GemVal _t12623 = gem_v_indent;
     GemVal _t12625[] = {_t12624, _t12623, gem_v_return_pos};
-    gem_check_callable(_t12626, "compiler/codegen.gem", 1679);
+    gem_check_callable(_t12626, "compiler/codegen.gem", 1680);
     GemVal _t12628[] = {_t12627, _t12626.fn(_t12626.env, _t12625, 3)};
             (void)(gem_buf_push_fn(NULL, _t12628, 2));
         } else {
-#line 1680 "compiler/codegen.gem"
-            gem_set_line(1680);
-            if (gem_truthy(gem_v_return_pos)) {
 #line 1681 "compiler/codegen.gem"
-                gem_set_line(1681);
+            gem_set_line(1681);
+            if (gem_truthy(gem_v_return_pos)) {
+#line 1682 "compiler/codegen.gem"
+                gem_set_line(1682);
     GemVal _t12632 = gem_v_b;
     GemVal _t12630 = (*gem_v_return_nil_str);
     GemVal _t12629[] = {gem_v_p};
-    gem_check_callable(_t12630, "compiler/codegen.gem", 1681);
+    gem_check_callable(_t12630, "compiler/codegen.gem", 1682);
     GemVal _t12631[] = {_t12630.fn(_t12630.env, _t12629, 1), GEM_STR_LIT("\n", 1)};
     GemVal _t12633[] = {_t12632, gem_interp(2, _t12631)};
                 (void)(gem_buf_push_fn(NULL, _t12633, 2));
             }
         }
-#line 1683 "compiler/codegen.gem"
-        gem_set_line(1683);
+#line 1684 "compiler/codegen.gem"
+        gem_set_line(1684);
     GemVal _t12636 = gem_v_b;
     GemVal _t12634 = gem_v_p;
     GemVal _t12635[] = {_t12634, GEM_STR_LIT("(void)", 6), gem_v_t, GEM_STR_LIT(";", 1)};
     GemVal _t12637[] = {_t12636, gem_interp(4, _t12635)};
         (void)(gem_buf_push_fn(NULL, _t12637, 2));
-#line 1684 "compiler/codegen.gem"
-        gem_set_line(1684);
+#line 1685 "compiler/codegen.gem"
+        gem_set_line(1685);
     GemVal _t12638[] = {gem_v_b};
         GemVal _t12639 = gem_to_string_fn(NULL, _t12638, 1);
         if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t12639, 1);
         gem_pop_frame();
         return _t12639;
     }
-#line 1686 "compiler/codegen.gem"
-    gem_set_line(1686);
+#line 1687 "compiler/codegen.gem"
+    gem_set_line(1687);
     GemVal gem_v___for_i_323 = gem_int(0);
-#line 1686 "compiler/codegen.gem"
-    gem_set_line(1686);
+#line 1687 "compiler/codegen.gem"
+    gem_set_line(1687);
     GemVal _t12640 = gem_v_node;
     static GemICacheSlot _ic_2116 = {0};
     GemVal gem_v___for_limit_323 = gem_len_1(gem_table_get_cached(_t12640, "whens", &_ic_2116));
-#line 1686 "compiler/codegen.gem"
-    gem_set_line(1686);
+#line 1687 "compiler/codegen.gem"
+    gem_set_line(1687);
     GemArenaMark _mk333;
     gem_arena_mark(&_mk333);
     while (1) {
@@ -54685,38 +54688,38 @@ static GemVal __anon_182(void *_env, GemVal *args, int argc) {
         }
     GemVal _t12641 = gem_v___for_i_323;
         if (!gem_truthy(gem_lt(_t12641, gem_v___for_limit_323))) break;
-#line 1686 "compiler/codegen.gem"
-        gem_set_line(1686);
-        GemVal gem_v_i = gem_v___for_i_323;
-#line 1686 "compiler/codegen.gem"
-        gem_set_line(1686);
-        gem_v___for_i_323 = gem_add(gem_v___for_i_323, gem_int(1));
 #line 1687 "compiler/codegen.gem"
         gem_set_line(1687);
+        GemVal gem_v_i = gem_v___for_i_323;
+#line 1687 "compiler/codegen.gem"
+        gem_set_line(1687);
+        gem_v___for_i_323 = gem_add(gem_v___for_i_323, gem_int(1));
+#line 1688 "compiler/codegen.gem"
+        gem_set_line(1688);
     GemVal _t12642 = gem_v_node;
     static GemICacheSlot _ic_2117 = {0};
     GemVal _t12643 = gem_table_get_cached(_t12642, "whens", &_ic_2117);
         GemVal gem_v_w = gem_table_get(_t12643, gem_v_i);
-#line 1688 "compiler/codegen.gem"
-        gem_set_line(1688);
+#line 1689 "compiler/codegen.gem"
+        gem_set_line(1689);
     GemVal _t12646 = (*gem_v_compile_expr);
     GemVal _t12644 = gem_v_w;
     static GemICacheSlot _ic_2118 = {0};
     GemVal _t12645[] = {gem_table_get_cached(_t12644, "value", &_ic_2118)};
-    gem_check_callable(_t12646, "compiler/codegen.gem", 1688);
+    gem_check_callable(_t12646, "compiler/codegen.gem", 1689);
         GemVal gem_v_val_r = _t12646.fn(_t12646.env, _t12645, 1);
-#line 1689 "compiler/codegen.gem"
-        gem_set_line(1689);
-        if (gem_truthy(gem_eq(gem_v_i, gem_int(0)))) {
 #line 1690 "compiler/codegen.gem"
-            gem_set_line(1690);
+        gem_set_line(1690);
+        if (gem_truthy(gem_eq(gem_v_i, gem_int(0)))) {
+#line 1691 "compiler/codegen.gem"
+            gem_set_line(1691);
     GemVal _t12648 = gem_v_b;
     GemVal _t12647 = gem_v_val_r;
     static GemICacheSlot _ic_2119 = {0};
     GemVal _t12649[] = {_t12648, gem_table_get_cached(_t12647, "setup", &_ic_2119)};
             (void)(gem_buf_push_fn(NULL, _t12649, 2));
-#line 1691 "compiler/codegen.gem"
-            gem_set_line(1691);
+#line 1692 "compiler/codegen.gem"
+            gem_set_line(1692);
     GemVal _t12653 = gem_v_b;
     GemVal _t12651 = gem_v_p;
     GemVal _t12650 = gem_v_val_r;
@@ -54725,21 +54728,21 @@ static GemVal __anon_182(void *_env, GemVal *args, int argc) {
     GemVal _t12654[] = {_t12653, gem_interp(4, _t12652)};
             (void)(gem_buf_push_fn(NULL, _t12654, 2));
         } else {
-#line 1693 "compiler/codegen.gem"
-            gem_set_line(1693);
+#line 1694 "compiler/codegen.gem"
+            gem_set_line(1694);
     GemVal _t12656 = gem_v_b;
     GemVal _t12655[] = {gem_v_p, GEM_STR_LIT("} else {\n", 9)};
     GemVal _t12657[] = {_t12656, gem_interp(2, _t12655)};
             (void)(gem_buf_push_fn(NULL, _t12657, 2));
-#line 1694 "compiler/codegen.gem"
-            gem_set_line(1694);
+#line 1695 "compiler/codegen.gem"
+            gem_set_line(1695);
     GemVal _t12659 = gem_v_b;
     GemVal _t12658 = gem_v_val_r;
     static GemICacheSlot _ic_2121 = {0};
     GemVal _t12660[] = {_t12659, gem_table_get_cached(_t12658, "setup", &_ic_2121)};
             (void)(gem_buf_push_fn(NULL, _t12660, 2));
-#line 1695 "compiler/codegen.gem"
-            gem_set_line(1695);
+#line 1696 "compiler/codegen.gem"
+            gem_set_line(1696);
     GemVal _t12664 = gem_v_b;
     GemVal _t12662 = gem_v_p;
     GemVal _t12661 = gem_v_val_r;
@@ -54748,31 +54751,31 @@ static GemVal __anon_182(void *_env, GemVal *args, int argc) {
     GemVal _t12665[] = {_t12664, gem_interp(4, _t12663)};
             (void)(gem_buf_push_fn(NULL, _t12665, 2));
         }
-#line 1697 "compiler/codegen.gem"
-        gem_set_line(1697);
+#line 1698 "compiler/codegen.gem"
+        gem_set_line(1698);
     GemVal _t12670 = gem_g___mod_codegen_set_union;
     GemVal _t12666 = (*gem_v_fs);
     static GemICacheSlot _ic_2123 = {0};
     GemVal _t12668 = gem_table_get_cached(_t12666, "fn_scope_locals", &_ic_2123);
     GemVal _t12667 = gem_table_new_braces();
     GemVal _t12669[] = {_t12668, _t12667};
-    gem_check_callable(_t12670, "compiler/codegen.gem", 1697);
+    gem_check_callable(_t12670, "compiler/codegen.gem", 1698);
         GemVal gem_v_saved_arm = _t12670.fn(_t12670.env, _t12669, 2);
-#line 1698 "compiler/codegen.gem"
-        gem_set_line(1698);
+#line 1699 "compiler/codegen.gem"
+        gem_set_line(1699);
     GemVal _t12671 = gem_v_w;
     static GemICacheSlot _ic_2124 = {0};
         if (gem_truthy(gem_neq(gem_table_get_cached(_t12671, "bindings", &_ic_2124), GEM_NIL))) {
-#line 1699 "compiler/codegen.gem"
-            gem_set_line(1699);
+#line 1700 "compiler/codegen.gem"
+            gem_set_line(1700);
     GemVal _t12672 = gem_v_w;
     static GemICacheSlot _ic_2125 = {0};
             GemVal gem_v___for_items_322 = gem_for_items_1(gem_table_get_cached(_t12672, "bindings", &_ic_2125));
-#line 1699 "compiler/codegen.gem"
-            gem_set_line(1699);
+#line 1700 "compiler/codegen.gem"
+            gem_set_line(1700);
             GemVal gem_v___for_i_322 = gem_int(0);
-#line 1699 "compiler/codegen.gem"
-            gem_set_line(1699);
+#line 1700 "compiler/codegen.gem"
+            gem_set_line(1700);
             GemArenaMark _mk334;
             gem_arena_mark(&_mk334);
             while (1) {
@@ -54783,31 +54786,31 @@ static GemVal __anon_182(void *_env, GemVal *args, int argc) {
                 }
     GemVal _t12673 = gem_v___for_i_322;
                 if (!gem_truthy(gem_lt(_t12673, gem_for_len_1(gem_v___for_items_322)))) break;
-#line 1699 "compiler/codegen.gem"
-                gem_set_line(1699);
-    GemVal _t12674 = gem_v___for_items_322;
-                GemVal gem_v_binding = gem_table_get(_t12674, gem_v___for_i_322);
-#line 1699 "compiler/codegen.gem"
-                gem_set_line(1699);
-                gem_v___for_i_322 = gem_add(gem_v___for_i_322, gem_int(1));
 #line 1700 "compiler/codegen.gem"
                 gem_set_line(1700);
+    GemVal _t12674 = gem_v___for_items_322;
+                GemVal gem_v_binding = gem_table_get(_t12674, gem_v___for_i_322);
+#line 1700 "compiler/codegen.gem"
+                gem_set_line(1700);
+                gem_v___for_i_322 = gem_add(gem_v___for_i_322, gem_int(1));
+#line 1701 "compiler/codegen.gem"
+                gem_set_line(1701);
     GemVal _t12678 = gem_v_b;
     GemVal _t12677 = (*gem_v_compile_stmt);
     GemVal _t12675 = gem_v_binding;
     GemVal _t12676[] = {_t12675, gem_add(gem_v_indent, gem_int(1))};
-    gem_check_callable(_t12677, "compiler/codegen.gem", 1700);
+    gem_check_callable(_t12677, "compiler/codegen.gem", 1701);
     GemVal _t12679[] = {_t12678, _t12677.fn(_t12677.env, _t12676, 2)};
                 (void)(gem_buf_push_fn(NULL, _t12679, 2));
-#line 1701 "compiler/codegen.gem"
-                gem_set_line(1701);
+#line 1702 "compiler/codegen.gem"
+                gem_set_line(1702);
     GemVal _t12680[] = {gem_v_b, GEM_STR_LIT("\n", 1)};
                 (void)(gem_buf_push_fn(NULL, _t12680, 2));
             }
 
         }
-#line 1704 "compiler/codegen.gem"
-        gem_set_line(1704);
+#line 1705 "compiler/codegen.gem"
+        gem_set_line(1705);
     GemVal _t12686 = gem_v_b;
     GemVal _t12685 = (*gem_v_compile_stmts_tail);
     GemVal _t12681 = gem_v_w;
@@ -54815,38 +54818,38 @@ static GemVal __anon_182(void *_env, GemVal *args, int argc) {
     GemVal _t12683 = gem_table_get_cached(_t12681, "body", &_ic_2126);
     GemVal _t12682 = gem_add(gem_v_indent, gem_int(1));
     GemVal _t12684[] = {_t12683, _t12682, gem_v_return_pos};
-    gem_check_callable(_t12685, "compiler/codegen.gem", 1704);
+    gem_check_callable(_t12685, "compiler/codegen.gem", 1705);
     GemVal _t12687[] = {_t12686, _t12685.fn(_t12685.env, _t12684, 3)};
         (void)(gem_buf_push_fn(NULL, _t12687, 2));
-#line 1705 "compiler/codegen.gem"
-        gem_set_line(1705);
+#line 1706 "compiler/codegen.gem"
+        gem_set_line(1706);
     GemVal _t12688 = (*gem_v_fs);
         gem_table_set(_t12688, GEM_STR_LIT("fn_scope_locals", 15), gem_v_saved_arm);
     }
 
-#line 1707 "compiler/codegen.gem"
-    gem_set_line(1707);
+#line 1708 "compiler/codegen.gem"
+    gem_set_line(1708);
     GemVal _t12689 = gem_v_node;
     static GemICacheSlot _ic_2127 = {0};
     if (gem_truthy(gem_neq(gem_table_get_cached(_t12689, "else", &_ic_2127), GEM_NIL))) {
-#line 1708 "compiler/codegen.gem"
-        gem_set_line(1708);
+#line 1709 "compiler/codegen.gem"
+        gem_set_line(1709);
     GemVal _t12691 = gem_v_b;
     GemVal _t12690[] = {gem_v_p, GEM_STR_LIT("} else {\n", 9)};
     GemVal _t12692[] = {_t12691, gem_interp(2, _t12690)};
         (void)(gem_buf_push_fn(NULL, _t12692, 2));
-#line 1709 "compiler/codegen.gem"
-        gem_set_line(1709);
+#line 1710 "compiler/codegen.gem"
+        gem_set_line(1710);
     GemVal _t12697 = gem_g___mod_codegen_set_union;
     GemVal _t12693 = (*gem_v_fs);
     static GemICacheSlot _ic_2128 = {0};
     GemVal _t12695 = gem_table_get_cached(_t12693, "fn_scope_locals", &_ic_2128);
     GemVal _t12694 = gem_table_new_braces();
     GemVal _t12696[] = {_t12695, _t12694};
-    gem_check_callable(_t12697, "compiler/codegen.gem", 1709);
+    gem_check_callable(_t12697, "compiler/codegen.gem", 1710);
         GemVal gem_v_saved_else = _t12697.fn(_t12697.env, _t12696, 2);
-#line 1710 "compiler/codegen.gem"
-        gem_set_line(1710);
+#line 1711 "compiler/codegen.gem"
+        gem_set_line(1711);
     GemVal _t12703 = gem_v_b;
     GemVal _t12702 = (*gem_v_compile_stmts_tail);
     GemVal _t12698 = gem_v_node;
@@ -54854,50 +54857,50 @@ static GemVal __anon_182(void *_env, GemVal *args, int argc) {
     GemVal _t12700 = gem_table_get_cached(_t12698, "else", &_ic_2129);
     GemVal _t12699 = gem_add(gem_v_indent, gem_int(1));
     GemVal _t12701[] = {_t12700, _t12699, gem_v_return_pos};
-    gem_check_callable(_t12702, "compiler/codegen.gem", 1710);
+    gem_check_callable(_t12702, "compiler/codegen.gem", 1711);
     GemVal _t12704[] = {_t12703, _t12702.fn(_t12702.env, _t12701, 3)};
         (void)(gem_buf_push_fn(NULL, _t12704, 2));
-#line 1711 "compiler/codegen.gem"
-        gem_set_line(1711);
+#line 1712 "compiler/codegen.gem"
+        gem_set_line(1712);
     GemVal _t12705 = (*gem_v_fs);
         gem_table_set(_t12705, GEM_STR_LIT("fn_scope_locals", 15), gem_v_saved_else);
     } else {
-#line 1712 "compiler/codegen.gem"
-        gem_set_line(1712);
-        if (gem_truthy(gem_v_return_pos)) {
 #line 1713 "compiler/codegen.gem"
-            gem_set_line(1713);
+        gem_set_line(1713);
+        if (gem_truthy(gem_v_return_pos)) {
+#line 1714 "compiler/codegen.gem"
+            gem_set_line(1714);
     GemVal _t12707 = gem_v_b;
     GemVal _t12706[] = {gem_v_p, GEM_STR_LIT("} else {\n", 9)};
     GemVal _t12708[] = {_t12707, gem_interp(2, _t12706)};
             (void)(gem_buf_push_fn(NULL, _t12708, 2));
-#line 1714 "compiler/codegen.gem"
-            gem_set_line(1714);
+#line 1715 "compiler/codegen.gem"
+            gem_set_line(1715);
     GemVal _t12712 = gem_v_b;
     GemVal _t12711 = (*gem_v_compile_stmts_tail);
     GemVal _t12709 = gem_table_new();
     GemVal _t12710[] = {_t12709, gem_add(gem_v_indent, gem_int(1)), gem_bool(1)};
-    gem_check_callable(_t12711, "compiler/codegen.gem", 1714);
+    gem_check_callable(_t12711, "compiler/codegen.gem", 1715);
     GemVal _t12713[] = {_t12712, _t12711.fn(_t12711.env, _t12710, 3)};
             (void)(gem_buf_push_fn(NULL, _t12713, 2));
         }
     }
-#line 1716 "compiler/codegen.gem"
-    gem_set_line(1716);
+#line 1717 "compiler/codegen.gem"
+    gem_set_line(1717);
     GemVal _t12715 = gem_v_b;
     GemVal _t12714[] = {gem_v_p, GEM_STR_LIT("}", 1)};
     GemVal _t12716[] = {_t12715, gem_interp(2, _t12714)};
     (void)(gem_buf_push_fn(NULL, _t12716, 2));
-#line 1717 "compiler/codegen.gem"
-    gem_set_line(1717);
+#line 1718 "compiler/codegen.gem"
+    gem_set_line(1718);
     GemVal gem_v___for_i_324 = gem_int(1);
-#line 1717 "compiler/codegen.gem"
-    gem_set_line(1717);
+#line 1718 "compiler/codegen.gem"
+    gem_set_line(1718);
     GemVal _t12717 = gem_v_node;
     static GemICacheSlot _ic_2130 = {0};
     GemVal gem_v___for_limit_324 = gem_len_1(gem_table_get_cached(_t12717, "whens", &_ic_2130));
-#line 1717 "compiler/codegen.gem"
-    gem_set_line(1717);
+#line 1718 "compiler/codegen.gem"
+    gem_set_line(1718);
     GemArenaMark _mk335;
     gem_arena_mark(&_mk335);
     while (1) {
@@ -54908,22 +54911,22 @@ static GemVal __anon_182(void *_env, GemVal *args, int argc) {
         }
     GemVal _t12718 = gem_v___for_i_324;
         if (!gem_truthy(gem_lt(_t12718, gem_v___for_limit_324))) break;
-#line 1717 "compiler/codegen.gem"
-        gem_set_line(1717);
-        GemVal gem_v_i = gem_v___for_i_324;
-#line 1717 "compiler/codegen.gem"
-        gem_set_line(1717);
-        gem_v___for_i_324 = gem_add(gem_v___for_i_324, gem_int(1));
 #line 1718 "compiler/codegen.gem"
         gem_set_line(1718);
+        GemVal gem_v_i = gem_v___for_i_324;
+#line 1718 "compiler/codegen.gem"
+        gem_set_line(1718);
+        gem_v___for_i_324 = gem_add(gem_v___for_i_324, gem_int(1));
+#line 1719 "compiler/codegen.gem"
+        gem_set_line(1719);
     GemVal _t12720 = gem_v_b;
     GemVal _t12719[] = {GEM_STR_LIT("\n", 1), gem_v_p, GEM_STR_LIT("}", 1)};
     GemVal _t12721[] = {_t12720, gem_interp(3, _t12719)};
         (void)(gem_buf_push_fn(NULL, _t12721, 2));
     }
 
-#line 1720 "compiler/codegen.gem"
-    gem_set_line(1720);
+#line 1721 "compiler/codegen.gem"
+    gem_set_line(1721);
     GemVal _t12722[] = {gem_v_b};
     GemVal _t12723 = gem_to_string_fn(NULL, _t12722, 1);
     if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t12723, 1);
@@ -54948,101 +54951,101 @@ static GemVal __anon_183(void *_env, GemVal *args, int argc) {
     GemVal *gem_v_fs = _cls->gem_v_fs;
     GemVal *gem_v_mangle = _cls->gem_v_mangle;
     GemVal *gem_v_tmp = _cls->gem_v_tmp;
-    gem_push_frame("anonymous fn", "compiler/codegen.gem", 1723);
+    gem_push_frame("anonymous fn", "compiler/codegen.gem", 1724);
     GemVal gem_v_node = (argc > 0) ? args[0] : GEM_NIL;
     GemVal gem_v_indent = (argc > 1) ? args[1] : GEM_NIL;
     GemVal gem_v_return_pos = (argc > 2) ? args[2] : GEM_NIL;
     GemArenaPoint _ret_pt;
     gem_arena_point(&_ret_pt);
-#line 1724 "compiler/codegen.gem"
-    gem_set_line(1724);
-    GemVal _t12729 = gem_g___mod_codegen_pad_for;
-    GemVal _t12728[] = {gem_v_indent};
-    gem_check_callable(_t12729, "compiler/codegen.gem", 1724);
-    GemVal gem_v_p = _t12729.fn(_t12729.env, _t12728, 1);
 #line 1725 "compiler/codegen.gem"
     gem_set_line(1725);
+    GemVal _t12729 = gem_g___mod_codegen_pad_for;
+    GemVal _t12728[] = {gem_v_indent};
+    gem_check_callable(_t12729, "compiler/codegen.gem", 1725);
+    GemVal gem_v_p = _t12729.fn(_t12729.env, _t12728, 1);
+#line 1726 "compiler/codegen.gem"
+    gem_set_line(1726);
     GemVal _t12730 = gem_v_node;
     static GemICacheSlot _ic_2131 = {0};
     GemVal gem_v_arms = gem_table_get_cached(_t12730, "arms", &_ic_2131);
-#line 1726 "compiler/codegen.gem"
-    gem_set_line(1726);
+#line 1727 "compiler/codegen.gem"
+    gem_set_line(1727);
     GemVal _t12731 = gem_v_node;
     static GemICacheSlot _ic_2132 = {0};
     GemVal gem_v_after_ms = gem_table_get_cached(_t12731, "after_ms", &_ic_2132);
-#line 1727 "compiler/codegen.gem"
-    gem_set_line(1727);
+#line 1728 "compiler/codegen.gem"
+    gem_set_line(1728);
     GemVal _t12732 = gem_v_node;
     static GemICacheSlot _ic_2133 = {0};
     GemVal gem_v_after_body = gem_table_get_cached(_t12732, "after_body", &_ic_2133);
-#line 1729 "compiler/codegen.gem"
-    gem_set_line(1729);
+#line 1730 "compiler/codegen.gem"
+    gem_set_line(1730);
     GemVal _t12735 = (*gem_v_mangle);
     GemVal _t12733 = gem_v_node;
     static GemICacheSlot _ic_2134 = {0};
     GemVal _t12734[] = {gem_table_get_cached(_t12733, "recv_var", &_ic_2134)};
-    gem_check_callable(_t12735, "compiler/codegen.gem", 1729);
+    gem_check_callable(_t12735, "compiler/codegen.gem", 1730);
     GemVal gem_v_recv_tmp = _t12735.fn(_t12735.env, _t12734, 1);
-#line 1730 "compiler/codegen.gem"
-    gem_set_line(1730);
-    GemVal _t12736 = (*gem_v_tmp);
-    gem_check_callable(_t12736, "compiler/codegen.gem", 1730);
-    GemVal gem_v_matched_tmp = _t12736.fn(_t12736.env, NULL, 0);
 #line 1731 "compiler/codegen.gem"
     gem_set_line(1731);
-    GemVal _t12737 = (*gem_v_tmp);
-    gem_check_callable(_t12737, "compiler/codegen.gem", 1731);
-    GemVal gem_v_prev_tmp = _t12737.fn(_t12737.env, NULL, 0);
+    GemVal _t12736 = (*gem_v_tmp);
+    gem_check_callable(_t12736, "compiler/codegen.gem", 1731);
+    GemVal gem_v_matched_tmp = _t12736.fn(_t12736.env, NULL, 0);
 #line 1732 "compiler/codegen.gem"
     gem_set_line(1732);
-    GemVal _t12738 = (*gem_v_tmp);
-    gem_check_callable(_t12738, "compiler/codegen.gem", 1732);
-    GemVal gem_v_cur_tmp = _t12738.fn(_t12738.env, NULL, 0);
+    GemVal _t12737 = (*gem_v_tmp);
+    gem_check_callable(_t12737, "compiler/codegen.gem", 1732);
+    GemVal gem_v_prev_tmp = _t12737.fn(_t12737.env, NULL, 0);
 #line 1733 "compiler/codegen.gem"
     gem_set_line(1733);
-    GemVal _t12739 = (*gem_v_tmp);
-    gem_check_callable(_t12739, "compiler/codegen.gem", 1733);
-    GemVal gem_v_deadline_tmp = _t12739.fn(_t12739.env, NULL, 0);
+    GemVal _t12738 = (*gem_v_tmp);
+    gem_check_callable(_t12738, "compiler/codegen.gem", 1733);
+    GemVal gem_v_cur_tmp = _t12738.fn(_t12738.env, NULL, 0);
 #line 1734 "compiler/codegen.gem"
     gem_set_line(1734);
+    GemVal _t12739 = (*gem_v_tmp);
+    gem_check_callable(_t12739, "compiler/codegen.gem", 1734);
+    GemVal gem_v_deadline_tmp = _t12739.fn(_t12739.env, NULL, 0);
+#line 1735 "compiler/codegen.gem"
+    gem_set_line(1735);
     GemVal _t12740 = (*gem_v_tmp);
-    gem_check_callable(_t12740, "compiler/codegen.gem", 1734);
+    gem_check_callable(_t12740, "compiler/codegen.gem", 1735);
     GemVal gem_v_proc_tmp = _t12740.fn(_t12740.env, NULL, 0);
-#line 1736 "compiler/codegen.gem"
-    gem_set_line(1736);
+#line 1737 "compiler/codegen.gem"
+    gem_set_line(1737);
     GemVal gem_v_b = gem_buf_new_fn(NULL, NULL, 0);
-#line 1738 "compiler/codegen.gem"
-    gem_set_line(1738);
+#line 1739 "compiler/codegen.gem"
+    gem_set_line(1739);
     GemVal _t12743 = gem_v_b;
     GemVal _t12741 = gem_v_p;
     GemVal _t12742[] = {_t12741, GEM_STR_LIT("GemVal ", 7), gem_v_recv_tmp, GEM_STR_LIT(" = GEM_NIL;\n", 12)};
     GemVal _t12744[] = {_t12743, gem_interp(4, _t12742)};
     (void)(gem_buf_push_fn(NULL, _t12744, 2));
-#line 1739 "compiler/codegen.gem"
-    gem_set_line(1739);
+#line 1740 "compiler/codegen.gem"
+    gem_set_line(1740);
     GemVal _t12747 = gem_v_b;
     GemVal _t12745 = gem_v_p;
     GemVal _t12746[] = {_t12745, GEM_STR_LIT("int ", 4), gem_v_matched_tmp, GEM_STR_LIT(" = -1;\n", 7)};
     GemVal _t12748[] = {_t12747, gem_interp(4, _t12746)};
     (void)(gem_buf_push_fn(NULL, _t12748, 2));
-#line 1741 "compiler/codegen.gem"
-    gem_set_line(1741);
-    if (gem_truthy(gem_neq(gem_v_after_ms, GEM_NIL))) {
 #line 1742 "compiler/codegen.gem"
-        gem_set_line(1742);
-    GemVal _t12750 = (*gem_v_compile_expr);
-    GemVal _t12749[] = {gem_v_after_ms};
-    gem_check_callable(_t12750, "compiler/codegen.gem", 1742);
-        GemVal gem_v_ms_r = _t12750.fn(_t12750.env, _t12749, 1);
+    gem_set_line(1742);
+    if (gem_truthy(gem_neq(gem_v_after_ms, GEM_NIL))) {
 #line 1743 "compiler/codegen.gem"
         gem_set_line(1743);
+    GemVal _t12750 = (*gem_v_compile_expr);
+    GemVal _t12749[] = {gem_v_after_ms};
+    gem_check_callable(_t12750, "compiler/codegen.gem", 1743);
+        GemVal gem_v_ms_r = _t12750.fn(_t12750.env, _t12749, 1);
+#line 1744 "compiler/codegen.gem"
+        gem_set_line(1744);
     GemVal _t12752 = gem_v_b;
     GemVal _t12751 = gem_v_ms_r;
     static GemICacheSlot _ic_2135 = {0};
     GemVal _t12753[] = {_t12752, gem_table_get_cached(_t12751, "setup", &_ic_2135)};
         (void)(gem_buf_push_fn(NULL, _t12753, 2));
-#line 1744 "compiler/codegen.gem"
-        gem_set_line(1744);
+#line 1745 "compiler/codegen.gem"
+        gem_set_line(1745);
     GemVal _t12758 = gem_v_b;
     GemVal _t12756 = gem_v_p;
     GemVal _t12755 = gem_v_deadline_tmp;
@@ -55052,91 +55055,91 @@ static GemVal __anon_183(void *_env, GemVal *args, int argc) {
     GemVal _t12759[] = {_t12758, gem_interp(6, _t12757)};
         (void)(gem_buf_push_fn(NULL, _t12759, 2));
     }
-#line 1747 "compiler/codegen.gem"
-    gem_set_line(1747);
+#line 1748 "compiler/codegen.gem"
+    gem_set_line(1748);
     GemVal _t12761 = gem_v_b;
     GemVal _t12760[] = {gem_v_p, GEM_STR_LIT("while (1) {\n", 12)};
     GemVal _t12762[] = {_t12761, gem_interp(2, _t12760)};
     (void)(gem_buf_push_fn(NULL, _t12762, 2));
-#line 1748 "compiler/codegen.gem"
-    gem_set_line(1748);
+#line 1749 "compiler/codegen.gem"
+    gem_set_line(1749);
     GemVal _t12764 = gem_g___mod_codegen_pad_for;
     GemVal _t12763[] = {gem_add(gem_v_indent, gem_int(1))};
-    gem_check_callable(_t12764, "compiler/codegen.gem", 1748);
+    gem_check_callable(_t12764, "compiler/codegen.gem", 1749);
     GemVal gem_v_p2 = _t12764.fn(_t12764.env, _t12763, 1);
-#line 1750 "compiler/codegen.gem"
-    gem_set_line(1750);
+#line 1751 "compiler/codegen.gem"
+    gem_set_line(1751);
     GemVal _t12767 = gem_v_b;
     GemVal _t12765 = gem_v_p2;
     GemVal _t12766[] = {_t12765, GEM_STR_LIT("GemProcess *", 12), gem_v_proc_tmp, GEM_STR_LIT(" = &gem_proc_table[gem_current_pid];\n", 37)};
     GemVal _t12768[] = {_t12767, gem_interp(4, _t12766)};
     (void)(gem_buf_push_fn(NULL, _t12768, 2));
-#line 1751 "compiler/codegen.gem"
-    gem_set_line(1751);
+#line 1752 "compiler/codegen.gem"
+    gem_set_line(1752);
     GemVal _t12771 = gem_v_b;
     GemVal _t12769 = gem_v_p2;
     GemVal _t12770[] = {_t12769, GEM_STR_LIT("GemMsgNode *", 12), gem_v_prev_tmp, GEM_STR_LIT(" = NULL;\n", 9)};
     GemVal _t12772[] = {_t12771, gem_interp(4, _t12770)};
     (void)(gem_buf_push_fn(NULL, _t12772, 2));
-#line 1752 "compiler/codegen.gem"
-    gem_set_line(1752);
+#line 1753 "compiler/codegen.gem"
+    gem_set_line(1753);
     GemVal _t12776 = gem_v_b;
     GemVal _t12774 = gem_v_p2;
     GemVal _t12773 = gem_v_cur_tmp;
     GemVal _t12775[] = {_t12774, GEM_STR_LIT("GemMsgNode *", 12), _t12773, GEM_STR_LIT(" = ", 3), gem_v_proc_tmp, GEM_STR_LIT("->mailbox.head;\n", 16)};
     GemVal _t12777[] = {_t12776, gem_interp(6, _t12775)};
     (void)(gem_buf_push_fn(NULL, _t12777, 2));
-#line 1753 "compiler/codegen.gem"
-    gem_set_line(1753);
+#line 1754 "compiler/codegen.gem"
+    gem_set_line(1754);
     GemVal _t12780 = gem_v_b;
     GemVal _t12778 = gem_v_p2;
     GemVal _t12779[] = {_t12778, gem_v_matched_tmp, GEM_STR_LIT(" = -1;\n", 7)};
     GemVal _t12781[] = {_t12780, gem_interp(3, _t12779)};
     (void)(gem_buf_push_fn(NULL, _t12781, 2));
-#line 1755 "compiler/codegen.gem"
-    gem_set_line(1755);
+#line 1756 "compiler/codegen.gem"
+    gem_set_line(1756);
     GemVal gem_v___val_325 = GEM_NIL;
-#line 1755 "compiler/codegen.gem"
-    gem_set_line(1755);
+#line 1756 "compiler/codegen.gem"
+    gem_set_line(1756);
     if (gem_truthy(gem_eq(gem_len_1(gem_v_arms), gem_int(0)))) {
-#line 1755 "compiler/codegen.gem"
-        gem_set_line(1755);
+#line 1756 "compiler/codegen.gem"
+        gem_set_line(1756);
     GemVal _t12782[] = {gem_v_p2, GEM_STR_LIT("while (0) {\n", 12)};
         gem_v___val_325 = gem_interp(2, _t12782);
     } else {
-#line 1755 "compiler/codegen.gem"
-        gem_set_line(1755);
+#line 1756 "compiler/codegen.gem"
+        gem_set_line(1756);
     GemVal _t12783 = gem_v_p2;
     GemVal _t12784[] = {_t12783, GEM_STR_LIT("while (", 7), gem_v_cur_tmp, GEM_STR_LIT(") {\n", 4)};
         gem_v___val_325 = gem_interp(4, _t12784);
     }
-#line 1755 "compiler/codegen.gem"
-    gem_set_line(1755);
+#line 1756 "compiler/codegen.gem"
+    gem_set_line(1756);
     GemVal _t12785 = gem_v_b;
     GemVal _t12786[] = {_t12785, gem_v___val_325};
     (void)(gem_buf_push_fn(NULL, _t12786, 2));
-#line 1756 "compiler/codegen.gem"
-    gem_set_line(1756);
-    GemVal _t12788 = gem_g___mod_codegen_pad_for;
-    GemVal _t12787[] = {gem_add(gem_v_indent, gem_int(2))};
-    gem_check_callable(_t12788, "compiler/codegen.gem", 1756);
-    GemVal gem_v_p3 = _t12788.fn(_t12788.env, _t12787, 1);
 #line 1757 "compiler/codegen.gem"
     gem_set_line(1757);
+    GemVal _t12788 = gem_g___mod_codegen_pad_for;
+    GemVal _t12787[] = {gem_add(gem_v_indent, gem_int(2))};
+    gem_check_callable(_t12788, "compiler/codegen.gem", 1757);
+    GemVal gem_v_p3 = _t12788.fn(_t12788.env, _t12787, 1);
+#line 1758 "compiler/codegen.gem"
+    gem_set_line(1758);
     GemVal _t12792 = gem_v_b;
     GemVal _t12790 = gem_v_p3;
     GemVal _t12789 = gem_v_recv_tmp;
     GemVal _t12791[] = {_t12790, _t12789, GEM_STR_LIT(" = ", 3), gem_v_cur_tmp, GEM_STR_LIT("->value;\n", 9)};
     GemVal _t12793[] = {_t12792, gem_interp(5, _t12791)};
     (void)(gem_buf_push_fn(NULL, _t12793, 2));
-#line 1759 "compiler/codegen.gem"
-    gem_set_line(1759);
+#line 1760 "compiler/codegen.gem"
+    gem_set_line(1760);
     GemVal gem_v___for_i_326 = gem_int(0);
-#line 1759 "compiler/codegen.gem"
-    gem_set_line(1759);
+#line 1760 "compiler/codegen.gem"
+    gem_set_line(1760);
     GemVal gem_v___for_limit_326 = gem_len_1(gem_v_arms);
-#line 1759 "compiler/codegen.gem"
-    gem_set_line(1759);
+#line 1760 "compiler/codegen.gem"
+    gem_set_line(1760);
     GemArenaMark _mk336;
     gem_arena_mark(&_mk336);
     while (1) {
@@ -55147,36 +55150,36 @@ static GemVal __anon_183(void *_env, GemVal *args, int argc) {
         }
     GemVal _t12794 = gem_v___for_i_326;
         if (!gem_truthy(gem_lt(_t12794, gem_v___for_limit_326))) break;
-#line 1759 "compiler/codegen.gem"
-        gem_set_line(1759);
-        GemVal gem_v_i = gem_v___for_i_326;
-#line 1759 "compiler/codegen.gem"
-        gem_set_line(1759);
-        gem_v___for_i_326 = gem_add(gem_v___for_i_326, gem_int(1));
 #line 1760 "compiler/codegen.gem"
         gem_set_line(1760);
-    GemVal _t12795 = gem_v_arms;
-        GemVal gem_v_arm = gem_table_get(_t12795, gem_v_i);
+        GemVal gem_v_i = gem_v___for_i_326;
+#line 1760 "compiler/codegen.gem"
+        gem_set_line(1760);
+        gem_v___for_i_326 = gem_add(gem_v___for_i_326, gem_int(1));
 #line 1761 "compiler/codegen.gem"
         gem_set_line(1761);
+    GemVal _t12795 = gem_v_arms;
+        GemVal gem_v_arm = gem_table_get(_t12795, gem_v_i);
+#line 1762 "compiler/codegen.gem"
+        gem_set_line(1762);
     GemVal _t12798 = (*gem_v_compile_expr);
     GemVal _t12796 = gem_v_arm;
     static GemICacheSlot _ic_2137 = {0};
     GemVal _t12797[] = {gem_table_get_cached(_t12796, "value", &_ic_2137)};
-    gem_check_callable(_t12798, "compiler/codegen.gem", 1761);
+    gem_check_callable(_t12798, "compiler/codegen.gem", 1762);
         GemVal gem_v_cond_r = _t12798.fn(_t12798.env, _t12797, 1);
-#line 1762 "compiler/codegen.gem"
-        gem_set_line(1762);
-        if (gem_truthy(gem_eq(gem_v_i, gem_int(0)))) {
 #line 1763 "compiler/codegen.gem"
-            gem_set_line(1763);
+        gem_set_line(1763);
+        if (gem_truthy(gem_eq(gem_v_i, gem_int(0)))) {
+#line 1764 "compiler/codegen.gem"
+            gem_set_line(1764);
     GemVal _t12800 = gem_v_b;
     GemVal _t12799 = gem_v_cond_r;
     static GemICacheSlot _ic_2138 = {0};
     GemVal _t12801[] = {_t12800, gem_table_get_cached(_t12799, "setup", &_ic_2138)};
             (void)(gem_buf_push_fn(NULL, _t12801, 2));
-#line 1764 "compiler/codegen.gem"
-            gem_set_line(1764);
+#line 1765 "compiler/codegen.gem"
+            gem_set_line(1765);
     GemVal _t12805 = gem_v_b;
     GemVal _t12803 = gem_v_p3;
     GemVal _t12802 = gem_v_cond_r;
@@ -55185,21 +55188,21 @@ static GemVal __anon_183(void *_env, GemVal *args, int argc) {
     GemVal _t12806[] = {_t12805, gem_interp(4, _t12804)};
             (void)(gem_buf_push_fn(NULL, _t12806, 2));
         } else {
-#line 1766 "compiler/codegen.gem"
-            gem_set_line(1766);
+#line 1767 "compiler/codegen.gem"
+            gem_set_line(1767);
     GemVal _t12808 = gem_v_b;
     GemVal _t12807[] = {gem_v_p3, GEM_STR_LIT("} else {\n", 9)};
     GemVal _t12809[] = {_t12808, gem_interp(2, _t12807)};
             (void)(gem_buf_push_fn(NULL, _t12809, 2));
-#line 1767 "compiler/codegen.gem"
-            gem_set_line(1767);
+#line 1768 "compiler/codegen.gem"
+            gem_set_line(1768);
     GemVal _t12811 = gem_v_b;
     GemVal _t12810 = gem_v_cond_r;
     static GemICacheSlot _ic_2140 = {0};
     GemVal _t12812[] = {_t12811, gem_table_get_cached(_t12810, "setup", &_ic_2140)};
             (void)(gem_buf_push_fn(NULL, _t12812, 2));
-#line 1768 "compiler/codegen.gem"
-            gem_set_line(1768);
+#line 1769 "compiler/codegen.gem"
+            gem_set_line(1769);
     GemVal _t12816 = gem_v_b;
     GemVal _t12814 = gem_v_p3;
     GemVal _t12813 = gem_v_cond_r;
@@ -55208,12 +55211,12 @@ static GemVal __anon_183(void *_env, GemVal *args, int argc) {
     GemVal _t12817[] = {_t12816, gem_interp(4, _t12815)};
             (void)(gem_buf_push_fn(NULL, _t12817, 2));
         }
-#line 1770 "compiler/codegen.gem"
-        gem_set_line(1770);
+#line 1771 "compiler/codegen.gem"
+        gem_set_line(1771);
     GemVal _t12823 = gem_v_b;
     GemVal _t12819 = gem_g___mod_codegen_pad_for;
     GemVal _t12818[] = {gem_add(gem_v_indent, gem_int(3))};
-    gem_check_callable(_t12819, "compiler/codegen.gem", 1770);
+    gem_check_callable(_t12819, "compiler/codegen.gem", 1771);
     GemVal _t12821 = _t12819.fn(_t12819.env, _t12818, 1);
     GemVal _t12820 = gem_v_matched_tmp;
     GemVal _t12822[] = {_t12821, _t12820, GEM_STR_LIT(" = ", 3), gem_v_i, GEM_STR_LIT(";\n", 2)};
@@ -55221,14 +55224,14 @@ static GemVal __anon_183(void *_env, GemVal *args, int argc) {
         (void)(gem_buf_push_fn(NULL, _t12824, 2));
     }
 
-#line 1772 "compiler/codegen.gem"
-    gem_set_line(1772);
+#line 1773 "compiler/codegen.gem"
+    gem_set_line(1773);
     GemVal gem_v___for_i_327 = gem_int(0);
-#line 1772 "compiler/codegen.gem"
-    gem_set_line(1772);
+#line 1773 "compiler/codegen.gem"
+    gem_set_line(1773);
     GemVal gem_v___for_limit_327 = gem_len_1(gem_v_arms);
-#line 1772 "compiler/codegen.gem"
-    gem_set_line(1772);
+#line 1773 "compiler/codegen.gem"
+    gem_set_line(1773);
     GemArenaMark _mk337;
     gem_arena_mark(&_mk337);
     while (1) {
@@ -55239,48 +55242,48 @@ static GemVal __anon_183(void *_env, GemVal *args, int argc) {
         }
     GemVal _t12825 = gem_v___for_i_327;
         if (!gem_truthy(gem_lt(_t12825, gem_v___for_limit_327))) break;
-#line 1772 "compiler/codegen.gem"
-        gem_set_line(1772);
-        GemVal gem_v_i = gem_v___for_i_327;
-#line 1772 "compiler/codegen.gem"
-        gem_set_line(1772);
-        gem_v___for_i_327 = gem_add(gem_v___for_i_327, gem_int(1));
 #line 1773 "compiler/codegen.gem"
         gem_set_line(1773);
+        GemVal gem_v_i = gem_v___for_i_327;
+#line 1773 "compiler/codegen.gem"
+        gem_set_line(1773);
+        gem_v___for_i_327 = gem_add(gem_v___for_i_327, gem_int(1));
+#line 1774 "compiler/codegen.gem"
+        gem_set_line(1774);
     GemVal _t12827 = gem_v_b;
     GemVal _t12826[] = {gem_v_p3, GEM_STR_LIT("}", 1)};
     GemVal _t12828[] = {_t12827, gem_interp(2, _t12826)};
         (void)(gem_buf_push_fn(NULL, _t12828, 2));
-#line 1774 "compiler/codegen.gem"
-        gem_set_line(1774);
+#line 1775 "compiler/codegen.gem"
+        gem_set_line(1775);
     GemVal _t12829 = gem_v_i;
         if (gem_truthy(gem_lt(_t12829, gem_sub(gem_len_1(gem_v_arms), gem_int(1))))) {
-#line 1775 "compiler/codegen.gem"
-            gem_set_line(1775);
+#line 1776 "compiler/codegen.gem"
+            gem_set_line(1776);
     GemVal _t12830[] = {gem_v_b, GEM_STR_LIT("\n", 1)};
             (void)(gem_buf_push_fn(NULL, _t12830, 2));
         }
     }
 
-#line 1778 "compiler/codegen.gem"
-    gem_set_line(1778);
+#line 1779 "compiler/codegen.gem"
+    gem_set_line(1779);
     GemVal _t12831[] = {gem_v_b, GEM_STR_LIT("\n", 1)};
     (void)(gem_buf_push_fn(NULL, _t12831, 2));
-#line 1780 "compiler/codegen.gem"
-    gem_set_line(1780);
+#line 1781 "compiler/codegen.gem"
+    gem_set_line(1781);
     GemVal _t12834 = gem_v_b;
     GemVal _t12832 = gem_v_p3;
     GemVal _t12833[] = {_t12832, GEM_STR_LIT("if (", 4), gem_v_matched_tmp, GEM_STR_LIT(" >= 0) {\n", 9)};
     GemVal _t12835[] = {_t12834, gem_interp(4, _t12833)};
     (void)(gem_buf_push_fn(NULL, _t12835, 2));
-#line 1781 "compiler/codegen.gem"
-    gem_set_line(1781);
-    GemVal _t12837 = gem_g___mod_codegen_pad_for;
-    GemVal _t12836[] = {gem_add(gem_v_indent, gem_int(3))};
-    gem_check_callable(_t12837, "compiler/codegen.gem", 1781);
-    GemVal gem_v_p4 = _t12837.fn(_t12837.env, _t12836, 1);
 #line 1782 "compiler/codegen.gem"
     gem_set_line(1782);
+    GemVal _t12837 = gem_g___mod_codegen_pad_for;
+    GemVal _t12836[] = {gem_add(gem_v_indent, gem_int(3))};
+    gem_check_callable(_t12837, "compiler/codegen.gem", 1782);
+    GemVal gem_v_p4 = _t12837.fn(_t12837.env, _t12836, 1);
+#line 1783 "compiler/codegen.gem"
+    gem_set_line(1783);
     GemVal _t12842 = gem_v_b;
     GemVal _t12840 = gem_v_p4;
     GemVal _t12839 = gem_v_proc_tmp;
@@ -55288,131 +55291,131 @@ static GemVal __anon_183(void *_env, GemVal *args, int argc) {
     GemVal _t12841[] = {_t12840, GEM_STR_LIT("gem_mailbox_remove(&", 20), _t12839, GEM_STR_LIT("->mailbox, ", 11), _t12838, GEM_STR_LIT(", ", 2), gem_v_cur_tmp, GEM_STR_LIT(");\n", 3)};
     GemVal _t12843[] = {_t12842, gem_interp(8, _t12841)};
     (void)(gem_buf_push_fn(NULL, _t12843, 2));
-#line 1783 "compiler/codegen.gem"
-    gem_set_line(1783);
+#line 1784 "compiler/codegen.gem"
+    gem_set_line(1784);
     GemVal _t12845 = gem_v_b;
     GemVal _t12844[] = {gem_v_p4, GEM_STR_LIT("break;\n", 7)};
     GemVal _t12846[] = {_t12845, gem_interp(2, _t12844)};
     (void)(gem_buf_push_fn(NULL, _t12846, 2));
-#line 1784 "compiler/codegen.gem"
-    gem_set_line(1784);
+#line 1785 "compiler/codegen.gem"
+    gem_set_line(1785);
     GemVal _t12848 = gem_v_b;
     GemVal _t12847[] = {gem_v_p3, GEM_STR_LIT("}\n", 2)};
     GemVal _t12849[] = {_t12848, gem_interp(2, _t12847)};
     (void)(gem_buf_push_fn(NULL, _t12849, 2));
-#line 1786 "compiler/codegen.gem"
-    gem_set_line(1786);
+#line 1787 "compiler/codegen.gem"
+    gem_set_line(1787);
     GemVal _t12853 = gem_v_b;
     GemVal _t12851 = gem_v_p3;
     GemVal _t12850 = gem_v_prev_tmp;
     GemVal _t12852[] = {_t12851, _t12850, GEM_STR_LIT(" = ", 3), gem_v_cur_tmp, GEM_STR_LIT(";\n", 2)};
     GemVal _t12854[] = {_t12853, gem_interp(5, _t12852)};
     (void)(gem_buf_push_fn(NULL, _t12854, 2));
-#line 1787 "compiler/codegen.gem"
-    gem_set_line(1787);
+#line 1788 "compiler/codegen.gem"
+    gem_set_line(1788);
     GemVal _t12858 = gem_v_b;
     GemVal _t12856 = gem_v_p3;
     GemVal _t12855 = gem_v_cur_tmp;
     GemVal _t12857[] = {_t12856, _t12855, GEM_STR_LIT(" = ", 3), gem_v_cur_tmp, GEM_STR_LIT("->next;\n", 8)};
     GemVal _t12859[] = {_t12858, gem_interp(5, _t12857)};
     (void)(gem_buf_push_fn(NULL, _t12859, 2));
-#line 1788 "compiler/codegen.gem"
-    gem_set_line(1788);
+#line 1789 "compiler/codegen.gem"
+    gem_set_line(1789);
     GemVal _t12861 = gem_v_b;
     GemVal _t12860[] = {gem_v_p2, GEM_STR_LIT("}\n", 2)};
     GemVal _t12862[] = {_t12861, gem_interp(2, _t12860)};
     (void)(gem_buf_push_fn(NULL, _t12862, 2));
-#line 1790 "compiler/codegen.gem"
-    gem_set_line(1790);
+#line 1791 "compiler/codegen.gem"
+    gem_set_line(1791);
     GemVal _t12865 = gem_v_b;
     GemVal _t12863 = gem_v_p2;
     GemVal _t12864[] = {_t12863, GEM_STR_LIT("if (", 4), gem_v_matched_tmp, GEM_STR_LIT(" >= 0) break;\n", 14)};
     GemVal _t12866[] = {_t12865, gem_interp(4, _t12864)};
     (void)(gem_buf_push_fn(NULL, _t12866, 2));
-#line 1791 "compiler/codegen.gem"
-    gem_set_line(1791);
-    if (gem_truthy(gem_neq(gem_v_after_ms, GEM_NIL))) {
 #line 1792 "compiler/codegen.gem"
-        gem_set_line(1792);
+    gem_set_line(1792);
+    if (gem_truthy(gem_neq(gem_v_after_ms, GEM_NIL))) {
+#line 1793 "compiler/codegen.gem"
+        gem_set_line(1793);
     GemVal _t12869 = gem_v_b;
     GemVal _t12867 = gem_v_p2;
     GemVal _t12868[] = {_t12867, GEM_STR_LIT("if (gem_now_ms() >= ", 20), gem_v_deadline_tmp, GEM_STR_LIT(") {\n", 4)};
     GemVal _t12870[] = {_t12869, gem_interp(4, _t12868)};
         (void)(gem_buf_push_fn(NULL, _t12870, 2));
-#line 1793 "compiler/codegen.gem"
-        gem_set_line(1793);
+#line 1794 "compiler/codegen.gem"
+        gem_set_line(1794);
     GemVal _t12873 = gem_v_b;
     GemVal _t12871 = gem_v_p2;
     GemVal _t12872[] = {_t12871, GEM_STR_LIT("    ", 4), gem_v_matched_tmp, GEM_STR_LIT(" = -2;\n", 7)};
     GemVal _t12874[] = {_t12873, gem_interp(4, _t12872)};
         (void)(gem_buf_push_fn(NULL, _t12874, 2));
-#line 1794 "compiler/codegen.gem"
-        gem_set_line(1794);
+#line 1795 "compiler/codegen.gem"
+        gem_set_line(1795);
     GemVal _t12876 = gem_v_b;
     GemVal _t12875[] = {gem_v_p2, GEM_STR_LIT("    break;\n", 11)};
     GemVal _t12877[] = {_t12876, gem_interp(2, _t12875)};
         (void)(gem_buf_push_fn(NULL, _t12877, 2));
-#line 1795 "compiler/codegen.gem"
-        gem_set_line(1795);
+#line 1796 "compiler/codegen.gem"
+        gem_set_line(1796);
     GemVal _t12879 = gem_v_b;
     GemVal _t12878[] = {gem_v_p2, GEM_STR_LIT("}\n", 2)};
     GemVal _t12880[] = {_t12879, gem_interp(2, _t12878)};
         (void)(gem_buf_push_fn(NULL, _t12880, 2));
-#line 1796 "compiler/codegen.gem"
-        gem_set_line(1796);
+#line 1797 "compiler/codegen.gem"
+        gem_set_line(1797);
     GemVal _t12883 = gem_v_b;
     GemVal _t12881 = gem_v_p2;
     GemVal _t12882[] = {_t12881, GEM_STR_LIT("gem_selective_yield(", 20), gem_v_deadline_tmp, GEM_STR_LIT(");\n", 3)};
     GemVal _t12884[] = {_t12883, gem_interp(4, _t12882)};
         (void)(gem_buf_push_fn(NULL, _t12884, 2));
-#line 1797 "compiler/codegen.gem"
-        gem_set_line(1797);
+#line 1798 "compiler/codegen.gem"
+        gem_set_line(1798);
     GemVal _t12887 = gem_v_b;
     GemVal _t12885 = gem_v_p2;
     GemVal _t12886[] = {_t12885, GEM_STR_LIT("if (", 4), gem_v_proc_tmp, GEM_STR_LIT("->timed_out) {\n", 15)};
     GemVal _t12888[] = {_t12887, gem_interp(4, _t12886)};
         (void)(gem_buf_push_fn(NULL, _t12888, 2));
-#line 1798 "compiler/codegen.gem"
-        gem_set_line(1798);
+#line 1799 "compiler/codegen.gem"
+        gem_set_line(1799);
     GemVal _t12891 = gem_v_b;
     GemVal _t12889 = gem_v_p2;
     GemVal _t12890[] = {_t12889, GEM_STR_LIT("    ", 4), gem_v_matched_tmp, GEM_STR_LIT(" = -2;\n", 7)};
     GemVal _t12892[] = {_t12891, gem_interp(4, _t12890)};
         (void)(gem_buf_push_fn(NULL, _t12892, 2));
-#line 1799 "compiler/codegen.gem"
-        gem_set_line(1799);
+#line 1800 "compiler/codegen.gem"
+        gem_set_line(1800);
     GemVal _t12894 = gem_v_b;
     GemVal _t12893[] = {gem_v_p2, GEM_STR_LIT("    break;\n", 11)};
     GemVal _t12895[] = {_t12894, gem_interp(2, _t12893)};
         (void)(gem_buf_push_fn(NULL, _t12895, 2));
-#line 1800 "compiler/codegen.gem"
-        gem_set_line(1800);
+#line 1801 "compiler/codegen.gem"
+        gem_set_line(1801);
     GemVal _t12897 = gem_v_b;
     GemVal _t12896[] = {gem_v_p2, GEM_STR_LIT("}\n", 2)};
     GemVal _t12898[] = {_t12897, gem_interp(2, _t12896)};
         (void)(gem_buf_push_fn(NULL, _t12898, 2));
     } else {
-#line 1802 "compiler/codegen.gem"
-        gem_set_line(1802);
+#line 1803 "compiler/codegen.gem"
+        gem_set_line(1803);
     GemVal _t12900 = gem_v_b;
     GemVal _t12899[] = {gem_v_p2, GEM_STR_LIT("gem_selective_yield(-1);\n", 25)};
     GemVal _t12901[] = {_t12900, gem_interp(2, _t12899)};
         (void)(gem_buf_push_fn(NULL, _t12901, 2));
     }
-#line 1805 "compiler/codegen.gem"
-    gem_set_line(1805);
+#line 1806 "compiler/codegen.gem"
+    gem_set_line(1806);
     GemVal _t12903 = gem_v_b;
     GemVal _t12902[] = {gem_v_p, GEM_STR_LIT("}\n", 2)};
     GemVal _t12904[] = {_t12903, gem_interp(2, _t12902)};
     (void)(gem_buf_push_fn(NULL, _t12904, 2));
-#line 1807 "compiler/codegen.gem"
-    gem_set_line(1807);
+#line 1808 "compiler/codegen.gem"
+    gem_set_line(1808);
     GemVal gem_v___for_i_329 = gem_int(0);
-#line 1807 "compiler/codegen.gem"
-    gem_set_line(1807);
+#line 1808 "compiler/codegen.gem"
+    gem_set_line(1808);
     GemVal gem_v___for_limit_329 = gem_len_1(gem_v_arms);
-#line 1807 "compiler/codegen.gem"
-    gem_set_line(1807);
+#line 1808 "compiler/codegen.gem"
+    gem_set_line(1808);
     GemArenaMark _mk338;
     gem_arena_mark(&_mk338);
     while (1) {
@@ -55423,21 +55426,21 @@ static GemVal __anon_183(void *_env, GemVal *args, int argc) {
         }
     GemVal _t12905 = gem_v___for_i_329;
         if (!gem_truthy(gem_lt(_t12905, gem_v___for_limit_329))) break;
-#line 1807 "compiler/codegen.gem"
-        gem_set_line(1807);
-        GemVal gem_v_i = gem_v___for_i_329;
-#line 1807 "compiler/codegen.gem"
-        gem_set_line(1807);
-        gem_v___for_i_329 = gem_add(gem_v___for_i_329, gem_int(1));
 #line 1808 "compiler/codegen.gem"
         gem_set_line(1808);
-    GemVal _t12906 = gem_v_arms;
-        GemVal gem_v_arm = gem_table_get(_t12906, gem_v_i);
+        GemVal gem_v_i = gem_v___for_i_329;
+#line 1808 "compiler/codegen.gem"
+        gem_set_line(1808);
+        gem_v___for_i_329 = gem_add(gem_v___for_i_329, gem_int(1));
 #line 1809 "compiler/codegen.gem"
         gem_set_line(1809);
-        if (gem_truthy(gem_eq(gem_v_i, gem_int(0)))) {
+    GemVal _t12906 = gem_v_arms;
+        GemVal gem_v_arm = gem_table_get(_t12906, gem_v_i);
 #line 1810 "compiler/codegen.gem"
-            gem_set_line(1810);
+        gem_set_line(1810);
+        if (gem_truthy(gem_eq(gem_v_i, gem_int(0)))) {
+#line 1811 "compiler/codegen.gem"
+            gem_set_line(1811);
     GemVal _t12910 = gem_v_b;
     GemVal _t12908 = gem_v_p;
     GemVal _t12907 = gem_v_matched_tmp;
@@ -55445,8 +55448,8 @@ static GemVal __anon_183(void *_env, GemVal *args, int argc) {
     GemVal _t12911[] = {_t12910, gem_interp(6, _t12909)};
             (void)(gem_buf_push_fn(NULL, _t12911, 2));
         } else {
-#line 1812 "compiler/codegen.gem"
-            gem_set_line(1812);
+#line 1813 "compiler/codegen.gem"
+            gem_set_line(1813);
     GemVal _t12915 = gem_v_b;
     GemVal _t12913 = gem_v_p;
     GemVal _t12912 = gem_v_matched_tmp;
@@ -55454,31 +55457,31 @@ static GemVal __anon_183(void *_env, GemVal *args, int argc) {
     GemVal _t12916[] = {_t12915, gem_interp(6, _t12914)};
             (void)(gem_buf_push_fn(NULL, _t12916, 2));
         }
-#line 1814 "compiler/codegen.gem"
-        gem_set_line(1814);
+#line 1815 "compiler/codegen.gem"
+        gem_set_line(1815);
     GemVal _t12921 = gem_g___mod_codegen_set_union;
     GemVal _t12917 = (*gem_v_fs);
     static GemICacheSlot _ic_2142 = {0};
     GemVal _t12919 = gem_table_get_cached(_t12917, "fn_scope_locals", &_ic_2142);
     GemVal _t12918 = gem_table_new_braces();
     GemVal _t12920[] = {_t12919, _t12918};
-    gem_check_callable(_t12921, "compiler/codegen.gem", 1814);
+    gem_check_callable(_t12921, "compiler/codegen.gem", 1815);
         GemVal gem_v_saved_arm = _t12921.fn(_t12921.env, _t12920, 2);
-#line 1815 "compiler/codegen.gem"
-        gem_set_line(1815);
+#line 1816 "compiler/codegen.gem"
+        gem_set_line(1816);
     GemVal _t12922 = gem_v_arm;
     static GemICacheSlot _ic_2143 = {0};
         if (gem_truthy(gem_neq(gem_table_get_cached(_t12922, "bindings", &_ic_2143), GEM_NIL))) {
-#line 1816 "compiler/codegen.gem"
-            gem_set_line(1816);
+#line 1817 "compiler/codegen.gem"
+            gem_set_line(1817);
     GemVal _t12923 = gem_v_arm;
     static GemICacheSlot _ic_2144 = {0};
             GemVal gem_v___for_items_328 = gem_for_items_1(gem_table_get_cached(_t12923, "bindings", &_ic_2144));
-#line 1816 "compiler/codegen.gem"
-            gem_set_line(1816);
+#line 1817 "compiler/codegen.gem"
+            gem_set_line(1817);
             GemVal gem_v___for_i_328 = gem_int(0);
-#line 1816 "compiler/codegen.gem"
-            gem_set_line(1816);
+#line 1817 "compiler/codegen.gem"
+            gem_set_line(1817);
             GemArenaMark _mk339;
             gem_arena_mark(&_mk339);
             while (1) {
@@ -55489,31 +55492,31 @@ static GemVal __anon_183(void *_env, GemVal *args, int argc) {
                 }
     GemVal _t12924 = gem_v___for_i_328;
                 if (!gem_truthy(gem_lt(_t12924, gem_for_len_1(gem_v___for_items_328)))) break;
-#line 1816 "compiler/codegen.gem"
-                gem_set_line(1816);
-    GemVal _t12925 = gem_v___for_items_328;
-                GemVal gem_v_binding = gem_table_get(_t12925, gem_v___for_i_328);
-#line 1816 "compiler/codegen.gem"
-                gem_set_line(1816);
-                gem_v___for_i_328 = gem_add(gem_v___for_i_328, gem_int(1));
 #line 1817 "compiler/codegen.gem"
                 gem_set_line(1817);
+    GemVal _t12925 = gem_v___for_items_328;
+                GemVal gem_v_binding = gem_table_get(_t12925, gem_v___for_i_328);
+#line 1817 "compiler/codegen.gem"
+                gem_set_line(1817);
+                gem_v___for_i_328 = gem_add(gem_v___for_i_328, gem_int(1));
+#line 1818 "compiler/codegen.gem"
+                gem_set_line(1818);
     GemVal _t12929 = gem_v_b;
     GemVal _t12928 = (*gem_v_compile_stmt);
     GemVal _t12926 = gem_v_binding;
     GemVal _t12927[] = {_t12926, gem_add(gem_v_indent, gem_int(1))};
-    gem_check_callable(_t12928, "compiler/codegen.gem", 1817);
+    gem_check_callable(_t12928, "compiler/codegen.gem", 1818);
     GemVal _t12930[] = {_t12929, _t12928.fn(_t12928.env, _t12927, 2)};
                 (void)(gem_buf_push_fn(NULL, _t12930, 2));
-#line 1818 "compiler/codegen.gem"
-                gem_set_line(1818);
+#line 1819 "compiler/codegen.gem"
+                gem_set_line(1819);
     GemVal _t12931[] = {gem_v_b, GEM_STR_LIT("\n", 1)};
                 (void)(gem_buf_push_fn(NULL, _t12931, 2));
             }
 
         }
-#line 1821 "compiler/codegen.gem"
-        gem_set_line(1821);
+#line 1822 "compiler/codegen.gem"
+        gem_set_line(1822);
     GemVal _t12937 = gem_v_b;
     GemVal _t12936 = (*gem_v_compile_stmts_tail);
     GemVal _t12932 = gem_v_arm;
@@ -55521,106 +55524,106 @@ static GemVal __anon_183(void *_env, GemVal *args, int argc) {
     GemVal _t12934 = gem_table_get_cached(_t12932, "body", &_ic_2145);
     GemVal _t12933 = gem_add(gem_v_indent, gem_int(1));
     GemVal _t12935[] = {_t12934, _t12933, gem_v_return_pos};
-    gem_check_callable(_t12936, "compiler/codegen.gem", 1821);
+    gem_check_callable(_t12936, "compiler/codegen.gem", 1822);
     GemVal _t12938[] = {_t12937, _t12936.fn(_t12936.env, _t12935, 3)};
         (void)(gem_buf_push_fn(NULL, _t12938, 2));
-#line 1822 "compiler/codegen.gem"
-        gem_set_line(1822);
+#line 1823 "compiler/codegen.gem"
+        gem_set_line(1823);
     GemVal _t12939 = (*gem_v_fs);
         gem_table_set(_t12939, GEM_STR_LIT("fn_scope_locals", 15), gem_v_saved_arm);
     }
 
-#line 1826 "compiler/codegen.gem"
-    gem_set_line(1826);
-    if (gem_truthy(gem_neq(gem_v_after_ms, GEM_NIL))) {
 #line 1827 "compiler/codegen.gem"
-        gem_set_line(1827);
-        if (gem_truthy(gem_eq(gem_len_1(gem_v_arms), gem_int(0)))) {
+    gem_set_line(1827);
+    if (gem_truthy(gem_neq(gem_v_after_ms, GEM_NIL))) {
 #line 1828 "compiler/codegen.gem"
-            gem_set_line(1828);
+        gem_set_line(1828);
+        if (gem_truthy(gem_eq(gem_len_1(gem_v_arms), gem_int(0)))) {
+#line 1829 "compiler/codegen.gem"
+            gem_set_line(1829);
     GemVal _t12941 = gem_v_b;
     GemVal _t12940[] = {gem_v_p, GEM_STR_LIT("{\n", 2)};
     GemVal _t12942[] = {_t12941, gem_interp(2, _t12940)};
             (void)(gem_buf_push_fn(NULL, _t12942, 2));
         } else {
-#line 1830 "compiler/codegen.gem"
-            gem_set_line(1830);
+#line 1831 "compiler/codegen.gem"
+            gem_set_line(1831);
     GemVal _t12944 = gem_v_b;
     GemVal _t12943[] = {gem_v_p, GEM_STR_LIT("} else {\n", 9)};
     GemVal _t12945[] = {_t12944, gem_interp(2, _t12943)};
             (void)(gem_buf_push_fn(NULL, _t12945, 2));
         }
-#line 1832 "compiler/codegen.gem"
-        gem_set_line(1832);
-        if (gem_truthy(gem_neq(gem_v_after_body, GEM_NIL))) {
 #line 1833 "compiler/codegen.gem"
-            gem_set_line(1833);
+        gem_set_line(1833);
+        if (gem_truthy(gem_neq(gem_v_after_body, GEM_NIL))) {
+#line 1834 "compiler/codegen.gem"
+            gem_set_line(1834);
     GemVal _t12950 = gem_g___mod_codegen_set_union;
     GemVal _t12946 = (*gem_v_fs);
     static GemICacheSlot _ic_2146 = {0};
     GemVal _t12948 = gem_table_get_cached(_t12946, "fn_scope_locals", &_ic_2146);
     GemVal _t12947 = gem_table_new_braces();
     GemVal _t12949[] = {_t12948, _t12947};
-    gem_check_callable(_t12950, "compiler/codegen.gem", 1833);
+    gem_check_callable(_t12950, "compiler/codegen.gem", 1834);
             GemVal gem_v_saved_after = _t12950.fn(_t12950.env, _t12949, 2);
-#line 1834 "compiler/codegen.gem"
-            gem_set_line(1834);
+#line 1835 "compiler/codegen.gem"
+            gem_set_line(1835);
     GemVal _t12955 = gem_v_b;
     GemVal _t12954 = (*gem_v_compile_stmts_tail);
     GemVal _t12952 = gem_v_after_body;
     GemVal _t12951 = gem_add(gem_v_indent, gem_int(1));
     GemVal _t12953[] = {_t12952, _t12951, gem_v_return_pos};
-    gem_check_callable(_t12954, "compiler/codegen.gem", 1834);
+    gem_check_callable(_t12954, "compiler/codegen.gem", 1835);
     GemVal _t12956[] = {_t12955, _t12954.fn(_t12954.env, _t12953, 3)};
             (void)(gem_buf_push_fn(NULL, _t12956, 2));
-#line 1835 "compiler/codegen.gem"
-            gem_set_line(1835);
+#line 1836 "compiler/codegen.gem"
+            gem_set_line(1836);
     GemVal _t12957 = (*gem_v_fs);
             gem_table_set(_t12957, GEM_STR_LIT("fn_scope_locals", 15), gem_v_saved_after);
         } else {
-#line 1836 "compiler/codegen.gem"
-            gem_set_line(1836);
-            if (gem_truthy(gem_v_return_pos)) {
 #line 1837 "compiler/codegen.gem"
-                gem_set_line(1837);
+            gem_set_line(1837);
+            if (gem_truthy(gem_v_return_pos)) {
+#line 1838 "compiler/codegen.gem"
+                gem_set_line(1838);
     GemVal _t12961 = gem_v_b;
     GemVal _t12960 = (*gem_v_compile_stmts_tail);
     GemVal _t12958 = gem_table_new();
     GemVal _t12959[] = {_t12958, gem_add(gem_v_indent, gem_int(1)), gem_bool(1)};
-    gem_check_callable(_t12960, "compiler/codegen.gem", 1837);
+    gem_check_callable(_t12960, "compiler/codegen.gem", 1838);
     GemVal _t12962[] = {_t12961, _t12960.fn(_t12960.env, _t12959, 3)};
                 (void)(gem_buf_push_fn(NULL, _t12962, 2));
             }
         }
     } else {
-#line 1839 "compiler/codegen.gem"
-        gem_set_line(1839);
-        if (gem_truthy(gem_v_return_pos)) {
 #line 1840 "compiler/codegen.gem"
-            gem_set_line(1840);
+        gem_set_line(1840);
+        if (gem_truthy(gem_v_return_pos)) {
+#line 1841 "compiler/codegen.gem"
+            gem_set_line(1841);
     GemVal _t12964 = gem_v_b;
     GemVal _t12963[] = {gem_v_p, GEM_STR_LIT("} else {\n", 9)};
     GemVal _t12965[] = {_t12964, gem_interp(2, _t12963)};
             (void)(gem_buf_push_fn(NULL, _t12965, 2));
-#line 1841 "compiler/codegen.gem"
-            gem_set_line(1841);
+#line 1842 "compiler/codegen.gem"
+            gem_set_line(1842);
     GemVal _t12969 = gem_v_b;
     GemVal _t12968 = (*gem_v_compile_stmts_tail);
     GemVal _t12966 = gem_table_new();
     GemVal _t12967[] = {_t12966, gem_add(gem_v_indent, gem_int(1)), gem_bool(1)};
-    gem_check_callable(_t12968, "compiler/codegen.gem", 1841);
+    gem_check_callable(_t12968, "compiler/codegen.gem", 1842);
     GemVal _t12970[] = {_t12969, _t12968.fn(_t12968.env, _t12967, 3)};
             (void)(gem_buf_push_fn(NULL, _t12970, 2));
         }
     }
-#line 1844 "compiler/codegen.gem"
-    gem_set_line(1844);
+#line 1845 "compiler/codegen.gem"
+    gem_set_line(1845);
     GemVal _t12972 = gem_v_b;
     GemVal _t12971[] = {gem_v_p, GEM_STR_LIT("}", 1)};
     GemVal _t12973[] = {_t12972, gem_interp(2, _t12971)};
     (void)(gem_buf_push_fn(NULL, _t12973, 2));
-#line 1845 "compiler/codegen.gem"
-    gem_set_line(1845);
+#line 1846 "compiler/codegen.gem"
+    gem_set_line(1846);
     GemVal _t12974[] = {gem_v_b};
     GemVal _t12975 = gem_to_string_fn(NULL, _t12974, 1);
     if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t12975, 1);
@@ -55641,60 +55644,60 @@ static GemVal __anon_184(void *_env, GemVal *args, int argc) {
     GemVal gem_v_params = (argc > 1) ? args[1] : GEM_NIL;
     GemVal gem_v_ret_type = (argc > 2) ? args[2] : GEM_NIL;
     GemVal gem_v_node = (argc > 3) ? args[3] : GEM_NIL;
-#line 1849 "compiler/codegen.gem"
-    gem_leaf_line = 1849;
-    GemVal gem_v___val_330 = GEM_NIL;
-#line 1849 "compiler/codegen.gem"
-    gem_leaf_line = 1849;
-    if (gem_truthy(gem_eq(gem_v_ret_type, GEM_STR_LIT("Int", 3)))) {
 #line 1850 "compiler/codegen.gem"
-        gem_leaf_line = 1850;
-        gem_v___val_330 = GEM_STR_LIT("int64_t", 7);
-    } else {
+    gem_leaf_line = 1850;
+    GemVal gem_v___val_330 = GEM_NIL;
+#line 1850 "compiler/codegen.gem"
+    gem_leaf_line = 1850;
+    if (gem_truthy(gem_eq(gem_v_ret_type, GEM_STR_LIT("Int", 3)))) {
 #line 1851 "compiler/codegen.gem"
         gem_leaf_line = 1851;
-        if (gem_truthy(gem_eq(gem_v_ret_type, GEM_STR_LIT("Float", 5)))) {
+        gem_v___val_330 = GEM_STR_LIT("int64_t", 7);
+    } else {
 #line 1852 "compiler/codegen.gem"
-            gem_leaf_line = 1852;
-            gem_v___val_330 = GEM_STR_LIT("double", 6);
-        } else {
+        gem_leaf_line = 1852;
+        if (gem_truthy(gem_eq(gem_v_ret_type, GEM_STR_LIT("Float", 5)))) {
 #line 1853 "compiler/codegen.gem"
             gem_leaf_line = 1853;
-            if (gem_truthy(gem_eq(gem_v_ret_type, GEM_STR_LIT("String", 6)))) {
+            gem_v___val_330 = GEM_STR_LIT("double", 6);
+        } else {
 #line 1854 "compiler/codegen.gem"
-                gem_leaf_line = 1854;
-                gem_v___val_330 = GEM_STR_LIT("char*", 5);
-            } else {
+            gem_leaf_line = 1854;
+            if (gem_truthy(gem_eq(gem_v_ret_type, GEM_STR_LIT("String", 6)))) {
 #line 1855 "compiler/codegen.gem"
                 gem_leaf_line = 1855;
-                if (gem_truthy(gem_eq(gem_v_ret_type, GEM_STR_LIT("Bool", 4)))) {
+                gem_v___val_330 = GEM_STR_LIT("char*", 5);
+            } else {
 #line 1856 "compiler/codegen.gem"
-                    gem_leaf_line = 1856;
-                    gem_v___val_330 = GEM_STR_LIT("int", 3);
-                } else {
+                gem_leaf_line = 1856;
+                if (gem_truthy(gem_eq(gem_v_ret_type, GEM_STR_LIT("Bool", 4)))) {
 #line 1857 "compiler/codegen.gem"
                     gem_leaf_line = 1857;
-                    if (gem_truthy(gem_eq(gem_v_ret_type, GEM_STR_LIT("Ptr", 3)))) {
+                    gem_v___val_330 = GEM_STR_LIT("int", 3);
+                } else {
 #line 1858 "compiler/codegen.gem"
-                        gem_leaf_line = 1858;
-                        gem_v___val_330 = GEM_STR_LIT("void*", 5);
-                    } else {
+                    gem_leaf_line = 1858;
+                    if (gem_truthy(gem_eq(gem_v_ret_type, GEM_STR_LIT("Ptr", 3)))) {
 #line 1859 "compiler/codegen.gem"
                         gem_leaf_line = 1859;
-                        if (gem_truthy(gem_eq(gem_v_ret_type, GEM_STR_LIT("Table", 5)))) {
+                        gem_v___val_330 = GEM_STR_LIT("void*", 5);
+                    } else {
 #line 1860 "compiler/codegen.gem"
-                            gem_leaf_line = 1860;
-                            gem_v___val_330 = GEM_STR_LIT("GemVal", 6);
-                        } else {
+                        gem_leaf_line = 1860;
+                        if (gem_truthy(gem_eq(gem_v_ret_type, GEM_STR_LIT("Table", 5)))) {
 #line 1861 "compiler/codegen.gem"
                             gem_leaf_line = 1861;
-                            if (gem_truthy(gem_eq(gem_v_ret_type, GEM_STR_LIT("Bytes", 5)))) {
+                            gem_v___val_330 = GEM_STR_LIT("GemVal", 6);
+                        } else {
 #line 1862 "compiler/codegen.gem"
-                                gem_leaf_line = 1862;
+                            gem_leaf_line = 1862;
+                            if (gem_truthy(gem_eq(gem_v_ret_type, GEM_STR_LIT("Bytes", 5)))) {
+#line 1863 "compiler/codegen.gem"
+                                gem_leaf_line = 1863;
                                 gem_v___val_330 = GEM_STR_LIT("GemBytes", 8);
                             } else {
-#line 1864 "compiler/codegen.gem"
-                                gem_leaf_line = 1864;
+#line 1865 "compiler/codegen.gem"
+                                gem_leaf_line = 1865;
                                 gem_v___val_330 = GEM_STR_LIT("void", 4);
                             }
                         }
@@ -55703,30 +55706,30 @@ static GemVal __anon_184(void *_env, GemVal *args, int argc) {
             }
         }
     }
-#line 1849 "compiler/codegen.gem"
-    gem_leaf_line = 1849;
+#line 1850 "compiler/codegen.gem"
+    gem_leaf_line = 1850;
     GemVal gem_v_c_ret = gem_v___val_330;
-#line 1867 "compiler/codegen.gem"
-    gem_leaf_line = 1867;
-    GemVal gem_v_c_params = GEM_STR_LIT("", 0);
 #line 1868 "compiler/codegen.gem"
     gem_leaf_line = 1868;
-    if (gem_truthy(gem_eq(gem_len_1(gem_v_params), gem_int(0)))) {
+    GemVal gem_v_c_params = GEM_STR_LIT("", 0);
 #line 1869 "compiler/codegen.gem"
-        gem_leaf_line = 1869;
+    gem_leaf_line = 1869;
+    if (gem_truthy(gem_eq(gem_len_1(gem_v_params), gem_int(0)))) {
+#line 1870 "compiler/codegen.gem"
+        gem_leaf_line = 1870;
         gem_v_c_params = GEM_STR_LIT("void", 4);
     } else {
-#line 1871 "compiler/codegen.gem"
-        gem_leaf_line = 1871;
+#line 1872 "compiler/codegen.gem"
+        gem_leaf_line = 1872;
         GemVal gem_v_first = gem_bool(1);
-#line 1872 "compiler/codegen.gem"
-        gem_leaf_line = 1872;
+#line 1873 "compiler/codegen.gem"
+        gem_leaf_line = 1873;
         GemVal gem_v___for_i_331 = gem_int(0);
-#line 1872 "compiler/codegen.gem"
-        gem_leaf_line = 1872;
+#line 1873 "compiler/codegen.gem"
+        gem_leaf_line = 1873;
         GemVal gem_v___for_limit_331 = gem_len_1(gem_v_params);
-#line 1872 "compiler/codegen.gem"
-        gem_leaf_line = 1872;
+#line 1873 "compiler/codegen.gem"
+        gem_leaf_line = 1873;
         int _t12980 = 0;
         GemArenaMark _mk340;
         gem_arena_mark(&_mk340);
@@ -55738,93 +55741,93 @@ static GemVal __anon_184(void *_env, GemVal *args, int argc) {
             }
     GemVal _t12979 = gem_v___for_i_331;
             if (!gem_truthy(gem_lt(_t12979, gem_v___for_limit_331))) break;
-#line 1872 "compiler/codegen.gem"
-            gem_leaf_line = 1872;
-            GemVal gem_v_i = gem_v___for_i_331;
-#line 1872 "compiler/codegen.gem"
-            gem_leaf_line = 1872;
-            gem_v___for_i_331 = gem_add(gem_v___for_i_331, gem_int(1));
 #line 1873 "compiler/codegen.gem"
             gem_leaf_line = 1873;
-            if (gem_truthy(gem_not(gem_v_first))) {
+            GemVal gem_v_i = gem_v___for_i_331;
+#line 1873 "compiler/codegen.gem"
+            gem_leaf_line = 1873;
+            gem_v___for_i_331 = gem_add(gem_v___for_i_331, gem_int(1));
 #line 1874 "compiler/codegen.gem"
-                gem_leaf_line = 1874;
+            gem_leaf_line = 1874;
+            if (gem_truthy(gem_not(gem_v_first))) {
+#line 1875 "compiler/codegen.gem"
+                gem_leaf_line = 1875;
                 gem_string_append_to(&gem_v_c_params, GEM_STR_LIT(", ", 2), &_t12980);
 
             }
-#line 1876 "compiler/codegen.gem"
-            gem_leaf_line = 1876;
-            gem_v_first = gem_bool(0);
 #line 1877 "compiler/codegen.gem"
             gem_leaf_line = 1877;
-    GemVal _t12981 = gem_v_params;
-            GemVal gem_v_pt = gem_table_get(gem_table_get(_t12981, gem_v_i), GEM_STR_LIT("type", 4));
+            gem_v_first = gem_bool(0);
 #line 1878 "compiler/codegen.gem"
             gem_leaf_line = 1878;
-            if (gem_truthy(gem_eq(gem_v_pt, GEM_STR_LIT("Int", 3)))) {
+    GemVal _t12981 = gem_v_params;
+            GemVal gem_v_pt = gem_table_get(gem_table_get(_t12981, gem_v_i), GEM_STR_LIT("type", 4));
 #line 1879 "compiler/codegen.gem"
-                gem_leaf_line = 1879;
+            gem_leaf_line = 1879;
+            if (gem_truthy(gem_eq(gem_v_pt, GEM_STR_LIT("Int", 3)))) {
+#line 1880 "compiler/codegen.gem"
+                gem_leaf_line = 1880;
                 gem_string_append_to(&gem_v_c_params, GEM_STR_LIT("int64_t", 7), &_t12980);
 
             } else {
-#line 1880 "compiler/codegen.gem"
-                gem_leaf_line = 1880;
-                if (gem_truthy(gem_eq(gem_v_pt, GEM_STR_LIT("Float", 5)))) {
 #line 1881 "compiler/codegen.gem"
-                    gem_leaf_line = 1881;
+                gem_leaf_line = 1881;
+                if (gem_truthy(gem_eq(gem_v_pt, GEM_STR_LIT("Float", 5)))) {
+#line 1882 "compiler/codegen.gem"
+                    gem_leaf_line = 1882;
                     gem_string_append_to(&gem_v_c_params, GEM_STR_LIT("double", 6), &_t12980);
 
                 } else {
-#line 1882 "compiler/codegen.gem"
-                    gem_leaf_line = 1882;
-                    if (gem_truthy(gem_eq(gem_v_pt, GEM_STR_LIT("String", 6)))) {
 #line 1883 "compiler/codegen.gem"
-                        gem_leaf_line = 1883;
+                    gem_leaf_line = 1883;
+                    if (gem_truthy(gem_eq(gem_v_pt, GEM_STR_LIT("String", 6)))) {
+#line 1884 "compiler/codegen.gem"
+                        gem_leaf_line = 1884;
                         gem_string_append_to(&gem_v_c_params, GEM_STR_LIT("const char*", 11), &_t12980);
 
                     } else {
-#line 1884 "compiler/codegen.gem"
-                        gem_leaf_line = 1884;
-                        if (gem_truthy(gem_eq(gem_v_pt, GEM_STR_LIT("Bool", 4)))) {
 #line 1885 "compiler/codegen.gem"
-                            gem_leaf_line = 1885;
+                        gem_leaf_line = 1885;
+                        if (gem_truthy(gem_eq(gem_v_pt, GEM_STR_LIT("Bool", 4)))) {
+#line 1886 "compiler/codegen.gem"
+                            gem_leaf_line = 1886;
                             gem_string_append_to(&gem_v_c_params, GEM_STR_LIT("int", 3), &_t12980);
 
                         } else {
-#line 1886 "compiler/codegen.gem"
-                            gem_leaf_line = 1886;
-                            if (gem_truthy(gem_eq(gem_v_pt, GEM_STR_LIT("Ptr", 3)))) {
 #line 1887 "compiler/codegen.gem"
-                                gem_leaf_line = 1887;
+                            gem_leaf_line = 1887;
+                            if (gem_truthy(gem_eq(gem_v_pt, GEM_STR_LIT("Ptr", 3)))) {
+#line 1888 "compiler/codegen.gem"
+                                gem_leaf_line = 1888;
                                 gem_string_append_to(&gem_v_c_params, GEM_STR_LIT("void*", 5), &_t12980);
 
                             } else {
-#line 1888 "compiler/codegen.gem"
-                                gem_leaf_line = 1888;
-                                if (gem_truthy(gem_eq(gem_v_pt, GEM_STR_LIT("Table", 5)))) {
 #line 1889 "compiler/codegen.gem"
-                                    gem_leaf_line = 1889;
+                                gem_leaf_line = 1889;
+                                if (gem_truthy(gem_eq(gem_v_pt, GEM_STR_LIT("Table", 5)))) {
+#line 1890 "compiler/codegen.gem"
+                                    gem_leaf_line = 1890;
                                     gem_string_append_to(&gem_v_c_params, GEM_STR_LIT("GemVal", 6), &_t12980);
 
                                 } else {
-#line 1890 "compiler/codegen.gem"
-                                    gem_leaf_line = 1890;
-                                    if (gem_truthy(gem_eq(gem_v_pt, GEM_STR_LIT("Bytes", 5)))) {
 #line 1891 "compiler/codegen.gem"
-                                        gem_leaf_line = 1891;
+                                    gem_leaf_line = 1891;
+                                    if (gem_truthy(gem_eq(gem_v_pt, GEM_STR_LIT("Bytes", 5)))) {
+#line 1892 "compiler/codegen.gem"
+                                        gem_leaf_line = 1892;
                                         gem_string_append_to(&gem_v_c_params, GEM_STR_LIT("const uint8_t*, int64_t", 23), &_t12980);
 
                                     } else {
-#line 1892 "compiler/codegen.gem"
-                                        gem_leaf_line = 1892;
-                                        if (gem_truthy(gem_eq(gem_v_pt, GEM_STR_LIT("Socket", 6)))) {
 #line 1893 "compiler/codegen.gem"
-                                            gem_leaf_line = 1893;
+                                        gem_leaf_line = 1893;
+                                        if (gem_truthy(gem_eq(gem_v_pt, GEM_STR_LIT("Socket", 6)))) {
+#line 1894 "compiler/codegen.gem"
+                                            gem_leaf_line = 1894;
                                             gem_string_append_to(&gem_v_c_params, GEM_STR_LIT("int", 3), &_t12980);
 
                                         } else {
-#line 1895 "compiler/codegen.gem"
-                                            gem_leaf_line = 1895;
+#line 1896 "compiler/codegen.gem"
+                                            gem_leaf_line = 1896;
                                             gem_string_append_to(&gem_v_c_params, GEM_STR_LIT("GemVal", 6), &_t12980);
 
                                         }
@@ -55839,8 +55842,8 @@ static GemVal __anon_184(void *_env, GemVal *args, int argc) {
         if (_t12980) gem_v_c_params = gem_string_finish(gem_v_c_params);
 
     }
-#line 1900 "compiler/codegen.gem"
-    gem_leaf_line = 1900;
+#line 1901 "compiler/codegen.gem"
+    gem_leaf_line = 1901;
     GemVal _t12986 = (*gem_v_extern_c_decls);
     GemVal _t12982 = gem_table_new_braces();
     GemVal _t12984 = gem_v_c_ret;
@@ -55863,11 +55866,11 @@ static GemVal __anon_185(void *_env, GemVal *args, int argc) {
     GemVal gem_v_b = (argc > 0) ? args[0] : GEM_NIL;
     GemVal gem_v_name = (argc > 1) ? args[1] : GEM_NIL;
     GemVal gem_v_params = (argc > 2) ? args[2] : GEM_NIL;
-#line 1906 "compiler/codegen.gem"
-    gem_leaf_line = 1906;
-    GemVal gem_v_n = gem_len_1(gem_v_params);
 #line 1907 "compiler/codegen.gem"
     gem_leaf_line = 1907;
+    GemVal gem_v_n = gem_len_1(gem_v_params);
+#line 1908 "compiler/codegen.gem"
+    gem_leaf_line = 1908;
     GemVal _t12994 = gem_v_b;
     GemVal _t12992 = gem_v_n;
     GemVal _t12991 = gem_v_name;
@@ -55875,14 +55878,14 @@ static GemVal __anon_185(void *_env, GemVal *args, int argc) {
     GemVal _t12995[] = {_t12994, gem_interp(7, _t12993)};
     (void)(gem_buf_push_fn(NULL, _t12995, 2));
     {
-#line 1908 "compiler/codegen.gem"
-        gem_leaf_line = 1908;
+#line 1909 "compiler/codegen.gem"
+        gem_leaf_line = 1909;
         GemVal gem_v___for_i_333 = gem_int(0);
-#line 1908 "compiler/codegen.gem"
-        gem_leaf_line = 1908;
+#line 1909 "compiler/codegen.gem"
+        gem_leaf_line = 1909;
         GemVal gem_v___for_limit_333 = gem_v_n;
-#line 1908 "compiler/codegen.gem"
-        gem_leaf_line = 1908;
+#line 1909 "compiler/codegen.gem"
+        gem_leaf_line = 1909;
         GemArenaMark _mk341;
         gem_arena_mark(&_mk341);
         while (1) {
@@ -55893,70 +55896,70 @@ static GemVal __anon_185(void *_env, GemVal *args, int argc) {
             }
     GemVal _t12996 = gem_v___for_i_333;
             if (!gem_truthy(gem_lt(_t12996, gem_v___for_limit_333))) break;
-#line 1908 "compiler/codegen.gem"
-            gem_leaf_line = 1908;
-            GemVal gem_v_i = gem_v___for_i_333;
-#line 1908 "compiler/codegen.gem"
-            gem_leaf_line = 1908;
-            gem_v___for_i_333 = gem_add(gem_v___for_i_333, gem_int(1));
 #line 1909 "compiler/codegen.gem"
             gem_leaf_line = 1909;
+            GemVal gem_v_i = gem_v___for_i_333;
+#line 1909 "compiler/codegen.gem"
+            gem_leaf_line = 1909;
+            gem_v___for_i_333 = gem_add(gem_v___for_i_333, gem_int(1));
+#line 1910 "compiler/codegen.gem"
+            gem_leaf_line = 1910;
     GemVal _t12997 = gem_v_params;
             GemVal gem_v_ptype = gem_table_get(gem_table_get(_t12997, gem_v_i), GEM_STR_LIT("type", 4));
-#line 1910 "compiler/codegen.gem"
-            gem_leaf_line = 1910;
-            GemVal gem_v___val_332 = GEM_NIL;
-#line 1910 "compiler/codegen.gem"
-            gem_leaf_line = 1910;
-            if (gem_truthy(gem_eq(gem_v_ptype, GEM_STR_LIT("Int", 3)))) {
 #line 1911 "compiler/codegen.gem"
-                gem_leaf_line = 1911;
-                gem_v___val_332 = GEM_STR_LIT("VAL_INT", 7);
-            } else {
+            gem_leaf_line = 1911;
+            GemVal gem_v___val_332 = GEM_NIL;
+#line 1911 "compiler/codegen.gem"
+            gem_leaf_line = 1911;
+            if (gem_truthy(gem_eq(gem_v_ptype, GEM_STR_LIT("Int", 3)))) {
 #line 1912 "compiler/codegen.gem"
                 gem_leaf_line = 1912;
-                if (gem_truthy(gem_eq(gem_v_ptype, GEM_STR_LIT("Float", 5)))) {
+                gem_v___val_332 = GEM_STR_LIT("VAL_INT", 7);
+            } else {
 #line 1913 "compiler/codegen.gem"
-                    gem_leaf_line = 1913;
-                    gem_v___val_332 = GEM_STR_LIT("VAL_FLOAT", 9);
-                } else {
+                gem_leaf_line = 1913;
+                if (gem_truthy(gem_eq(gem_v_ptype, GEM_STR_LIT("Float", 5)))) {
 #line 1914 "compiler/codegen.gem"
                     gem_leaf_line = 1914;
-                    if (gem_truthy(gem_eq(gem_v_ptype, GEM_STR_LIT("String", 6)))) {
+                    gem_v___val_332 = GEM_STR_LIT("VAL_FLOAT", 9);
+                } else {
 #line 1915 "compiler/codegen.gem"
-                        gem_leaf_line = 1915;
-                        gem_v___val_332 = GEM_STR_LIT("VAL_STRING", 10);
-                    } else {
+                    gem_leaf_line = 1915;
+                    if (gem_truthy(gem_eq(gem_v_ptype, GEM_STR_LIT("String", 6)))) {
 #line 1916 "compiler/codegen.gem"
                         gem_leaf_line = 1916;
-                        if (gem_truthy(gem_eq(gem_v_ptype, GEM_STR_LIT("Bool", 4)))) {
+                        gem_v___val_332 = GEM_STR_LIT("VAL_STRING", 10);
+                    } else {
 #line 1917 "compiler/codegen.gem"
-                            gem_leaf_line = 1917;
-                            gem_v___val_332 = GEM_STR_LIT("VAL_BOOL", 8);
-                        } else {
+                        gem_leaf_line = 1917;
+                        if (gem_truthy(gem_eq(gem_v_ptype, GEM_STR_LIT("Bool", 4)))) {
 #line 1918 "compiler/codegen.gem"
                             gem_leaf_line = 1918;
-                            if (gem_truthy(gem_eq(gem_v_ptype, GEM_STR_LIT("Ptr", 3)))) {
+                            gem_v___val_332 = GEM_STR_LIT("VAL_BOOL", 8);
+                        } else {
 #line 1919 "compiler/codegen.gem"
-                                gem_leaf_line = 1919;
-                                gem_v___val_332 = GEM_STR_LIT("VAL_INT", 7);
-                            } else {
+                            gem_leaf_line = 1919;
+                            if (gem_truthy(gem_eq(gem_v_ptype, GEM_STR_LIT("Ptr", 3)))) {
 #line 1920 "compiler/codegen.gem"
                                 gem_leaf_line = 1920;
-                                if (gem_truthy(gem_eq(gem_v_ptype, GEM_STR_LIT("Bytes", 5)))) {
+                                gem_v___val_332 = GEM_STR_LIT("VAL_INT", 7);
+                            } else {
 #line 1921 "compiler/codegen.gem"
-                                    gem_leaf_line = 1921;
-                                    gem_v___val_332 = GEM_STR_LIT("VAL_STRING", 10);
-                                } else {
+                                gem_leaf_line = 1921;
+                                if (gem_truthy(gem_eq(gem_v_ptype, GEM_STR_LIT("Bytes", 5)))) {
 #line 1922 "compiler/codegen.gem"
                                     gem_leaf_line = 1922;
-                                    if (gem_truthy(gem_eq(gem_v_ptype, GEM_STR_LIT("Table", 5)))) {
+                                    gem_v___val_332 = GEM_STR_LIT("VAL_STRING", 10);
+                                } else {
 #line 1923 "compiler/codegen.gem"
-                                        gem_leaf_line = 1923;
+                                    gem_leaf_line = 1923;
+                                    if (gem_truthy(gem_eq(gem_v_ptype, GEM_STR_LIT("Table", 5)))) {
+#line 1924 "compiler/codegen.gem"
+                                        gem_leaf_line = 1924;
                                         gem_v___val_332 = GEM_STR_LIT("VAL_TABLE", 9);
                                     } else {
-#line 1910 "compiler/codegen.gem"
-                                        gem_leaf_line = 1910;
+#line 1911 "compiler/codegen.gem"
+                                        gem_leaf_line = 1911;
                                         gem_v___val_332 = GEM_NIL;
                                     }
                                 }
@@ -55965,14 +55968,14 @@ static GemVal __anon_185(void *_env, GemVal *args, int argc) {
                     }
                 }
             }
-#line 1910 "compiler/codegen.gem"
-            gem_leaf_line = 1910;
+#line 1911 "compiler/codegen.gem"
+            gem_leaf_line = 1911;
             GemVal gem_v_val_tag = gem_v___val_332;
-#line 1925 "compiler/codegen.gem"
-            gem_leaf_line = 1925;
-            if (gem_truthy(gem_neq(gem_v_val_tag, GEM_NIL))) {
 #line 1926 "compiler/codegen.gem"
-                gem_leaf_line = 1926;
+            gem_leaf_line = 1926;
+            if (gem_truthy(gem_neq(gem_v_val_tag, GEM_NIL))) {
+#line 1927 "compiler/codegen.gem"
+                gem_leaf_line = 1927;
     GemVal _t13004 = gem_v_b;
     GemVal _t13002 = gem_v_i;
     GemVal _t13001 = gem_v_val_tag;
@@ -56002,94 +56005,94 @@ static GemVal __anon_186(void *_env, GemVal *args, int argc) {
     GemVal *gem_v_emit_extern_c_decl = _cls->gem_v_emit_extern_c_decl;
     GemVal *gem_v_emit_extern_validation = _cls->gem_v_emit_extern_validation;
     GemVal *gem_v_forward_decls = _cls->gem_v_forward_decls;
-    gem_push_frame("anonymous fn", "compiler/codegen.gem", 1931);
+    gem_push_frame("anonymous fn", "compiler/codegen.gem", 1932);
     GemVal gem_v_node = (argc > 0) ? args[0] : GEM_NIL;
     GemArenaPoint _ret_pt;
     gem_arena_point(&_ret_pt);
-#line 1932 "compiler/codegen.gem"
-    gem_set_line(1932);
+#line 1933 "compiler/codegen.gem"
+    gem_set_line(1933);
     GemVal gem_v___d2 = gem_v_node;
-#line 1932 "compiler/codegen.gem"
-    gem_set_line(1932);
+#line 1933 "compiler/codegen.gem"
+    gem_set_line(1933);
     GemVal _t13006 = gem_v___d2;
     static GemICacheSlot _ic_2147 = {0};
     GemVal gem_v_name = gem_table_get_cached(_t13006, "name", &_ic_2147);
-#line 1932 "compiler/codegen.gem"
-    gem_set_line(1932);
+#line 1933 "compiler/codegen.gem"
+    gem_set_line(1933);
     GemVal _t13007 = gem_v___d2;
     static GemICacheSlot _ic_2148 = {0};
     GemVal gem_v_params = gem_table_get_cached(_t13007, "params", &_ic_2148);
-#line 1932 "compiler/codegen.gem"
-    gem_set_line(1932);
+#line 1933 "compiler/codegen.gem"
+    gem_set_line(1933);
     GemVal _t13008 = gem_v___d2;
     static GemICacheSlot _ic_2149 = {0};
     GemVal gem_v_ret_type = gem_table_get_cached(_t13008, "ret_type", &_ic_2149);
 
-#line 1934 "compiler/codegen.gem"
-    gem_set_line(1934);
+#line 1935 "compiler/codegen.gem"
+    gem_set_line(1935);
     GemVal gem_v___val_334 = GEM_NIL;
-#line 1934 "compiler/codegen.gem"
-    gem_set_line(1934);
+#line 1935 "compiler/codegen.gem"
+    gem_set_line(1935);
     GemVal _t13009 = gem_v_node;
     static GemICacheSlot _ic_2150 = {0};
     if (gem_truthy(gem_neq(gem_table_get_cached(_t13009, "c_name", &_ic_2150), GEM_NIL))) {
-#line 1934 "compiler/codegen.gem"
-        gem_set_line(1934);
+#line 1935 "compiler/codegen.gem"
+        gem_set_line(1935);
     GemVal _t13010 = gem_v_node;
     static GemICacheSlot _ic_2151 = {0};
         gem_v___val_334 = gem_table_get_cached(_t13010, "c_name", &_ic_2151);
     } else {
-#line 1934 "compiler/codegen.gem"
-        gem_set_line(1934);
+#line 1935 "compiler/codegen.gem"
+        gem_set_line(1935);
         gem_v___val_334 = gem_v_name;
     }
-#line 1934 "compiler/codegen.gem"
-    gem_set_line(1934);
+#line 1935 "compiler/codegen.gem"
+    gem_set_line(1935);
     GemVal gem_v_c_sym = gem_v___val_334;
-#line 1936 "compiler/codegen.gem"
-    gem_set_line(1936);
+#line 1937 "compiler/codegen.gem"
+    gem_set_line(1937);
     GemVal _t13011 = gem_v_node;
     static GemICacheSlot _ic_2152 = {0};
     if (gem_truthy(gem_table_get_cached(_t13011, "blocking", &_ic_2152))) {
-#line 1937 "compiler/codegen.gem"
-        gem_set_line(1937);
+#line 1938 "compiler/codegen.gem"
+        gem_set_line(1938);
     GemVal _t13013 = (*gem_v_compile_blocking_extern_fn);
     GemVal _t13012[] = {gem_v_node};
-    gem_check_callable(_t13013, "compiler/codegen.gem", 1937);
+    gem_check_callable(_t13013, "compiler/codegen.gem", 1938);
         GemVal _t13014 = _t13013.fn(_t13013.env, _t13012, 1);
         if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t13014, 1);
         gem_pop_frame();
         return _t13014;
     }
-#line 1940 "compiler/codegen.gem"
-    gem_set_line(1940);
-    GemVal gem_v_b = gem_buf_new_fn(NULL, NULL, 0);
 #line 1941 "compiler/codegen.gem"
     gem_set_line(1941);
+    GemVal gem_v_b = gem_buf_new_fn(NULL, NULL, 0);
+#line 1942 "compiler/codegen.gem"
+    gem_set_line(1942);
     GemVal _t13016 = gem_v_b;
     GemVal _t13015[] = {GEM_STR_LIT("static GemVal gem_fn_", 21), gem_v_name, GEM_STR_LIT("(void *_env, GemVal *args, int argc) {\n", 39)};
     GemVal _t13017[] = {_t13016, gem_interp(3, _t13015)};
     (void)(gem_buf_push_fn(NULL, _t13017, 2));
-#line 1942 "compiler/codegen.gem"
-    gem_set_line(1942);
+#line 1943 "compiler/codegen.gem"
+    gem_set_line(1943);
     GemVal _t13021 = (*gem_v_emit_extern_validation);
     GemVal _t13019 = gem_v_b;
     GemVal _t13018 = gem_v_c_sym;
     GemVal _t13020[] = {_t13019, _t13018, gem_v_params};
-    gem_check_callable(_t13021, "compiler/codegen.gem", 1942);
+    gem_check_callable(_t13021, "compiler/codegen.gem", 1943);
     (void)(_t13021.fn(_t13021.env, _t13020, 3));
-#line 1944 "compiler/codegen.gem"
-    gem_set_line(1944);
+#line 1945 "compiler/codegen.gem"
+    gem_set_line(1945);
     GemVal _t13022 = gem_table_new();
     GemVal gem_v_c_args = _t13022;
-#line 1945 "compiler/codegen.gem"
-    gem_set_line(1945);
+#line 1946 "compiler/codegen.gem"
+    gem_set_line(1946);
     GemVal gem_v___for_i_335 = gem_int(0);
-#line 1945 "compiler/codegen.gem"
-    gem_set_line(1945);
+#line 1946 "compiler/codegen.gem"
+    gem_set_line(1946);
     GemVal gem_v___for_limit_335 = gem_len_1(gem_v_params);
-#line 1945 "compiler/codegen.gem"
-    gem_set_line(1945);
+#line 1946 "compiler/codegen.gem"
+    gem_set_line(1946);
     GemArenaMark _mk342;
     gem_arena_mark(&_mk342);
     while (1) {
@@ -56100,139 +56103,139 @@ static GemVal __anon_186(void *_env, GemVal *args, int argc) {
         }
     GemVal _t13023 = gem_v___for_i_335;
         if (!gem_truthy(gem_lt(_t13023, gem_v___for_limit_335))) break;
-#line 1945 "compiler/codegen.gem"
-        gem_set_line(1945);
-        GemVal gem_v_i = gem_v___for_i_335;
-#line 1945 "compiler/codegen.gem"
-        gem_set_line(1945);
-        gem_v___for_i_335 = gem_add(gem_v___for_i_335, gem_int(1));
 #line 1946 "compiler/codegen.gem"
         gem_set_line(1946);
-    GemVal _t13024 = gem_v_params;
-        GemVal gem_v_p = gem_table_get(_t13024, gem_v_i);
+        GemVal gem_v_i = gem_v___for_i_335;
+#line 1946 "compiler/codegen.gem"
+        gem_set_line(1946);
+        gem_v___for_i_335 = gem_add(gem_v___for_i_335, gem_int(1));
 #line 1947 "compiler/codegen.gem"
         gem_set_line(1947);
-        GemVal gem_v_ptype = gem_table_get(gem_v_p, GEM_STR_LIT("type", 4));
+    GemVal _t13024 = gem_v_params;
+        GemVal gem_v_p = gem_table_get(_t13024, gem_v_i);
 #line 1948 "compiler/codegen.gem"
         gem_set_line(1948);
-        if (gem_truthy(gem_eq(gem_v_ptype, GEM_STR_LIT("Int", 3)))) {
+        GemVal gem_v_ptype = gem_table_get(gem_v_p, GEM_STR_LIT("type", 4));
 #line 1949 "compiler/codegen.gem"
-            gem_set_line(1949);
+        gem_set_line(1949);
+        if (gem_truthy(gem_eq(gem_v_ptype, GEM_STR_LIT("Int", 3)))) {
+#line 1950 "compiler/codegen.gem"
+            gem_set_line(1950);
     GemVal _t13027 = gem_v_b;
     GemVal _t13025 = gem_v_i;
     GemVal _t13026[] = {GEM_STR_LIT("    int64_t _p", 14), _t13025, GEM_STR_LIT(" = args[", 8), gem_v_i, GEM_STR_LIT("].ival;\n", 8)};
     GemVal _t13028[] = {_t13027, gem_interp(5, _t13026)};
             (void)(gem_buf_push_fn(NULL, _t13028, 2));
-#line 1950 "compiler/codegen.gem"
-            gem_set_line(1950);
+#line 1951 "compiler/codegen.gem"
+            gem_set_line(1951);
     GemVal _t13030 = gem_v_c_args;
     GemVal _t13029[] = {GEM_STR_LIT("_p", 2), gem_v_i};
     GemVal _t13031[] = {_t13030, gem_interp(2, _t13029)};
             (void)(gem_push_fn(NULL, _t13031, 2));
         } else {
-#line 1951 "compiler/codegen.gem"
-            gem_set_line(1951);
-            if (gem_truthy(gem_eq(gem_v_ptype, GEM_STR_LIT("Float", 5)))) {
 #line 1952 "compiler/codegen.gem"
-                gem_set_line(1952);
+            gem_set_line(1952);
+            if (gem_truthy(gem_eq(gem_v_ptype, GEM_STR_LIT("Float", 5)))) {
+#line 1953 "compiler/codegen.gem"
+                gem_set_line(1953);
     GemVal _t13034 = gem_v_b;
     GemVal _t13032 = gem_v_i;
     GemVal _t13033[] = {GEM_STR_LIT("    double _p", 13), _t13032, GEM_STR_LIT(" = args[", 8), gem_v_i, GEM_STR_LIT("].fval;\n", 8)};
     GemVal _t13035[] = {_t13034, gem_interp(5, _t13033)};
                 (void)(gem_buf_push_fn(NULL, _t13035, 2));
-#line 1953 "compiler/codegen.gem"
-                gem_set_line(1953);
+#line 1954 "compiler/codegen.gem"
+                gem_set_line(1954);
     GemVal _t13037 = gem_v_c_args;
     GemVal _t13036[] = {GEM_STR_LIT("_p", 2), gem_v_i};
     GemVal _t13038[] = {_t13037, gem_interp(2, _t13036)};
                 (void)(gem_push_fn(NULL, _t13038, 2));
             } else {
-#line 1954 "compiler/codegen.gem"
-                gem_set_line(1954);
-                if (gem_truthy(gem_eq(gem_v_ptype, GEM_STR_LIT("String", 6)))) {
 #line 1955 "compiler/codegen.gem"
-                    gem_set_line(1955);
+                gem_set_line(1955);
+                if (gem_truthy(gem_eq(gem_v_ptype, GEM_STR_LIT("String", 6)))) {
+#line 1956 "compiler/codegen.gem"
+                    gem_set_line(1956);
     GemVal _t13041 = gem_v_b;
     GemVal _t13039 = gem_v_i;
     GemVal _t13040[] = {GEM_STR_LIT("    char* _p", 12), _t13039, GEM_STR_LIT(" = args[", 8), gem_v_i, GEM_STR_LIT("].sval;\n", 8)};
     GemVal _t13042[] = {_t13041, gem_interp(5, _t13040)};
                     (void)(gem_buf_push_fn(NULL, _t13042, 2));
-#line 1956 "compiler/codegen.gem"
-                    gem_set_line(1956);
+#line 1957 "compiler/codegen.gem"
+                    gem_set_line(1957);
     GemVal _t13044 = gem_v_c_args;
     GemVal _t13043[] = {GEM_STR_LIT("_p", 2), gem_v_i};
     GemVal _t13045[] = {_t13044, gem_interp(2, _t13043)};
                     (void)(gem_push_fn(NULL, _t13045, 2));
                 } else {
-#line 1957 "compiler/codegen.gem"
-                    gem_set_line(1957);
-                    if (gem_truthy(gem_eq(gem_v_ptype, GEM_STR_LIT("Bool", 4)))) {
 #line 1958 "compiler/codegen.gem"
-                        gem_set_line(1958);
+                    gem_set_line(1958);
+                    if (gem_truthy(gem_eq(gem_v_ptype, GEM_STR_LIT("Bool", 4)))) {
+#line 1959 "compiler/codegen.gem"
+                        gem_set_line(1959);
     GemVal _t13048 = gem_v_b;
     GemVal _t13046 = gem_v_i;
     GemVal _t13047[] = {GEM_STR_LIT("    int _p", 10), _t13046, GEM_STR_LIT(" = args[", 8), gem_v_i, GEM_STR_LIT("].bval;\n", 8)};
     GemVal _t13049[] = {_t13048, gem_interp(5, _t13047)};
                         (void)(gem_buf_push_fn(NULL, _t13049, 2));
-#line 1959 "compiler/codegen.gem"
-                        gem_set_line(1959);
+#line 1960 "compiler/codegen.gem"
+                        gem_set_line(1960);
     GemVal _t13051 = gem_v_c_args;
     GemVal _t13050[] = {GEM_STR_LIT("_p", 2), gem_v_i};
     GemVal _t13052[] = {_t13051, gem_interp(2, _t13050)};
                         (void)(gem_push_fn(NULL, _t13052, 2));
                     } else {
-#line 1960 "compiler/codegen.gem"
-                        gem_set_line(1960);
-                        if (gem_truthy(gem_eq(gem_v_ptype, GEM_STR_LIT("Ptr", 3)))) {
 #line 1961 "compiler/codegen.gem"
-                            gem_set_line(1961);
+                        gem_set_line(1961);
+                        if (gem_truthy(gem_eq(gem_v_ptype, GEM_STR_LIT("Ptr", 3)))) {
+#line 1962 "compiler/codegen.gem"
+                            gem_set_line(1962);
     GemVal _t13055 = gem_v_b;
     GemVal _t13053 = gem_v_i;
     GemVal _t13054[] = {GEM_STR_LIT("    void* _p", 12), _t13053, GEM_STR_LIT(" = (void*)(intptr_t)args[", 25), gem_v_i, GEM_STR_LIT("].ival;\n", 8)};
     GemVal _t13056[] = {_t13055, gem_interp(5, _t13054)};
                             (void)(gem_buf_push_fn(NULL, _t13056, 2));
-#line 1962 "compiler/codegen.gem"
-                            gem_set_line(1962);
+#line 1963 "compiler/codegen.gem"
+                            gem_set_line(1963);
     GemVal _t13058 = gem_v_c_args;
     GemVal _t13057[] = {GEM_STR_LIT("_p", 2), gem_v_i};
     GemVal _t13059[] = {_t13058, gem_interp(2, _t13057)};
                             (void)(gem_push_fn(NULL, _t13059, 2));
                         } else {
-#line 1963 "compiler/codegen.gem"
-                            gem_set_line(1963);
-                            if (gem_truthy(gem_eq(gem_v_ptype, GEM_STR_LIT("Bytes", 5)))) {
 #line 1964 "compiler/codegen.gem"
-                                gem_set_line(1964);
+                            gem_set_line(1964);
+                            if (gem_truthy(gem_eq(gem_v_ptype, GEM_STR_LIT("Bytes", 5)))) {
+#line 1965 "compiler/codegen.gem"
+                                gem_set_line(1965);
     GemVal _t13062 = gem_v_b;
     GemVal _t13060 = gem_v_i;
     GemVal _t13061[] = {GEM_STR_LIT("    const uint8_t* _p", 21), _t13060, GEM_STR_LIT(" = (const uint8_t*)args[", 24), gem_v_i, GEM_STR_LIT("].sval;\n", 8)};
     GemVal _t13063[] = {_t13062, gem_interp(5, _t13061)};
                                 (void)(gem_buf_push_fn(NULL, _t13063, 2));
-#line 1965 "compiler/codegen.gem"
-                                gem_set_line(1965);
+#line 1966 "compiler/codegen.gem"
+                                gem_set_line(1966);
     GemVal _t13066 = gem_v_b;
     GemVal _t13064 = gem_v_i;
     GemVal _t13065[] = {GEM_STR_LIT("    int64_t _p", 14), _t13064, GEM_STR_LIT("_len = (int64_t)args[", 21), gem_v_i, GEM_STR_LIT("].slen;\n", 8)};
     GemVal _t13067[] = {_t13066, gem_interp(5, _t13065)};
                                 (void)(gem_buf_push_fn(NULL, _t13067, 2));
-#line 1966 "compiler/codegen.gem"
-                                gem_set_line(1966);
+#line 1967 "compiler/codegen.gem"
+                                gem_set_line(1967);
     GemVal _t13069 = gem_v_c_args;
     GemVal _t13068[] = {GEM_STR_LIT("_p", 2), gem_v_i};
     GemVal _t13070[] = {_t13069, gem_interp(2, _t13068)};
                                 (void)(gem_push_fn(NULL, _t13070, 2));
-#line 1967 "compiler/codegen.gem"
-                                gem_set_line(1967);
+#line 1968 "compiler/codegen.gem"
+                                gem_set_line(1968);
     GemVal _t13072 = gem_v_c_args;
     GemVal _t13071[] = {GEM_STR_LIT("_p", 2), gem_v_i, GEM_STR_LIT("_len", 4)};
     GemVal _t13073[] = {_t13072, gem_interp(3, _t13071)};
                                 (void)(gem_push_fn(NULL, _t13073, 2));
                             } else {
-#line 1968 "compiler/codegen.gem"
-                                gem_set_line(1968);
-                                if (gem_truthy(gem_eq(gem_v_ptype, GEM_STR_LIT("Socket", 6)))) {
 #line 1969 "compiler/codegen.gem"
-                                    gem_set_line(1969);
+                                gem_set_line(1969);
+                                if (gem_truthy(gem_eq(gem_v_ptype, GEM_STR_LIT("Socket", 6)))) {
+#line 1970 "compiler/codegen.gem"
+                                    gem_set_line(1970);
     GemVal _t13078 = gem_v_b;
     GemVal _t13076 = gem_v_i;
     GemVal _t13075 = gem_v_i;
@@ -56240,25 +56243,25 @@ static GemVal __anon_186(void *_env, GemVal *args, int argc) {
     GemVal _t13077[] = {GEM_STR_LIT("    int _p", 10), _t13076, GEM_STR_LIT(" = gem_extern_socket_fd(args[", 29), _t13075, GEM_STR_LIT("], \"", 4), _t13074, GEM_STR_LIT("\", ", 3), gem_v_i, GEM_STR_LIT(");\n", 3)};
     GemVal _t13079[] = {_t13078, gem_interp(9, _t13077)};
                                     (void)(gem_buf_push_fn(NULL, _t13079, 2));
-#line 1970 "compiler/codegen.gem"
-                                    gem_set_line(1970);
+#line 1971 "compiler/codegen.gem"
+                                    gem_set_line(1971);
     GemVal _t13081 = gem_v_c_args;
     GemVal _t13080[] = {GEM_STR_LIT("_p", 2), gem_v_i};
     GemVal _t13082[] = {_t13081, gem_interp(2, _t13080)};
                                     (void)(gem_push_fn(NULL, _t13082, 2));
                                 } else {
-#line 1971 "compiler/codegen.gem"
-                                    gem_set_line(1971);
-                                    if (gem_truthy(gem_eq(gem_v_ptype, GEM_STR_LIT("Table", 5)))) {
 #line 1972 "compiler/codegen.gem"
-                                        gem_set_line(1972);
+                                    gem_set_line(1972);
+                                    if (gem_truthy(gem_eq(gem_v_ptype, GEM_STR_LIT("Table", 5)))) {
+#line 1973 "compiler/codegen.gem"
+                                        gem_set_line(1973);
     GemVal _t13084 = gem_v_c_args;
     GemVal _t13083[] = {GEM_STR_LIT("args[", 5), gem_v_i, GEM_STR_LIT("]", 1)};
     GemVal _t13085[] = {_t13084, gem_interp(3, _t13083)};
                                         (void)(gem_push_fn(NULL, _t13085, 2));
                                     } else {
-#line 1974 "compiler/codegen.gem"
-                                        gem_set_line(1974);
+#line 1975 "compiler/codegen.gem"
+                                        gem_set_line(1975);
     GemVal _t13087 = gem_v_c_args;
     GemVal _t13086[] = {GEM_STR_LIT("args[", 5), gem_v_i, GEM_STR_LIT("]", 1)};
     GemVal _t13088[] = {_t13087, gem_interp(3, _t13086)};
@@ -56273,17 +56276,17 @@ static GemVal __anon_186(void *_env, GemVal *args, int argc) {
         }
     }
 
-#line 1978 "compiler/codegen.gem"
-    gem_set_line(1978);
+#line 1979 "compiler/codegen.gem"
+    gem_set_line(1979);
     GemVal gem_v_call_args = GEM_STR_LIT("", 0);
-#line 1979 "compiler/codegen.gem"
-    gem_set_line(1979);
+#line 1980 "compiler/codegen.gem"
+    gem_set_line(1980);
     GemVal gem_v___for_i_336 = gem_int(0);
-#line 1979 "compiler/codegen.gem"
-    gem_set_line(1979);
+#line 1980 "compiler/codegen.gem"
+    gem_set_line(1980);
     GemVal gem_v___for_limit_336 = gem_len_1(gem_v_c_args);
-#line 1979 "compiler/codegen.gem"
-    gem_set_line(1979);
+#line 1980 "compiler/codegen.gem"
+    gem_set_line(1980);
     int _t13090 = 0;
     GemArenaMark _mk343;
     gem_arena_mark(&_mk343);
@@ -56295,159 +56298,159 @@ static GemVal __anon_186(void *_env, GemVal *args, int argc) {
         }
     GemVal _t13089 = gem_v___for_i_336;
         if (!gem_truthy(gem_lt(_t13089, gem_v___for_limit_336))) break;
-#line 1979 "compiler/codegen.gem"
-        gem_set_line(1979);
-        GemVal gem_v_i = gem_v___for_i_336;
-#line 1979 "compiler/codegen.gem"
-        gem_set_line(1979);
-        gem_v___for_i_336 = gem_add(gem_v___for_i_336, gem_int(1));
 #line 1980 "compiler/codegen.gem"
         gem_set_line(1980);
-        if (gem_truthy(gem_gt(gem_v_i, gem_int(0)))) {
+        GemVal gem_v_i = gem_v___for_i_336;
+#line 1980 "compiler/codegen.gem"
+        gem_set_line(1980);
+        gem_v___for_i_336 = gem_add(gem_v___for_i_336, gem_int(1));
 #line 1981 "compiler/codegen.gem"
-            gem_set_line(1981);
+        gem_set_line(1981);
+        if (gem_truthy(gem_gt(gem_v_i, gem_int(0)))) {
+#line 1982 "compiler/codegen.gem"
+            gem_set_line(1982);
             gem_string_append_to(&gem_v_call_args, GEM_STR_LIT(", ", 2), &_t13090);
 
         }
-#line 1983 "compiler/codegen.gem"
-        gem_set_line(1983);
+#line 1984 "compiler/codegen.gem"
+        gem_set_line(1984);
     GemVal _t13091 = gem_v_c_args;
         gem_string_append_to(&gem_v_call_args, gem_table_get(_t13091, gem_v_i), &_t13090);
 
     }
     if (_t13090) gem_v_call_args = gem_string_finish(gem_v_call_args);
 
-#line 1986 "compiler/codegen.gem"
-    gem_set_line(1986);
+#line 1987 "compiler/codegen.gem"
+    gem_set_line(1987);
     GemVal _t13092 = gem_v_c_sym;
     GemVal _t13093[] = {_t13092, GEM_STR_LIT("(", 1), gem_v_call_args, GEM_STR_LIT(")", 1)};
     GemVal gem_v_call_expr = gem_interp(4, _t13093);
-#line 1988 "compiler/codegen.gem"
-    gem_set_line(1988);
-    GemVal _t13094[] = {gem_v_b, GEM_STR_LIT("    gem_native_call_fence();\n", 29)};
-    (void)(gem_buf_push_fn(NULL, _t13094, 2));
 #line 1989 "compiler/codegen.gem"
     gem_set_line(1989);
-    if (gem_truthy(gem_eq(gem_v_ret_type, GEM_STR_LIT("Nil", 3)))) {
+    GemVal _t13094[] = {gem_v_b, GEM_STR_LIT("    gem_native_call_fence();\n", 29)};
+    (void)(gem_buf_push_fn(NULL, _t13094, 2));
 #line 1990 "compiler/codegen.gem"
-        gem_set_line(1990);
+    gem_set_line(1990);
+    if (gem_truthy(gem_eq(gem_v_ret_type, GEM_STR_LIT("Nil", 3)))) {
+#line 1991 "compiler/codegen.gem"
+        gem_set_line(1991);
     GemVal _t13096 = gem_v_b;
     GemVal _t13095[] = {GEM_STR_LIT("    ", 4), gem_v_call_expr, GEM_STR_LIT(";\n", 2)};
     GemVal _t13097[] = {_t13096, gem_interp(3, _t13095)};
         (void)(gem_buf_push_fn(NULL, _t13097, 2));
-#line 1991 "compiler/codegen.gem"
-        gem_set_line(1991);
+#line 1992 "compiler/codegen.gem"
+        gem_set_line(1992);
     GemVal _t13098[] = {gem_v_b, GEM_STR_LIT("    return GEM_NIL;\n", 20)};
         (void)(gem_buf_push_fn(NULL, _t13098, 2));
     } else {
-#line 1992 "compiler/codegen.gem"
-        gem_set_line(1992);
-        if (gem_truthy(gem_eq(gem_v_ret_type, GEM_STR_LIT("Table", 5)))) {
 #line 1993 "compiler/codegen.gem"
-            gem_set_line(1993);
+        gem_set_line(1993);
+        if (gem_truthy(gem_eq(gem_v_ret_type, GEM_STR_LIT("Table", 5)))) {
+#line 1994 "compiler/codegen.gem"
+            gem_set_line(1994);
     GemVal _t13100 = gem_v_b;
     GemVal _t13099[] = {GEM_STR_LIT("    return ", 11), gem_v_call_expr, GEM_STR_LIT(";\n", 2)};
     GemVal _t13101[] = {_t13100, gem_interp(3, _t13099)};
             (void)(gem_buf_push_fn(NULL, _t13101, 2));
         } else {
-#line 1994 "compiler/codegen.gem"
-            gem_set_line(1994);
-            if (gem_truthy(gem_eq(gem_v_ret_type, GEM_STR_LIT("Int", 3)))) {
 #line 1995 "compiler/codegen.gem"
-                gem_set_line(1995);
+            gem_set_line(1995);
+            if (gem_truthy(gem_eq(gem_v_ret_type, GEM_STR_LIT("Int", 3)))) {
+#line 1996 "compiler/codegen.gem"
+                gem_set_line(1996);
     GemVal _t13103 = gem_v_b;
     GemVal _t13102[] = {GEM_STR_LIT("    int64_t _ret = ", 19), gem_v_call_expr, GEM_STR_LIT(";\n", 2)};
     GemVal _t13104[] = {_t13103, gem_interp(3, _t13102)};
                 (void)(gem_buf_push_fn(NULL, _t13104, 2));
-#line 1996 "compiler/codegen.gem"
-                gem_set_line(1996);
+#line 1997 "compiler/codegen.gem"
+                gem_set_line(1997);
     GemVal _t13105[] = {gem_v_b, GEM_STR_LIT("    return gem_int(_ret);\n", 26)};
                 (void)(gem_buf_push_fn(NULL, _t13105, 2));
             } else {
-#line 1997 "compiler/codegen.gem"
-                gem_set_line(1997);
-                if (gem_truthy(gem_eq(gem_v_ret_type, GEM_STR_LIT("Float", 5)))) {
 #line 1998 "compiler/codegen.gem"
-                    gem_set_line(1998);
+                gem_set_line(1998);
+                if (gem_truthy(gem_eq(gem_v_ret_type, GEM_STR_LIT("Float", 5)))) {
+#line 1999 "compiler/codegen.gem"
+                    gem_set_line(1999);
     GemVal _t13107 = gem_v_b;
     GemVal _t13106[] = {GEM_STR_LIT("    double _ret = ", 18), gem_v_call_expr, GEM_STR_LIT(";\n", 2)};
     GemVal _t13108[] = {_t13107, gem_interp(3, _t13106)};
                     (void)(gem_buf_push_fn(NULL, _t13108, 2));
-#line 1999 "compiler/codegen.gem"
-                    gem_set_line(1999);
+#line 2000 "compiler/codegen.gem"
+                    gem_set_line(2000);
     GemVal _t13109[] = {gem_v_b, GEM_STR_LIT("    return gem_float(_ret);\n", 28)};
                     (void)(gem_buf_push_fn(NULL, _t13109, 2));
                 } else {
-#line 2000 "compiler/codegen.gem"
-                    gem_set_line(2000);
+#line 2001 "compiler/codegen.gem"
+                    gem_set_line(2001);
                     if (gem_truthy(gem_eq(gem_v_ret_type, GEM_STR_LIT("String", 6)))) {
-#line 2002 "compiler/codegen.gem"
-                        gem_set_line(2002);
+#line 2003 "compiler/codegen.gem"
+                        gem_set_line(2003);
     GemVal _t13111 = gem_v_b;
     GemVal _t13110[] = {GEM_STR_LIT("    const char* _ret = ", 23), gem_v_call_expr, GEM_STR_LIT(";\n", 2)};
     GemVal _t13112[] = {_t13111, gem_interp(3, _t13110)};
                         (void)(gem_buf_push_fn(NULL, _t13112, 2));
-#line 2003 "compiler/codegen.gem"
-                        gem_set_line(2003);
+#line 2004 "compiler/codegen.gem"
+                        gem_set_line(2004);
     GemVal _t13113[] = {gem_v_b, GEM_STR_LIT("    return _ret ? gem_string(_ret) : GEM_NIL;\n", 46)};
                         (void)(gem_buf_push_fn(NULL, _t13113, 2));
                     } else {
-#line 2004 "compiler/codegen.gem"
-                        gem_set_line(2004);
-                        if (gem_truthy(gem_eq(gem_v_ret_type, GEM_STR_LIT("Bool", 4)))) {
 #line 2005 "compiler/codegen.gem"
-                            gem_set_line(2005);
+                        gem_set_line(2005);
+                        if (gem_truthy(gem_eq(gem_v_ret_type, GEM_STR_LIT("Bool", 4)))) {
+#line 2006 "compiler/codegen.gem"
+                            gem_set_line(2006);
     GemVal _t13115 = gem_v_b;
     GemVal _t13114[] = {GEM_STR_LIT("    int _ret = ", 15), gem_v_call_expr, GEM_STR_LIT(";\n", 2)};
     GemVal _t13116[] = {_t13115, gem_interp(3, _t13114)};
                             (void)(gem_buf_push_fn(NULL, _t13116, 2));
-#line 2006 "compiler/codegen.gem"
-                            gem_set_line(2006);
+#line 2007 "compiler/codegen.gem"
+                            gem_set_line(2007);
     GemVal _t13117[] = {gem_v_b, GEM_STR_LIT("    return gem_bool(_ret);\n", 27)};
                             (void)(gem_buf_push_fn(NULL, _t13117, 2));
                         } else {
-#line 2007 "compiler/codegen.gem"
-                            gem_set_line(2007);
-                            if (gem_truthy(gem_eq(gem_v_ret_type, GEM_STR_LIT("Ptr", 3)))) {
 #line 2008 "compiler/codegen.gem"
-                                gem_set_line(2008);
+                            gem_set_line(2008);
+                            if (gem_truthy(gem_eq(gem_v_ret_type, GEM_STR_LIT("Ptr", 3)))) {
+#line 2009 "compiler/codegen.gem"
+                                gem_set_line(2009);
     GemVal _t13119 = gem_v_b;
     GemVal _t13118[] = {GEM_STR_LIT("    void *_ret = ", 17), gem_v_call_expr, GEM_STR_LIT(";\n", 2)};
     GemVal _t13120[] = {_t13119, gem_interp(3, _t13118)};
                                 (void)(gem_buf_push_fn(NULL, _t13120, 2));
-#line 2009 "compiler/codegen.gem"
-                                gem_set_line(2009);
+#line 2010 "compiler/codegen.gem"
+                                gem_set_line(2010);
     GemVal _t13121[] = {gem_v_b, GEM_STR_LIT("    return gem_int((int64_t)(intptr_t)_ret);\n", 45)};
                                 (void)(gem_buf_push_fn(NULL, _t13121, 2));
                             } else {
-#line 2010 "compiler/codegen.gem"
-                                gem_set_line(2010);
-                                if (gem_truthy(gem_eq(gem_v_ret_type, GEM_STR_LIT("Bytes", 5)))) {
 #line 2011 "compiler/codegen.gem"
-                                    gem_set_line(2011);
+                                gem_set_line(2011);
+                                if (gem_truthy(gem_eq(gem_v_ret_type, GEM_STR_LIT("Bytes", 5)))) {
+#line 2012 "compiler/codegen.gem"
+                                    gem_set_line(2012);
     GemVal _t13123 = gem_v_b;
     GemVal _t13122[] = {GEM_STR_LIT("    GemBytes _ret = ", 20), gem_v_call_expr, GEM_STR_LIT(";\n", 2)};
     GemVal _t13124[] = {_t13123, gem_interp(3, _t13122)};
                                     (void)(gem_buf_push_fn(NULL, _t13124, 2));
-#line 2012 "compiler/codegen.gem"
-                                    gem_set_line(2012);
+#line 2013 "compiler/codegen.gem"
+                                    gem_set_line(2013);
     GemVal _t13126 = gem_v_b;
     GemVal _t13125[] = {GEM_STR_LIT("    if (_ret.data && _ret.len > GEM_MAX_STRLEN) gem_strlen_check((size_t)_ret.len, \"", 84), gem_v_c_sym, GEM_STR_LIT("\");\n", 4)};
     GemVal _t13127[] = {_t13126, gem_interp(3, _t13125)};
                                     (void)(gem_buf_push_fn(NULL, _t13127, 2));
-#line 2013 "compiler/codegen.gem"
-                                    gem_set_line(2013);
+#line 2014 "compiler/codegen.gem"
+                                    gem_set_line(2014);
     GemVal _t13128[] = {gem_v_b, GEM_STR_LIT("    return _ret.data ? gem_string_with_len((const char*)_ret.data, _ret.len) : GEM_NIL;\n", 88)};
                                     (void)(gem_buf_push_fn(NULL, _t13128, 2));
                                 } else {
-#line 2015 "compiler/codegen.gem"
-                                    gem_set_line(2015);
+#line 2016 "compiler/codegen.gem"
+                                    gem_set_line(2016);
     GemVal _t13130 = gem_v_b;
     GemVal _t13129[] = {GEM_STR_LIT("    ", 4), gem_v_call_expr, GEM_STR_LIT(";\n", 2)};
     GemVal _t13131[] = {_t13130, gem_interp(3, _t13129)};
                                     (void)(gem_buf_push_fn(NULL, _t13131, 2));
-#line 2016 "compiler/codegen.gem"
-                                    gem_set_line(2016);
+#line 2017 "compiler/codegen.gem"
+                                    gem_set_line(2017);
     GemVal _t13132[] = {gem_v_b, GEM_STR_LIT("    return GEM_NIL;\n", 20)};
                                     (void)(gem_buf_push_fn(NULL, _t13132, 2));
                                 }
@@ -56458,27 +56461,27 @@ static GemVal __anon_186(void *_env, GemVal *args, int argc) {
             }
         }
     }
-#line 2019 "compiler/codegen.gem"
-    gem_set_line(2019);
+#line 2020 "compiler/codegen.gem"
+    gem_set_line(2020);
     GemVal _t13133[] = {gem_v_b, GEM_STR_LIT("}", 1)};
     (void)(gem_buf_push_fn(NULL, _t13133, 2));
-#line 2021 "compiler/codegen.gem"
-    gem_set_line(2021);
+#line 2022 "compiler/codegen.gem"
+    gem_set_line(2022);
     GemVal _t13135 = (*gem_v_forward_decls);
     GemVal _t13134[] = {GEM_STR_LIT("static GemVal gem_fn_", 21), gem_v_name, GEM_STR_LIT("(void *_env, GemVal *args, int argc);", 37)};
     GemVal _t13136[] = {_t13135, gem_interp(3, _t13134)};
     (void)(gem_push_fn(NULL, _t13136, 2));
-#line 2022 "compiler/codegen.gem"
-    gem_set_line(2022);
+#line 2023 "compiler/codegen.gem"
+    gem_set_line(2023);
     GemVal _t13141 = (*gem_v_emit_extern_c_decl);
     GemVal _t13139 = gem_v_c_sym;
     GemVal _t13138 = gem_v_params;
     GemVal _t13137 = gem_v_ret_type;
     GemVal _t13140[] = {_t13139, _t13138, _t13137, gem_v_node};
-    gem_check_callable(_t13141, "compiler/codegen.gem", 2022);
+    gem_check_callable(_t13141, "compiler/codegen.gem", 2023);
     (void)(_t13141.fn(_t13141.env, _t13140, 4));
-#line 2024 "compiler/codegen.gem"
-    gem_set_line(2024);
+#line 2025 "compiler/codegen.gem"
+    gem_set_line(2025);
     GemVal _t13142[] = {gem_v_b};
     GemVal _t13143 = gem_to_string_fn(NULL, _t13142, 1);
     if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t13143, 1);
@@ -56497,67 +56500,67 @@ static GemVal __anon_187(void *_env, GemVal *args, int argc) {
     GemVal *gem_v_emit_extern_c_decl = _cls->gem_v_emit_extern_c_decl;
     GemVal *gem_v_emit_extern_validation = _cls->gem_v_emit_extern_validation;
     GemVal *gem_v_forward_decls = _cls->gem_v_forward_decls;
-    gem_push_frame("anonymous fn", "compiler/codegen.gem", 2028);
+    gem_push_frame("anonymous fn", "compiler/codegen.gem", 2029);
     GemVal gem_v_node = (argc > 0) ? args[0] : GEM_NIL;
     GemArenaPoint _ret_pt;
     gem_arena_point(&_ret_pt);
-#line 2029 "compiler/codegen.gem"
-    gem_set_line(2029);
+#line 2030 "compiler/codegen.gem"
+    gem_set_line(2030);
     GemVal gem_v___d3 = gem_v_node;
-#line 2029 "compiler/codegen.gem"
-    gem_set_line(2029);
+#line 2030 "compiler/codegen.gem"
+    gem_set_line(2030);
     GemVal _t13148 = gem_v___d3;
     static GemICacheSlot _ic_2153 = {0};
     GemVal gem_v_name = gem_table_get_cached(_t13148, "name", &_ic_2153);
-#line 2029 "compiler/codegen.gem"
-    gem_set_line(2029);
+#line 2030 "compiler/codegen.gem"
+    gem_set_line(2030);
     GemVal _t13149 = gem_v___d3;
     static GemICacheSlot _ic_2154 = {0};
     GemVal gem_v_params = gem_table_get_cached(_t13149, "params", &_ic_2154);
-#line 2029 "compiler/codegen.gem"
-    gem_set_line(2029);
+#line 2030 "compiler/codegen.gem"
+    gem_set_line(2030);
     GemVal _t13150 = gem_v___d3;
     static GemICacheSlot _ic_2155 = {0};
     GemVal gem_v_ret_type = gem_table_get_cached(_t13150, "ret_type", &_ic_2155);
 
-#line 2030 "compiler/codegen.gem"
-    gem_set_line(2030);
+#line 2031 "compiler/codegen.gem"
+    gem_set_line(2031);
     GemVal gem_v___val_337 = GEM_NIL;
-#line 2030 "compiler/codegen.gem"
-    gem_set_line(2030);
+#line 2031 "compiler/codegen.gem"
+    gem_set_line(2031);
     GemVal _t13151 = gem_v_node;
     static GemICacheSlot _ic_2156 = {0};
     if (gem_truthy(gem_neq(gem_table_get_cached(_t13151, "c_name", &_ic_2156), GEM_NIL))) {
-#line 2030 "compiler/codegen.gem"
-        gem_set_line(2030);
+#line 2031 "compiler/codegen.gem"
+        gem_set_line(2031);
     GemVal _t13152 = gem_v_node;
     static GemICacheSlot _ic_2157 = {0};
         gem_v___val_337 = gem_table_get_cached(_t13152, "c_name", &_ic_2157);
     } else {
-#line 2030 "compiler/codegen.gem"
-        gem_set_line(2030);
+#line 2031 "compiler/codegen.gem"
+        gem_set_line(2031);
         gem_v___val_337 = gem_v_name;
     }
-#line 2030 "compiler/codegen.gem"
-    gem_set_line(2030);
-    GemVal gem_v_c_sym = gem_v___val_337;
 #line 2031 "compiler/codegen.gem"
     gem_set_line(2031);
+    GemVal gem_v_c_sym = gem_v___val_337;
+#line 2032 "compiler/codegen.gem"
+    gem_set_line(2032);
     GemVal gem_v_b = gem_buf_new_fn(NULL, NULL, 0);
-#line 2033 "compiler/codegen.gem"
-    gem_set_line(2033);
+#line 2034 "compiler/codegen.gem"
+    gem_set_line(2034);
     GemVal _t13154 = gem_v_b;
     GemVal _t13153[] = {GEM_STR_LIT("struct _blk_", 12), gem_v_name, GEM_STR_LIT("_args {\n", 8)};
     GemVal _t13155[] = {_t13154, gem_interp(3, _t13153)};
     (void)(gem_buf_push_fn(NULL, _t13155, 2));
-#line 2034 "compiler/codegen.gem"
-    gem_set_line(2034);
+#line 2035 "compiler/codegen.gem"
+    gem_set_line(2035);
     GemVal gem_v___for_i_338 = gem_int(0);
-#line 2034 "compiler/codegen.gem"
-    gem_set_line(2034);
+#line 2035 "compiler/codegen.gem"
+    gem_set_line(2035);
     GemVal gem_v___for_limit_338 = gem_len_1(gem_v_params);
-#line 2034 "compiler/codegen.gem"
-    gem_set_line(2034);
+#line 2035 "compiler/codegen.gem"
+    gem_set_line(2035);
     GemArenaMark _mk344;
     gem_arena_mark(&_mk344);
     while (1) {
@@ -56568,87 +56571,87 @@ static GemVal __anon_187(void *_env, GemVal *args, int argc) {
         }
     GemVal _t13156 = gem_v___for_i_338;
         if (!gem_truthy(gem_lt(_t13156, gem_v___for_limit_338))) break;
-#line 2034 "compiler/codegen.gem"
-        gem_set_line(2034);
-        GemVal gem_v_i = gem_v___for_i_338;
-#line 2034 "compiler/codegen.gem"
-        gem_set_line(2034);
-        gem_v___for_i_338 = gem_add(gem_v___for_i_338, gem_int(1));
 #line 2035 "compiler/codegen.gem"
         gem_set_line(2035);
-    GemVal _t13157 = gem_v_params;
-        GemVal gem_v_ptype = gem_table_get(gem_table_get(_t13157, gem_v_i), GEM_STR_LIT("type", 4));
+        GemVal gem_v_i = gem_v___for_i_338;
+#line 2035 "compiler/codegen.gem"
+        gem_set_line(2035);
+        gem_v___for_i_338 = gem_add(gem_v___for_i_338, gem_int(1));
 #line 2036 "compiler/codegen.gem"
         gem_set_line(2036);
-        if (gem_truthy(gem_eq(gem_v_ptype, GEM_STR_LIT("Int", 3)))) {
+    GemVal _t13157 = gem_v_params;
+        GemVal gem_v_ptype = gem_table_get(gem_table_get(_t13157, gem_v_i), GEM_STR_LIT("type", 4));
 #line 2037 "compiler/codegen.gem"
-            gem_set_line(2037);
+        gem_set_line(2037);
+        if (gem_truthy(gem_eq(gem_v_ptype, GEM_STR_LIT("Int", 3)))) {
+#line 2038 "compiler/codegen.gem"
+            gem_set_line(2038);
     GemVal _t13159 = gem_v_b;
     GemVal _t13158[] = {GEM_STR_LIT("    int64_t _p", 14), gem_v_i, GEM_STR_LIT(";\n", 2)};
     GemVal _t13160[] = {_t13159, gem_interp(3, _t13158)};
             (void)(gem_buf_push_fn(NULL, _t13160, 2));
         } else {
-#line 2038 "compiler/codegen.gem"
-            gem_set_line(2038);
-            if (gem_truthy(gem_eq(gem_v_ptype, GEM_STR_LIT("Float", 5)))) {
 #line 2039 "compiler/codegen.gem"
-                gem_set_line(2039);
+            gem_set_line(2039);
+            if (gem_truthy(gem_eq(gem_v_ptype, GEM_STR_LIT("Float", 5)))) {
+#line 2040 "compiler/codegen.gem"
+                gem_set_line(2040);
     GemVal _t13162 = gem_v_b;
     GemVal _t13161[] = {GEM_STR_LIT("    double _p", 13), gem_v_i, GEM_STR_LIT(";\n", 2)};
     GemVal _t13163[] = {_t13162, gem_interp(3, _t13161)};
                 (void)(gem_buf_push_fn(NULL, _t13163, 2));
             } else {
-#line 2040 "compiler/codegen.gem"
-                gem_set_line(2040);
-                if (gem_truthy(gem_eq(gem_v_ptype, GEM_STR_LIT("String", 6)))) {
 #line 2041 "compiler/codegen.gem"
-                    gem_set_line(2041);
+                gem_set_line(2041);
+                if (gem_truthy(gem_eq(gem_v_ptype, GEM_STR_LIT("String", 6)))) {
+#line 2042 "compiler/codegen.gem"
+                    gem_set_line(2042);
     GemVal _t13165 = gem_v_b;
     GemVal _t13164[] = {GEM_STR_LIT("    char *_p", 12), gem_v_i, GEM_STR_LIT(";\n", 2)};
     GemVal _t13166[] = {_t13165, gem_interp(3, _t13164)};
                     (void)(gem_buf_push_fn(NULL, _t13166, 2));
                 } else {
-#line 2042 "compiler/codegen.gem"
-                    gem_set_line(2042);
-                    if (gem_truthy(gem_eq(gem_v_ptype, GEM_STR_LIT("Bool", 4)))) {
 #line 2043 "compiler/codegen.gem"
-                        gem_set_line(2043);
+                    gem_set_line(2043);
+                    if (gem_truthy(gem_eq(gem_v_ptype, GEM_STR_LIT("Bool", 4)))) {
+#line 2044 "compiler/codegen.gem"
+                        gem_set_line(2044);
     GemVal _t13168 = gem_v_b;
     GemVal _t13167[] = {GEM_STR_LIT("    int _p", 10), gem_v_i, GEM_STR_LIT(";\n", 2)};
     GemVal _t13169[] = {_t13168, gem_interp(3, _t13167)};
                         (void)(gem_buf_push_fn(NULL, _t13169, 2));
                     } else {
-#line 2044 "compiler/codegen.gem"
-                        gem_set_line(2044);
-                        if (gem_truthy(gem_eq(gem_v_ptype, GEM_STR_LIT("Ptr", 3)))) {
 #line 2045 "compiler/codegen.gem"
-                            gem_set_line(2045);
+                        gem_set_line(2045);
+                        if (gem_truthy(gem_eq(gem_v_ptype, GEM_STR_LIT("Ptr", 3)))) {
+#line 2046 "compiler/codegen.gem"
+                            gem_set_line(2046);
     GemVal _t13171 = gem_v_b;
     GemVal _t13170[] = {GEM_STR_LIT("    void *_p", 12), gem_v_i, GEM_STR_LIT(";\n", 2)};
     GemVal _t13172[] = {_t13171, gem_interp(3, _t13170)};
                             (void)(gem_buf_push_fn(NULL, _t13172, 2));
                         } else {
-#line 2046 "compiler/codegen.gem"
-                            gem_set_line(2046);
-                            if (gem_truthy(gem_eq(gem_v_ptype, GEM_STR_LIT("Bytes", 5)))) {
 #line 2047 "compiler/codegen.gem"
-                                gem_set_line(2047);
+                            gem_set_line(2047);
+                            if (gem_truthy(gem_eq(gem_v_ptype, GEM_STR_LIT("Bytes", 5)))) {
+#line 2048 "compiler/codegen.gem"
+                                gem_set_line(2048);
     GemVal _t13174 = gem_v_b;
     GemVal _t13173[] = {GEM_STR_LIT("    uint8_t *_p", 15), gem_v_i, GEM_STR_LIT(";\n", 2)};
     GemVal _t13175[] = {_t13174, gem_interp(3, _t13173)};
                                 (void)(gem_buf_push_fn(NULL, _t13175, 2));
-#line 2048 "compiler/codegen.gem"
-                                gem_set_line(2048);
+#line 2049 "compiler/codegen.gem"
+                                gem_set_line(2049);
     GemVal _t13177 = gem_v_b;
     GemVal _t13176[] = {GEM_STR_LIT("    int64_t _p", 14), gem_v_i, GEM_STR_LIT("_len;\n", 6)};
     GemVal _t13178[] = {_t13177, gem_interp(3, _t13176)};
                                 (void)(gem_buf_push_fn(NULL, _t13178, 2));
                             } else {
-#line 2049 "compiler/codegen.gem"
-                                gem_set_line(2049);
-                                if (gem_truthy(gem_eq(gem_v_ptype, GEM_STR_LIT("Socket", 6)))) {
 #line 2050 "compiler/codegen.gem"
-                                    gem_set_line(2050);
+                                gem_set_line(2050);
+                                if (gem_truthy(gem_eq(gem_v_ptype, GEM_STR_LIT("Socket", 6)))) {
+#line 2051 "compiler/codegen.gem"
+                                    gem_set_line(2051);
     GemVal _t13180 = gem_v_b;
     GemVal _t13179[] = {GEM_STR_LIT("    int _p", 10), gem_v_i, GEM_STR_LIT(";\n", 2)};
     GemVal _t13181[] = {_t13180, gem_interp(3, _t13179)};
@@ -56662,51 +56665,51 @@ static GemVal __anon_187(void *_env, GemVal *args, int argc) {
         }
     }
 
-#line 2053 "compiler/codegen.gem"
-    gem_set_line(2053);
-    if (gem_truthy(gem_eq(gem_v_ret_type, GEM_STR_LIT("Int", 3)))) {
 #line 2054 "compiler/codegen.gem"
-        gem_set_line(2054);
+    gem_set_line(2054);
+    if (gem_truthy(gem_eq(gem_v_ret_type, GEM_STR_LIT("Int", 3)))) {
+#line 2055 "compiler/codegen.gem"
+        gem_set_line(2055);
     GemVal _t13182[] = {gem_v_b, GEM_STR_LIT("    int64_t _result;\n", 21)};
         (void)(gem_buf_push_fn(NULL, _t13182, 2));
     } else {
-#line 2055 "compiler/codegen.gem"
-        gem_set_line(2055);
-        if (gem_truthy(gem_eq(gem_v_ret_type, GEM_STR_LIT("Float", 5)))) {
 #line 2056 "compiler/codegen.gem"
-            gem_set_line(2056);
+        gem_set_line(2056);
+        if (gem_truthy(gem_eq(gem_v_ret_type, GEM_STR_LIT("Float", 5)))) {
+#line 2057 "compiler/codegen.gem"
+            gem_set_line(2057);
     GemVal _t13183[] = {gem_v_b, GEM_STR_LIT("    double _result;\n", 20)};
             (void)(gem_buf_push_fn(NULL, _t13183, 2));
         } else {
-#line 2057 "compiler/codegen.gem"
-            gem_set_line(2057);
-            if (gem_truthy(gem_eq(gem_v_ret_type, GEM_STR_LIT("String", 6)))) {
 #line 2058 "compiler/codegen.gem"
-                gem_set_line(2058);
+            gem_set_line(2058);
+            if (gem_truthy(gem_eq(gem_v_ret_type, GEM_STR_LIT("String", 6)))) {
+#line 2059 "compiler/codegen.gem"
+                gem_set_line(2059);
     GemVal _t13184[] = {gem_v_b, GEM_STR_LIT("    char *_result;\n", 19)};
                 (void)(gem_buf_push_fn(NULL, _t13184, 2));
             } else {
-#line 2059 "compiler/codegen.gem"
-                gem_set_line(2059);
-                if (gem_truthy(gem_eq(gem_v_ret_type, GEM_STR_LIT("Bool", 4)))) {
 #line 2060 "compiler/codegen.gem"
-                    gem_set_line(2060);
+                gem_set_line(2060);
+                if (gem_truthy(gem_eq(gem_v_ret_type, GEM_STR_LIT("Bool", 4)))) {
+#line 2061 "compiler/codegen.gem"
+                    gem_set_line(2061);
     GemVal _t13185[] = {gem_v_b, GEM_STR_LIT("    int _result;\n", 17)};
                     (void)(gem_buf_push_fn(NULL, _t13185, 2));
                 } else {
-#line 2061 "compiler/codegen.gem"
-                    gem_set_line(2061);
-                    if (gem_truthy(gem_eq(gem_v_ret_type, GEM_STR_LIT("Ptr", 3)))) {
 #line 2062 "compiler/codegen.gem"
-                        gem_set_line(2062);
+                    gem_set_line(2062);
+                    if (gem_truthy(gem_eq(gem_v_ret_type, GEM_STR_LIT("Ptr", 3)))) {
+#line 2063 "compiler/codegen.gem"
+                        gem_set_line(2063);
     GemVal _t13186[] = {gem_v_b, GEM_STR_LIT("    void *_result;\n", 19)};
                         (void)(gem_buf_push_fn(NULL, _t13186, 2));
                     } else {
-#line 2063 "compiler/codegen.gem"
-                        gem_set_line(2063);
-                        if (gem_truthy(gem_eq(gem_v_ret_type, GEM_STR_LIT("Bytes", 5)))) {
 #line 2064 "compiler/codegen.gem"
-                            gem_set_line(2064);
+                        gem_set_line(2064);
+                        if (gem_truthy(gem_eq(gem_v_ret_type, GEM_STR_LIT("Bytes", 5)))) {
+#line 2065 "compiler/codegen.gem"
+                            gem_set_line(2065);
     GemVal _t13187[] = {gem_v_b, GEM_STR_LIT("    GemBytes _result;\n", 22)};
                             (void)(gem_buf_push_fn(NULL, _t13187, 2));
                         }
@@ -56715,37 +56718,37 @@ static GemVal __anon_187(void *_env, GemVal *args, int argc) {
             }
         }
     }
-#line 2066 "compiler/codegen.gem"
-    gem_set_line(2066);
+#line 2067 "compiler/codegen.gem"
+    gem_set_line(2067);
     GemVal _t13188[] = {gem_v_b, GEM_STR_LIT("};\n\n", 4)};
     (void)(gem_buf_push_fn(NULL, _t13188, 2));
-#line 2068 "compiler/codegen.gem"
-    gem_set_line(2068);
+#line 2069 "compiler/codegen.gem"
+    gem_set_line(2069);
     GemVal _t13190 = gem_v_b;
     GemVal _t13189[] = {GEM_STR_LIT("static void _blk_", 17), gem_v_name, GEM_STR_LIT("_worker(void *_a) {\n", 20)};
     GemVal _t13191[] = {_t13190, gem_interp(3, _t13189)};
     (void)(gem_buf_push_fn(NULL, _t13191, 2));
-#line 2069 "compiler/codegen.gem"
-    gem_set_line(2069);
+#line 2070 "compiler/codegen.gem"
+    gem_set_line(2070);
     GemVal _t13194 = gem_v_b;
     GemVal _t13192 = gem_v_name;
     GemVal _t13193[] = {GEM_STR_LIT("    struct _blk_", 16), _t13192, GEM_STR_LIT("_args *a = (struct _blk_", 24), gem_v_name, GEM_STR_LIT("_args *)_a;\n", 12)};
     GemVal _t13195[] = {_t13194, gem_interp(5, _t13193)};
     (void)(gem_buf_push_fn(NULL, _t13195, 2));
-#line 2071 "compiler/codegen.gem"
-    gem_set_line(2071);
-    GemVal gem_v_w_args = GEM_STR_LIT("", 0);
 #line 2072 "compiler/codegen.gem"
     gem_set_line(2072);
+    GemVal gem_v_w_args = GEM_STR_LIT("", 0);
+#line 2073 "compiler/codegen.gem"
+    gem_set_line(2073);
     GemVal gem_v_w_first = gem_bool(1);
-#line 2073 "compiler/codegen.gem"
-    gem_set_line(2073);
+#line 2074 "compiler/codegen.gem"
+    gem_set_line(2074);
     GemVal gem_v___for_i_340 = gem_int(0);
-#line 2073 "compiler/codegen.gem"
-    gem_set_line(2073);
+#line 2074 "compiler/codegen.gem"
+    gem_set_line(2074);
     GemVal gem_v___for_limit_340 = gem_len_1(gem_v_params);
-#line 2073 "compiler/codegen.gem"
-    gem_set_line(2073);
+#line 2074 "compiler/codegen.gem"
+    gem_set_line(2074);
     int _t13197 = 0;
     GemArenaMark _mk345;
     gem_arena_mark(&_mk345);
@@ -56757,95 +56760,95 @@ static GemVal __anon_187(void *_env, GemVal *args, int argc) {
         }
     GemVal _t13196 = gem_v___for_i_340;
         if (!gem_truthy(gem_lt(_t13196, gem_v___for_limit_340))) break;
-#line 2073 "compiler/codegen.gem"
-        gem_set_line(2073);
-        GemVal gem_v_i = gem_v___for_i_340;
-#line 2073 "compiler/codegen.gem"
-        gem_set_line(2073);
-        gem_v___for_i_340 = gem_add(gem_v___for_i_340, gem_int(1));
 #line 2074 "compiler/codegen.gem"
         gem_set_line(2074);
-        if (gem_truthy(gem_not(gem_v_w_first))) {
+        GemVal gem_v_i = gem_v___for_i_340;
+#line 2074 "compiler/codegen.gem"
+        gem_set_line(2074);
+        gem_v___for_i_340 = gem_add(gem_v___for_i_340, gem_int(1));
 #line 2075 "compiler/codegen.gem"
-            gem_set_line(2075);
+        gem_set_line(2075);
+        if (gem_truthy(gem_not(gem_v_w_first))) {
+#line 2076 "compiler/codegen.gem"
+            gem_set_line(2076);
             gem_string_append_to(&gem_v_w_args, GEM_STR_LIT(", ", 2), &_t13197);
 
         }
-#line 2077 "compiler/codegen.gem"
-        gem_set_line(2077);
+#line 2078 "compiler/codegen.gem"
+        gem_set_line(2078);
         gem_v_w_first = gem_bool(0);
-#line 2078 "compiler/codegen.gem"
-        gem_set_line(2078);
+#line 2079 "compiler/codegen.gem"
+        gem_set_line(2079);
         GemVal gem_v___val_339 = GEM_NIL;
-#line 2078 "compiler/codegen.gem"
-        gem_set_line(2078);
+#line 2079 "compiler/codegen.gem"
+        gem_set_line(2079);
     GemVal _t13198 = gem_v_params;
         if (gem_truthy(gem_eq(gem_table_get(gem_table_get(_t13198, gem_v_i), GEM_STR_LIT("type", 4)), GEM_STR_LIT("Bytes", 5)))) {
-#line 2078 "compiler/codegen.gem"
-            gem_set_line(2078);
+#line 2079 "compiler/codegen.gem"
+            gem_set_line(2079);
     GemVal _t13199 = gem_v_i;
     GemVal _t13200[] = {GEM_STR_LIT("a->_p", 5), _t13199, GEM_STR_LIT(", a->_p", 7), gem_v_i, GEM_STR_LIT("_len", 4)};
             gem_v___val_339 = gem_interp(5, _t13200);
         } else {
-#line 2078 "compiler/codegen.gem"
-            gem_set_line(2078);
+#line 2079 "compiler/codegen.gem"
+            gem_set_line(2079);
     GemVal _t13201[] = {GEM_STR_LIT("a->_p", 5), gem_v_i};
             gem_v___val_339 = gem_interp(2, _t13201);
         }
-#line 2078 "compiler/codegen.gem"
-        gem_set_line(2078);
+#line 2079 "compiler/codegen.gem"
+        gem_set_line(2079);
         gem_string_append_to(&gem_v_w_args, gem_v___val_339, &_t13197);
 
     }
     if (_t13197) gem_v_w_args = gem_string_finish(gem_v_w_args);
 
-#line 2080 "compiler/codegen.gem"
-    gem_set_line(2080);
+#line 2081 "compiler/codegen.gem"
+    gem_set_line(2081);
     GemVal _t13202 = gem_v_c_sym;
     GemVal _t13203[] = {_t13202, GEM_STR_LIT("(", 1), gem_v_w_args, GEM_STR_LIT(")", 1)};
     GemVal gem_v_w_call = gem_interp(4, _t13203);
-#line 2082 "compiler/codegen.gem"
-    gem_set_line(2082);
-    if (gem_truthy(gem_eq(gem_v_ret_type, GEM_STR_LIT("Nil", 3)))) {
 #line 2083 "compiler/codegen.gem"
-        gem_set_line(2083);
+    gem_set_line(2083);
+    if (gem_truthy(gem_eq(gem_v_ret_type, GEM_STR_LIT("Nil", 3)))) {
+#line 2084 "compiler/codegen.gem"
+        gem_set_line(2084);
     GemVal _t13205 = gem_v_b;
     GemVal _t13204[] = {GEM_STR_LIT("    ", 4), gem_v_w_call, GEM_STR_LIT(";\n", 2)};
     GemVal _t13206[] = {_t13205, gem_interp(3, _t13204)};
         (void)(gem_buf_push_fn(NULL, _t13206, 2));
     } else {
-#line 2085 "compiler/codegen.gem"
-        gem_set_line(2085);
+#line 2086 "compiler/codegen.gem"
+        gem_set_line(2086);
     GemVal _t13208 = gem_v_b;
     GemVal _t13207[] = {GEM_STR_LIT("    a->_result = ", 17), gem_v_w_call, GEM_STR_LIT(";\n", 2)};
     GemVal _t13209[] = {_t13208, gem_interp(3, _t13207)};
         (void)(gem_buf_push_fn(NULL, _t13209, 2));
     }
-#line 2087 "compiler/codegen.gem"
-    gem_set_line(2087);
+#line 2088 "compiler/codegen.gem"
+    gem_set_line(2088);
     GemVal _t13210[] = {gem_v_b, GEM_STR_LIT("}\n\n", 3)};
     (void)(gem_buf_push_fn(NULL, _t13210, 2));
-#line 2090 "compiler/codegen.gem"
-    gem_set_line(2090);
+#line 2091 "compiler/codegen.gem"
+    gem_set_line(2091);
     GemVal _t13212 = gem_v_b;
     GemVal _t13211[] = {GEM_STR_LIT("static void _blk_", 17), gem_v_name, GEM_STR_LIT("_free(void *_a) {\n", 18)};
     GemVal _t13213[] = {_t13212, gem_interp(3, _t13211)};
     (void)(gem_buf_push_fn(NULL, _t13213, 2));
-#line 2091 "compiler/codegen.gem"
-    gem_set_line(2091);
+#line 2092 "compiler/codegen.gem"
+    gem_set_line(2092);
     GemVal _t13216 = gem_v_b;
     GemVal _t13214 = gem_v_name;
     GemVal _t13215[] = {GEM_STR_LIT("    struct _blk_", 16), _t13214, GEM_STR_LIT("_args *a = (struct _blk_", 24), gem_v_name, GEM_STR_LIT("_args *)_a;\n", 12)};
     GemVal _t13217[] = {_t13216, gem_interp(5, _t13215)};
     (void)(gem_buf_push_fn(NULL, _t13217, 2));
-#line 2092 "compiler/codegen.gem"
-    gem_set_line(2092);
+#line 2093 "compiler/codegen.gem"
+    gem_set_line(2093);
     GemVal gem_v___for_i_341 = gem_int(0);
-#line 2092 "compiler/codegen.gem"
-    gem_set_line(2092);
+#line 2093 "compiler/codegen.gem"
+    gem_set_line(2093);
     GemVal gem_v___for_limit_341 = gem_len_1(gem_v_params);
-#line 2092 "compiler/codegen.gem"
-    gem_set_line(2092);
+#line 2093 "compiler/codegen.gem"
+    gem_set_line(2093);
     GemArenaMark _mk346;
     gem_arena_mark(&_mk346);
     while (1) {
@@ -56856,18 +56859,18 @@ static GemVal __anon_187(void *_env, GemVal *args, int argc) {
         }
     GemVal _t13218 = gem_v___for_i_341;
         if (!gem_truthy(gem_lt(_t13218, gem_v___for_limit_341))) break;
-#line 2092 "compiler/codegen.gem"
-        gem_set_line(2092);
-        GemVal gem_v_i = gem_v___for_i_341;
-#line 2092 "compiler/codegen.gem"
-        gem_set_line(2092);
-        gem_v___for_i_341 = gem_add(gem_v___for_i_341, gem_int(1));
 #line 2093 "compiler/codegen.gem"
         gem_set_line(2093);
-    GemVal _t13219 = gem_v_params;
-        GemVal gem_v_pt = gem_table_get(gem_table_get(_t13219, gem_v_i), GEM_STR_LIT("type", 4));
+        GemVal gem_v_i = gem_v___for_i_341;
+#line 2093 "compiler/codegen.gem"
+        gem_set_line(2093);
+        gem_v___for_i_341 = gem_add(gem_v___for_i_341, gem_int(1));
 #line 2094 "compiler/codegen.gem"
         gem_set_line(2094);
+    GemVal _t13219 = gem_v_params;
+        GemVal gem_v_pt = gem_table_get(gem_table_get(_t13219, gem_v_i), GEM_STR_LIT("type", 4));
+#line 2095 "compiler/codegen.gem"
+        gem_set_line(2095);
     GemVal _t13220 = gem_eq(gem_v_pt, GEM_STR_LIT("String", 6));
     GemVal _t13221;
     if (gem_truthy(_t13220)) {
@@ -56876,8 +56879,8 @@ static GemVal __anon_187(void *_env, GemVal *args, int argc) {
         _t13221 = gem_eq(gem_v_pt, GEM_STR_LIT("Bytes", 5));
     }
         if (gem_truthy(_t13221)) {
-#line 2095 "compiler/codegen.gem"
-            gem_set_line(2095);
+#line 2096 "compiler/codegen.gem"
+            gem_set_line(2096);
     GemVal _t13223 = gem_v_b;
     GemVal _t13222[] = {GEM_STR_LIT("    free(a->_p", 14), gem_v_i, GEM_STR_LIT(");\n", 3)};
     GemVal _t13224[] = {_t13223, gem_interp(3, _t13222)};
@@ -56885,53 +56888,53 @@ static GemVal __anon_187(void *_env, GemVal *args, int argc) {
         }
     }
 
-#line 2098 "compiler/codegen.gem"
-    gem_set_line(2098);
-    if (gem_truthy(gem_eq(gem_v_ret_type, GEM_STR_LIT("String", 6)))) {
 #line 2099 "compiler/codegen.gem"
-        gem_set_line(2099);
+    gem_set_line(2099);
+    if (gem_truthy(gem_eq(gem_v_ret_type, GEM_STR_LIT("String", 6)))) {
+#line 2100 "compiler/codegen.gem"
+        gem_set_line(2100);
     GemVal _t13225[] = {gem_v_b, GEM_STR_LIT("    free(a->_result);\n", 22)};
         (void)(gem_buf_push_fn(NULL, _t13225, 2));
     } else {
-#line 2100 "compiler/codegen.gem"
-        gem_set_line(2100);
-        if (gem_truthy(gem_eq(gem_v_ret_type, GEM_STR_LIT("Bytes", 5)))) {
 #line 2101 "compiler/codegen.gem"
-            gem_set_line(2101);
+        gem_set_line(2101);
+        if (gem_truthy(gem_eq(gem_v_ret_type, GEM_STR_LIT("Bytes", 5)))) {
+#line 2102 "compiler/codegen.gem"
+            gem_set_line(2102);
     GemVal _t13226[] = {gem_v_b, GEM_STR_LIT("    free((void *)a->_result.data);\n", 35)};
             (void)(gem_buf_push_fn(NULL, _t13226, 2));
         }
     }
-#line 2103 "compiler/codegen.gem"
-    gem_set_line(2103);
-    GemVal _t13227[] = {gem_v_b, GEM_STR_LIT("    free(a);\n", 13)};
-    (void)(gem_buf_push_fn(NULL, _t13227, 2));
 #line 2104 "compiler/codegen.gem"
     gem_set_line(2104);
+    GemVal _t13227[] = {gem_v_b, GEM_STR_LIT("    free(a);\n", 13)};
+    (void)(gem_buf_push_fn(NULL, _t13227, 2));
+#line 2105 "compiler/codegen.gem"
+    gem_set_line(2105);
     GemVal _t13228[] = {gem_v_b, GEM_STR_LIT("}\n\n", 3)};
     (void)(gem_buf_push_fn(NULL, _t13228, 2));
-#line 2106 "compiler/codegen.gem"
-    gem_set_line(2106);
+#line 2107 "compiler/codegen.gem"
+    gem_set_line(2107);
     GemVal _t13230 = gem_v_b;
     GemVal _t13229[] = {GEM_STR_LIT("static GemVal gem_fn_", 21), gem_v_name, GEM_STR_LIT("(void *_env, GemVal *args, int argc) {\n", 39)};
     GemVal _t13231[] = {_t13230, gem_interp(3, _t13229)};
     (void)(gem_buf_push_fn(NULL, _t13231, 2));
-#line 2107 "compiler/codegen.gem"
-    gem_set_line(2107);
+#line 2108 "compiler/codegen.gem"
+    gem_set_line(2108);
     GemVal _t13235 = (*gem_v_emit_extern_validation);
     GemVal _t13233 = gem_v_b;
     GemVal _t13232 = gem_v_c_sym;
     GemVal _t13234[] = {_t13233, _t13232, gem_v_params};
-    gem_check_callable(_t13235, "compiler/codegen.gem", 2107);
+    gem_check_callable(_t13235, "compiler/codegen.gem", 2108);
     (void)(_t13235.fn(_t13235.env, _t13234, 3));
-#line 2109 "compiler/codegen.gem"
-    gem_set_line(2109);
+#line 2110 "compiler/codegen.gem"
+    gem_set_line(2110);
     GemVal gem_v___for_i_342 = gem_int(0);
-#line 2109 "compiler/codegen.gem"
-    gem_set_line(2109);
+#line 2110 "compiler/codegen.gem"
+    gem_set_line(2110);
     GemVal gem_v___for_limit_342 = gem_len_1(gem_v_params);
-#line 2109 "compiler/codegen.gem"
-    gem_set_line(2109);
+#line 2110 "compiler/codegen.gem"
+    gem_set_line(2110);
     GemArenaMark _mk347;
     gem_arena_mark(&_mk347);
     while (1) {
@@ -56942,94 +56945,94 @@ static GemVal __anon_187(void *_env, GemVal *args, int argc) {
         }
     GemVal _t13236 = gem_v___for_i_342;
         if (!gem_truthy(gem_lt(_t13236, gem_v___for_limit_342))) break;
-#line 2109 "compiler/codegen.gem"
-        gem_set_line(2109);
-        GemVal gem_v_i = gem_v___for_i_342;
-#line 2109 "compiler/codegen.gem"
-        gem_set_line(2109);
-        gem_v___for_i_342 = gem_add(gem_v___for_i_342, gem_int(1));
 #line 2110 "compiler/codegen.gem"
         gem_set_line(2110);
-    GemVal _t13237 = gem_v_params;
-        GemVal gem_v_ptype = gem_table_get(gem_table_get(_t13237, gem_v_i), GEM_STR_LIT("type", 4));
+        GemVal gem_v_i = gem_v___for_i_342;
+#line 2110 "compiler/codegen.gem"
+        gem_set_line(2110);
+        gem_v___for_i_342 = gem_add(gem_v___for_i_342, gem_int(1));
 #line 2111 "compiler/codegen.gem"
         gem_set_line(2111);
-        if (gem_truthy(gem_eq(gem_v_ptype, GEM_STR_LIT("Int", 3)))) {
+    GemVal _t13237 = gem_v_params;
+        GemVal gem_v_ptype = gem_table_get(gem_table_get(_t13237, gem_v_i), GEM_STR_LIT("type", 4));
 #line 2112 "compiler/codegen.gem"
-            gem_set_line(2112);
+        gem_set_line(2112);
+        if (gem_truthy(gem_eq(gem_v_ptype, GEM_STR_LIT("Int", 3)))) {
+#line 2113 "compiler/codegen.gem"
+            gem_set_line(2113);
     GemVal _t13240 = gem_v_b;
     GemVal _t13238 = gem_v_i;
     GemVal _t13239[] = {GEM_STR_LIT("    int64_t _p", 14), _t13238, GEM_STR_LIT(" = args[", 8), gem_v_i, GEM_STR_LIT("].ival;\n", 8)};
     GemVal _t13241[] = {_t13240, gem_interp(5, _t13239)};
             (void)(gem_buf_push_fn(NULL, _t13241, 2));
         } else {
-#line 2113 "compiler/codegen.gem"
-            gem_set_line(2113);
-            if (gem_truthy(gem_eq(gem_v_ptype, GEM_STR_LIT("Float", 5)))) {
 #line 2114 "compiler/codegen.gem"
-                gem_set_line(2114);
+            gem_set_line(2114);
+            if (gem_truthy(gem_eq(gem_v_ptype, GEM_STR_LIT("Float", 5)))) {
+#line 2115 "compiler/codegen.gem"
+                gem_set_line(2115);
     GemVal _t13244 = gem_v_b;
     GemVal _t13242 = gem_v_i;
     GemVal _t13243[] = {GEM_STR_LIT("    double _p", 13), _t13242, GEM_STR_LIT(" = args[", 8), gem_v_i, GEM_STR_LIT("].fval;\n", 8)};
     GemVal _t13245[] = {_t13244, gem_interp(5, _t13243)};
                 (void)(gem_buf_push_fn(NULL, _t13245, 2));
             } else {
-#line 2115 "compiler/codegen.gem"
-                gem_set_line(2115);
-                if (gem_truthy(gem_eq(gem_v_ptype, GEM_STR_LIT("String", 6)))) {
 #line 2116 "compiler/codegen.gem"
-                    gem_set_line(2116);
+                gem_set_line(2116);
+                if (gem_truthy(gem_eq(gem_v_ptype, GEM_STR_LIT("String", 6)))) {
+#line 2117 "compiler/codegen.gem"
+                    gem_set_line(2117);
     GemVal _t13248 = gem_v_b;
     GemVal _t13246 = gem_v_i;
     GemVal _t13247[] = {GEM_STR_LIT("    char* _p", 12), _t13246, GEM_STR_LIT(" = args[", 8), gem_v_i, GEM_STR_LIT("].sval;\n", 8)};
     GemVal _t13249[] = {_t13248, gem_interp(5, _t13247)};
                     (void)(gem_buf_push_fn(NULL, _t13249, 2));
                 } else {
-#line 2117 "compiler/codegen.gem"
-                    gem_set_line(2117);
-                    if (gem_truthy(gem_eq(gem_v_ptype, GEM_STR_LIT("Bool", 4)))) {
 #line 2118 "compiler/codegen.gem"
-                        gem_set_line(2118);
+                    gem_set_line(2118);
+                    if (gem_truthy(gem_eq(gem_v_ptype, GEM_STR_LIT("Bool", 4)))) {
+#line 2119 "compiler/codegen.gem"
+                        gem_set_line(2119);
     GemVal _t13252 = gem_v_b;
     GemVal _t13250 = gem_v_i;
     GemVal _t13251[] = {GEM_STR_LIT("    int _p", 10), _t13250, GEM_STR_LIT(" = args[", 8), gem_v_i, GEM_STR_LIT("].bval;\n", 8)};
     GemVal _t13253[] = {_t13252, gem_interp(5, _t13251)};
                         (void)(gem_buf_push_fn(NULL, _t13253, 2));
                     } else {
-#line 2119 "compiler/codegen.gem"
-                        gem_set_line(2119);
-                        if (gem_truthy(gem_eq(gem_v_ptype, GEM_STR_LIT("Ptr", 3)))) {
 #line 2120 "compiler/codegen.gem"
-                            gem_set_line(2120);
+                        gem_set_line(2120);
+                        if (gem_truthy(gem_eq(gem_v_ptype, GEM_STR_LIT("Ptr", 3)))) {
+#line 2121 "compiler/codegen.gem"
+                            gem_set_line(2121);
     GemVal _t13256 = gem_v_b;
     GemVal _t13254 = gem_v_i;
     GemVal _t13255[] = {GEM_STR_LIT("    void* _p", 12), _t13254, GEM_STR_LIT(" = (void*)(intptr_t)args[", 25), gem_v_i, GEM_STR_LIT("].ival;\n", 8)};
     GemVal _t13257[] = {_t13256, gem_interp(5, _t13255)};
                             (void)(gem_buf_push_fn(NULL, _t13257, 2));
                         } else {
-#line 2121 "compiler/codegen.gem"
-                            gem_set_line(2121);
-                            if (gem_truthy(gem_eq(gem_v_ptype, GEM_STR_LIT("Bytes", 5)))) {
 #line 2122 "compiler/codegen.gem"
-                                gem_set_line(2122);
+                            gem_set_line(2122);
+                            if (gem_truthy(gem_eq(gem_v_ptype, GEM_STR_LIT("Bytes", 5)))) {
+#line 2123 "compiler/codegen.gem"
+                                gem_set_line(2123);
     GemVal _t13260 = gem_v_b;
     GemVal _t13258 = gem_v_i;
     GemVal _t13259[] = {GEM_STR_LIT("    const uint8_t* _p", 21), _t13258, GEM_STR_LIT(" = (const uint8_t*)args[", 24), gem_v_i, GEM_STR_LIT("].sval;\n", 8)};
     GemVal _t13261[] = {_t13260, gem_interp(5, _t13259)};
                                 (void)(gem_buf_push_fn(NULL, _t13261, 2));
-#line 2123 "compiler/codegen.gem"
-                                gem_set_line(2123);
+#line 2124 "compiler/codegen.gem"
+                                gem_set_line(2124);
     GemVal _t13264 = gem_v_b;
     GemVal _t13262 = gem_v_i;
     GemVal _t13263[] = {GEM_STR_LIT("    int64_t _p", 14), _t13262, GEM_STR_LIT("_len = (int64_t)args[", 21), gem_v_i, GEM_STR_LIT("].slen;\n", 8)};
     GemVal _t13265[] = {_t13264, gem_interp(5, _t13263)};
                                 (void)(gem_buf_push_fn(NULL, _t13265, 2));
                             } else {
-#line 2124 "compiler/codegen.gem"
-                                gem_set_line(2124);
-                                if (gem_truthy(gem_eq(gem_v_ptype, GEM_STR_LIT("Socket", 6)))) {
 #line 2125 "compiler/codegen.gem"
-                                    gem_set_line(2125);
+                                gem_set_line(2125);
+                                if (gem_truthy(gem_eq(gem_v_ptype, GEM_STR_LIT("Socket", 6)))) {
+#line 2126 "compiler/codegen.gem"
+                                    gem_set_line(2126);
     GemVal _t13270 = gem_v_b;
     GemVal _t13268 = gem_v_i;
     GemVal _t13267 = gem_v_i;
@@ -57046,26 +57049,26 @@ static GemVal __anon_187(void *_env, GemVal *args, int argc) {
         }
     }
 
-#line 2129 "compiler/codegen.gem"
-    gem_set_line(2129);
-    GemVal _t13272[] = {gem_v_b, GEM_STR_LIT("    if (gem_current_pid >= 0) {\n", 32)};
-    (void)(gem_buf_push_fn(NULL, _t13272, 2));
 #line 2130 "compiler/codegen.gem"
     gem_set_line(2130);
+    GemVal _t13272[] = {gem_v_b, GEM_STR_LIT("    if (gem_current_pid >= 0) {\n", 32)};
+    (void)(gem_buf_push_fn(NULL, _t13272, 2));
+#line 2131 "compiler/codegen.gem"
+    gem_set_line(2131);
     GemVal _t13276 = gem_v_b;
     GemVal _t13274 = gem_v_name;
     GemVal _t13273 = gem_v_name;
     GemVal _t13275[] = {GEM_STR_LIT("        struct _blk_", 20), _t13274, GEM_STR_LIT("_args *_ba = (struct _blk_", 26), _t13273, GEM_STR_LIT("_args *)calloc(1, sizeof(struct _blk_", 37), gem_v_name, GEM_STR_LIT("_args));\n", 9)};
     GemVal _t13277[] = {_t13276, gem_interp(7, _t13275)};
     (void)(gem_buf_push_fn(NULL, _t13277, 2));
-#line 2133 "compiler/codegen.gem"
-    gem_set_line(2133);
+#line 2134 "compiler/codegen.gem"
+    gem_set_line(2134);
     GemVal gem_v___for_i_343 = gem_int(0);
-#line 2133 "compiler/codegen.gem"
-    gem_set_line(2133);
+#line 2134 "compiler/codegen.gem"
+    gem_set_line(2134);
     GemVal gem_v___for_limit_343 = gem_len_1(gem_v_params);
-#line 2133 "compiler/codegen.gem"
-    gem_set_line(2133);
+#line 2134 "compiler/codegen.gem"
+    gem_set_line(2134);
     GemArenaMark _mk348;
     gem_arena_mark(&_mk348);
     while (1) {
@@ -57076,39 +57079,39 @@ static GemVal __anon_187(void *_env, GemVal *args, int argc) {
         }
     GemVal _t13278 = gem_v___for_i_343;
         if (!gem_truthy(gem_lt(_t13278, gem_v___for_limit_343))) break;
-#line 2133 "compiler/codegen.gem"
-        gem_set_line(2133);
-        GemVal gem_v_i = gem_v___for_i_343;
-#line 2133 "compiler/codegen.gem"
-        gem_set_line(2133);
-        gem_v___for_i_343 = gem_add(gem_v___for_i_343, gem_int(1));
 #line 2134 "compiler/codegen.gem"
         gem_set_line(2134);
-    GemVal _t13279 = gem_v_params;
-        GemVal gem_v_ptype = gem_table_get(gem_table_get(_t13279, gem_v_i), GEM_STR_LIT("type", 4));
+        GemVal gem_v_i = gem_v___for_i_343;
+#line 2134 "compiler/codegen.gem"
+        gem_set_line(2134);
+        gem_v___for_i_343 = gem_add(gem_v___for_i_343, gem_int(1));
 #line 2135 "compiler/codegen.gem"
         gem_set_line(2135);
-        if (gem_truthy(gem_eq(gem_v_ptype, GEM_STR_LIT("String", 6)))) {
+    GemVal _t13279 = gem_v_params;
+        GemVal gem_v_ptype = gem_table_get(gem_table_get(_t13279, gem_v_i), GEM_STR_LIT("type", 4));
 #line 2136 "compiler/codegen.gem"
-            gem_set_line(2136);
+        gem_set_line(2136);
+        if (gem_truthy(gem_eq(gem_v_ptype, GEM_STR_LIT("String", 6)))) {
+#line 2137 "compiler/codegen.gem"
+            gem_set_line(2137);
     GemVal _t13282 = gem_v_b;
     GemVal _t13280 = gem_v_i;
     GemVal _t13281[] = {GEM_STR_LIT("        _ba->_p", 15), _t13280, GEM_STR_LIT(" = strdup(_p", 12), gem_v_i, GEM_STR_LIT(");\n", 3)};
     GemVal _t13283[] = {_t13282, gem_interp(5, _t13281)};
             (void)(gem_buf_push_fn(NULL, _t13283, 2));
         } else {
-#line 2137 "compiler/codegen.gem"
-            gem_set_line(2137);
-            if (gem_truthy(gem_eq(gem_v_ptype, GEM_STR_LIT("Bytes", 5)))) {
 #line 2138 "compiler/codegen.gem"
-                gem_set_line(2138);
+            gem_set_line(2138);
+            if (gem_truthy(gem_eq(gem_v_ptype, GEM_STR_LIT("Bytes", 5)))) {
+#line 2139 "compiler/codegen.gem"
+                gem_set_line(2139);
     GemVal _t13286 = gem_v_b;
     GemVal _t13284 = gem_v_i;
     GemVal _t13285[] = {GEM_STR_LIT("        _ba->_p", 15), _t13284, GEM_STR_LIT(" = (uint8_t*)malloc((size_t)_p", 30), gem_v_i, GEM_STR_LIT("_len);\n", 7)};
     GemVal _t13287[] = {_t13286, gem_interp(5, _t13285)};
                 (void)(gem_buf_push_fn(NULL, _t13287, 2));
-#line 2139 "compiler/codegen.gem"
-                gem_set_line(2139);
+#line 2140 "compiler/codegen.gem"
+                gem_set_line(2140);
     GemVal _t13292 = gem_v_b;
     GemVal _t13290 = gem_v_i;
     GemVal _t13289 = gem_v_i;
@@ -57116,16 +57119,16 @@ static GemVal __anon_187(void *_env, GemVal *args, int argc) {
     GemVal _t13291[] = {GEM_STR_LIT("        if (_p", 14), _t13290, GEM_STR_LIT("_len > 0) memcpy(_ba->_p", 24), _t13289, GEM_STR_LIT(", _p", 4), _t13288, GEM_STR_LIT(", (size_t)_p", 12), gem_v_i, GEM_STR_LIT("_len);\n", 7)};
     GemVal _t13293[] = {_t13292, gem_interp(9, _t13291)};
                 (void)(gem_buf_push_fn(NULL, _t13293, 2));
-#line 2140 "compiler/codegen.gem"
-                gem_set_line(2140);
+#line 2141 "compiler/codegen.gem"
+                gem_set_line(2141);
     GemVal _t13296 = gem_v_b;
     GemVal _t13294 = gem_v_i;
     GemVal _t13295[] = {GEM_STR_LIT("        _ba->_p", 15), _t13294, GEM_STR_LIT("_len = _p", 9), gem_v_i, GEM_STR_LIT("_len;\n", 6)};
     GemVal _t13297[] = {_t13296, gem_interp(5, _t13295)};
                 (void)(gem_buf_push_fn(NULL, _t13297, 2));
             } else {
-#line 2142 "compiler/codegen.gem"
-                gem_set_line(2142);
+#line 2143 "compiler/codegen.gem"
+                gem_set_line(2143);
     GemVal _t13300 = gem_v_b;
     GemVal _t13298 = gem_v_i;
     GemVal _t13299[] = {GEM_STR_LIT("        _ba->_p", 15), _t13298, GEM_STR_LIT(" = _p", 5), gem_v_i, GEM_STR_LIT(";\n", 2)};
@@ -57135,33 +57138,33 @@ static GemVal __anon_187(void *_env, GemVal *args, int argc) {
         }
     }
 
-#line 2146 "compiler/codegen.gem"
-    gem_set_line(2146);
+#line 2147 "compiler/codegen.gem"
+    gem_set_line(2147);
     GemVal _t13304 = gem_v_b;
     GemVal _t13302 = gem_v_name;
     GemVal _t13303[] = {GEM_STR_LIT("        GemIORequest *_req = gem_io_submit_extern(_blk_", 55), _t13302, GEM_STR_LIT("_worker, _ba, _blk_", 19), gem_v_name, GEM_STR_LIT("_free);\n", 8)};
     GemVal _t13305[] = {_t13304, gem_interp(5, _t13303)};
     (void)(gem_buf_push_fn(NULL, _t13305, 2));
-#line 2147 "compiler/codegen.gem"
-    gem_set_line(2147);
+#line 2148 "compiler/codegen.gem"
+    gem_set_line(2148);
     GemVal _t13307 = gem_v_b;
     GemVal _t13306[] = {GEM_STR_LIT("        if (!_req) gem_error(\"", 30), gem_v_c_sym, GEM_STR_LIT(": I/O queue full\");\n", 20)};
     GemVal _t13308[] = {_t13307, gem_interp(3, _t13306)};
     (void)(gem_buf_push_fn(NULL, _t13308, 2));
-#line 2149 "compiler/codegen.gem"
-    gem_set_line(2149);
-    GemVal gem_v_sock_idx = GEM_STR_LIT("", 0);
 #line 2150 "compiler/codegen.gem"
     gem_set_line(2150);
+    GemVal gem_v_sock_idx = GEM_STR_LIT("", 0);
+#line 2151 "compiler/codegen.gem"
+    gem_set_line(2151);
     GemVal gem_v_n_socks = gem_int(0);
-#line 2151 "compiler/codegen.gem"
-    gem_set_line(2151);
+#line 2152 "compiler/codegen.gem"
+    gem_set_line(2152);
     GemVal gem_v___for_i_345 = gem_int(0);
-#line 2151 "compiler/codegen.gem"
-    gem_set_line(2151);
+#line 2152 "compiler/codegen.gem"
+    gem_set_line(2152);
     GemVal gem_v___for_limit_345 = gem_len_1(gem_v_params);
-#line 2151 "compiler/codegen.gem"
-    gem_set_line(2151);
+#line 2152 "compiler/codegen.gem"
+    gem_set_line(2152);
     GemArenaMark _mk349;
     gem_arena_mark(&_mk349);
     while (1) {
@@ -57172,186 +57175,186 @@ static GemVal __anon_187(void *_env, GemVal *args, int argc) {
         }
     GemVal _t13309 = gem_v___for_i_345;
         if (!gem_truthy(gem_lt(_t13309, gem_v___for_limit_345))) break;
-#line 2151 "compiler/codegen.gem"
-        gem_set_line(2151);
-        GemVal gem_v_i = gem_v___for_i_345;
-#line 2151 "compiler/codegen.gem"
-        gem_set_line(2151);
-        gem_v___for_i_345 = gem_add(gem_v___for_i_345, gem_int(1));
 #line 2152 "compiler/codegen.gem"
         gem_set_line(2152);
+        GemVal gem_v_i = gem_v___for_i_345;
+#line 2152 "compiler/codegen.gem"
+        gem_set_line(2152);
+        gem_v___for_i_345 = gem_add(gem_v___for_i_345, gem_int(1));
+#line 2153 "compiler/codegen.gem"
+        gem_set_line(2153);
     GemVal _t13310 = gem_v_params;
         if (gem_truthy(gem_eq(gem_table_get(gem_table_get(_t13310, gem_v_i), GEM_STR_LIT("type", 4)), GEM_STR_LIT("Socket", 6)))) {
-#line 2153 "compiler/codegen.gem"
-            gem_set_line(2153);
+#line 2154 "compiler/codegen.gem"
+            gem_set_line(2154);
             GemVal gem_v___val_344 = GEM_NIL;
-#line 2153 "compiler/codegen.gem"
-            gem_set_line(2153);
+#line 2154 "compiler/codegen.gem"
+            gem_set_line(2154);
             if (gem_truthy(gem_eq(gem_v_n_socks, gem_int(0)))) {
-#line 2153 "compiler/codegen.gem"
-                gem_set_line(2153);
+#line 2154 "compiler/codegen.gem"
+                gem_set_line(2154);
     GemVal _t13311[] = {gem_v_i};
                 gem_v___val_344 = gem_interp(1, _t13311);
             } else {
-#line 2153 "compiler/codegen.gem"
-                gem_set_line(2153);
+#line 2154 "compiler/codegen.gem"
+                gem_set_line(2154);
     GemVal _t13312 = gem_v_sock_idx;
     GemVal _t13313[] = {_t13312, GEM_STR_LIT(", ", 2), gem_v_i};
                 gem_v___val_344 = gem_interp(3, _t13313);
             }
-#line 2153 "compiler/codegen.gem"
-            gem_set_line(2153);
-            gem_v_sock_idx = gem_v___val_344;
 #line 2154 "compiler/codegen.gem"
             gem_set_line(2154);
+            gem_v_sock_idx = gem_v___val_344;
+#line 2155 "compiler/codegen.gem"
+            gem_set_line(2155);
             gem_v_n_socks = gem_add(gem_v_n_socks, gem_int(1));
         }
     }
 
-#line 2157 "compiler/codegen.gem"
-    gem_set_line(2157);
-    if (gem_truthy(gem_gt(gem_v_n_socks, gem_int(0)))) {
 #line 2158 "compiler/codegen.gem"
-        gem_set_line(2158);
+    gem_set_line(2158);
+    if (gem_truthy(gem_gt(gem_v_n_socks, gem_int(0)))) {
+#line 2159 "compiler/codegen.gem"
+        gem_set_line(2159);
     GemVal _t13315 = gem_v_b;
     GemVal _t13314[] = {GEM_STR_LIT("        static const int _sock_idx[] = {", 40), gem_v_sock_idx, GEM_STR_LIT("};\n", 3)};
     GemVal _t13316[] = {_t13315, gem_interp(3, _t13314)};
         (void)(gem_buf_push_fn(NULL, _t13316, 2));
-#line 2159 "compiler/codegen.gem"
-        gem_set_line(2159);
+#line 2160 "compiler/codegen.gem"
+        gem_set_line(2160);
     GemVal _t13318 = gem_v_b;
     GemVal _t13317[] = {GEM_STR_LIT("        gem_res_busy_begin(_req, args, _sock_idx, ", 50), gem_v_n_socks, GEM_STR_LIT(");\n", 3)};
     GemVal _t13319[] = {_t13318, gem_interp(3, _t13317)};
         (void)(gem_buf_push_fn(NULL, _t13319, 2));
     }
-#line 2161 "compiler/codegen.gem"
-    gem_set_line(2161);
-    GemVal _t13320[] = {gem_v_b, GEM_STR_LIT("        GemProcess *_proc = &gem_proc_table[gem_current_pid];\n", 62)};
-    (void)(gem_buf_push_fn(NULL, _t13320, 2));
 #line 2162 "compiler/codegen.gem"
     gem_set_line(2162);
-    GemVal _t13321[] = {gem_v_b, GEM_STR_LIT("        _proc->io_request = _req;\n", 34)};
-    (void)(gem_buf_push_fn(NULL, _t13321, 2));
+    GemVal _t13320[] = {gem_v_b, GEM_STR_LIT("        GemProcess *_proc = &gem_proc_table[gem_current_pid];\n", 62)};
+    (void)(gem_buf_push_fn(NULL, _t13320, 2));
 #line 2163 "compiler/codegen.gem"
     gem_set_line(2163);
-    GemVal _t13322[] = {gem_v_b, GEM_STR_LIT("        gem_io_pool_yield();\n", 29)};
-    (void)(gem_buf_push_fn(NULL, _t13322, 2));
+    GemVal _t13321[] = {gem_v_b, GEM_STR_LIT("        _proc->io_request = _req;\n", 34)};
+    (void)(gem_buf_push_fn(NULL, _t13321, 2));
 #line 2164 "compiler/codegen.gem"
     gem_set_line(2164);
-    GemVal _t13323[] = {gem_v_b, GEM_STR_LIT("        _proc->io_request = NULL;\n", 34)};
-    (void)(gem_buf_push_fn(NULL, _t13323, 2));
+    GemVal _t13322[] = {gem_v_b, GEM_STR_LIT("        gem_io_pool_yield();\n", 29)};
+    (void)(gem_buf_push_fn(NULL, _t13322, 2));
 #line 2165 "compiler/codegen.gem"
     gem_set_line(2165);
-    if (gem_truthy(gem_gt(gem_v_n_socks, gem_int(0)))) {
+    GemVal _t13323[] = {gem_v_b, GEM_STR_LIT("        _proc->io_request = NULL;\n", 34)};
+    (void)(gem_buf_push_fn(NULL, _t13323, 2));
 #line 2166 "compiler/codegen.gem"
-        gem_set_line(2166);
+    gem_set_line(2166);
+    if (gem_truthy(gem_gt(gem_v_n_socks, gem_int(0)))) {
+#line 2167 "compiler/codegen.gem"
+        gem_set_line(2167);
     GemVal _t13324[] = {gem_v_b, GEM_STR_LIT("        gem_res_busy_end(_req);\n", 32)};
         (void)(gem_buf_push_fn(NULL, _t13324, 2));
     }
-#line 2170 "compiler/codegen.gem"
-    gem_set_line(2170);
-    if (gem_truthy(gem_eq(gem_v_ret_type, GEM_STR_LIT("String", 6)))) {
 #line 2171 "compiler/codegen.gem"
-        gem_set_line(2171);
-    GemVal _t13325[] = {gem_v_b, GEM_STR_LIT("        GemVal _gv = gem_string(_ba->_result ? _ba->_result : \"\");\n", 67)};
-        (void)(gem_buf_push_fn(NULL, _t13325, 2));
+    gem_set_line(2171);
+    if (gem_truthy(gem_eq(gem_v_ret_type, GEM_STR_LIT("String", 6)))) {
 #line 2172 "compiler/codegen.gem"
         gem_set_line(2172);
-    GemVal _t13326[] = {gem_v_b, GEM_STR_LIT("        gem_io_release(_req);\n", 30)};
-        (void)(gem_buf_push_fn(NULL, _t13326, 2));
+    GemVal _t13325[] = {gem_v_b, GEM_STR_LIT("        GemVal _gv = gem_string(_ba->_result ? _ba->_result : \"\");\n", 67)};
+        (void)(gem_buf_push_fn(NULL, _t13325, 2));
 #line 2173 "compiler/codegen.gem"
         gem_set_line(2173);
+    GemVal _t13326[] = {gem_v_b, GEM_STR_LIT("        gem_io_release(_req);\n", 30)};
+        (void)(gem_buf_push_fn(NULL, _t13326, 2));
+#line 2174 "compiler/codegen.gem"
+        gem_set_line(2174);
     GemVal _t13327[] = {gem_v_b, GEM_STR_LIT("        return _gv;\n", 20)};
         (void)(gem_buf_push_fn(NULL, _t13327, 2));
     } else {
-#line 2174 "compiler/codegen.gem"
-        gem_set_line(2174);
-        if (gem_truthy(gem_eq(gem_v_ret_type, GEM_STR_LIT("Bytes", 5)))) {
 #line 2175 "compiler/codegen.gem"
-            gem_set_line(2175);
-    GemVal _t13328[] = {gem_v_b, GEM_STR_LIT("        GemBytes _raw = _ba->_result;\n", 38)};
-            (void)(gem_buf_push_fn(NULL, _t13328, 2));
+        gem_set_line(2175);
+        if (gem_truthy(gem_eq(gem_v_ret_type, GEM_STR_LIT("Bytes", 5)))) {
 #line 2176 "compiler/codegen.gem"
             gem_set_line(2176);
+    GemVal _t13328[] = {gem_v_b, GEM_STR_LIT("        GemBytes _raw = _ba->_result;\n", 38)};
+            (void)(gem_buf_push_fn(NULL, _t13328, 2));
+#line 2177 "compiler/codegen.gem"
+            gem_set_line(2177);
     GemVal _t13330 = gem_v_b;
     GemVal _t13329[] = {GEM_STR_LIT("        if (_raw.data && _raw.len > GEM_MAX_STRLEN) { gem_io_release(_req); gem_strlen_check((size_t)_raw.len, \"", 112), gem_v_c_sym, GEM_STR_LIT("\"); }\n", 6)};
     GemVal _t13331[] = {_t13330, gem_interp(3, _t13329)};
             (void)(gem_buf_push_fn(NULL, _t13331, 2));
-#line 2177 "compiler/codegen.gem"
-            gem_set_line(2177);
-    GemVal _t13332[] = {gem_v_b, GEM_STR_LIT("        GemVal _gv = _raw.data ? gem_string_with_len((const char*)_raw.data, _raw.len) : gem_string_with_len(\"\", 0);\n", 117)};
-            (void)(gem_buf_push_fn(NULL, _t13332, 2));
 #line 2178 "compiler/codegen.gem"
             gem_set_line(2178);
-    GemVal _t13333[] = {gem_v_b, GEM_STR_LIT("        gem_io_release(_req);\n", 30)};
-            (void)(gem_buf_push_fn(NULL, _t13333, 2));
+    GemVal _t13332[] = {gem_v_b, GEM_STR_LIT("        GemVal _gv = _raw.data ? gem_string_with_len((const char*)_raw.data, _raw.len) : gem_string_with_len(\"\", 0);\n", 117)};
+            (void)(gem_buf_push_fn(NULL, _t13332, 2));
 #line 2179 "compiler/codegen.gem"
             gem_set_line(2179);
+    GemVal _t13333[] = {gem_v_b, GEM_STR_LIT("        gem_io_release(_req);\n", 30)};
+            (void)(gem_buf_push_fn(NULL, _t13333, 2));
+#line 2180 "compiler/codegen.gem"
+            gem_set_line(2180);
     GemVal _t13334[] = {gem_v_b, GEM_STR_LIT("        return _gv;\n", 20)};
             (void)(gem_buf_push_fn(NULL, _t13334, 2));
         } else {
-#line 2180 "compiler/codegen.gem"
-            gem_set_line(2180);
-            if (gem_truthy(gem_eq(gem_v_ret_type, GEM_STR_LIT("Nil", 3)))) {
 #line 2181 "compiler/codegen.gem"
-                gem_set_line(2181);
-    GemVal _t13335[] = {gem_v_b, GEM_STR_LIT("        gem_io_release(_req);\n", 30)};
-                (void)(gem_buf_push_fn(NULL, _t13335, 2));
+            gem_set_line(2181);
+            if (gem_truthy(gem_eq(gem_v_ret_type, GEM_STR_LIT("Nil", 3)))) {
 #line 2182 "compiler/codegen.gem"
                 gem_set_line(2182);
+    GemVal _t13335[] = {gem_v_b, GEM_STR_LIT("        gem_io_release(_req);\n", 30)};
+                (void)(gem_buf_push_fn(NULL, _t13335, 2));
+#line 2183 "compiler/codegen.gem"
+                gem_set_line(2183);
     GemVal _t13336[] = {gem_v_b, GEM_STR_LIT("        return GEM_NIL;\n", 24)};
                 (void)(gem_buf_push_fn(NULL, _t13336, 2));
             } else {
-#line 2184 "compiler/codegen.gem"
-                gem_set_line(2184);
-                GemVal gem_v_c_type = GEM_STR_LIT("int64_t", 7);
 #line 2185 "compiler/codegen.gem"
                 gem_set_line(2185);
-                GemVal gem_v_ret_val = GEM_STR_LIT("gem_int(_ret)", 13);
+                GemVal gem_v_c_type = GEM_STR_LIT("int64_t", 7);
 #line 2186 "compiler/codegen.gem"
                 gem_set_line(2186);
-                if (gem_truthy(gem_eq(gem_v_ret_type, GEM_STR_LIT("Float", 5)))) {
+                GemVal gem_v_ret_val = GEM_STR_LIT("gem_int(_ret)", 13);
 #line 2187 "compiler/codegen.gem"
-                    gem_set_line(2187);
-                    gem_v_c_type = GEM_STR_LIT("double", 6);
+                gem_set_line(2187);
+                if (gem_truthy(gem_eq(gem_v_ret_type, GEM_STR_LIT("Float", 5)))) {
 #line 2188 "compiler/codegen.gem"
                     gem_set_line(2188);
-                    gem_v_ret_val = GEM_STR_LIT("gem_float(_ret)", 15);
-                } else {
+                    gem_v_c_type = GEM_STR_LIT("double", 6);
 #line 2189 "compiler/codegen.gem"
                     gem_set_line(2189);
-                    if (gem_truthy(gem_eq(gem_v_ret_type, GEM_STR_LIT("Bool", 4)))) {
+                    gem_v_ret_val = GEM_STR_LIT("gem_float(_ret)", 15);
+                } else {
 #line 2190 "compiler/codegen.gem"
-                        gem_set_line(2190);
-                        gem_v_c_type = GEM_STR_LIT("int", 3);
+                    gem_set_line(2190);
+                    if (gem_truthy(gem_eq(gem_v_ret_type, GEM_STR_LIT("Bool", 4)))) {
 #line 2191 "compiler/codegen.gem"
                         gem_set_line(2191);
-                        gem_v_ret_val = GEM_STR_LIT("gem_bool(_ret)", 14);
-                    } else {
+                        gem_v_c_type = GEM_STR_LIT("int", 3);
 #line 2192 "compiler/codegen.gem"
                         gem_set_line(2192);
-                        if (gem_truthy(gem_eq(gem_v_ret_type, GEM_STR_LIT("Ptr", 3)))) {
+                        gem_v_ret_val = GEM_STR_LIT("gem_bool(_ret)", 14);
+                    } else {
 #line 2193 "compiler/codegen.gem"
-                            gem_set_line(2193);
-                            gem_v_c_type = GEM_STR_LIT("void *", 6);
+                        gem_set_line(2193);
+                        if (gem_truthy(gem_eq(gem_v_ret_type, GEM_STR_LIT("Ptr", 3)))) {
 #line 2194 "compiler/codegen.gem"
                             gem_set_line(2194);
+                            gem_v_c_type = GEM_STR_LIT("void *", 6);
+#line 2195 "compiler/codegen.gem"
+                            gem_set_line(2195);
                             gem_v_ret_val = GEM_STR_LIT("gem_int((int64_t)(intptr_t)_ret)", 32);
                         }
                     }
                 }
-#line 2196 "compiler/codegen.gem"
-                gem_set_line(2196);
+#line 2197 "compiler/codegen.gem"
+                gem_set_line(2197);
     GemVal _t13338 = gem_v_b;
     GemVal _t13337[] = {GEM_STR_LIT("        ", 8), gem_v_c_type, GEM_STR_LIT(" _ret = _ba->_result;\n", 22)};
     GemVal _t13339[] = {_t13338, gem_interp(3, _t13337)};
                 (void)(gem_buf_push_fn(NULL, _t13339, 2));
-#line 2197 "compiler/codegen.gem"
-                gem_set_line(2197);
-    GemVal _t13340[] = {gem_v_b, GEM_STR_LIT("        gem_io_release(_req);\n", 30)};
-                (void)(gem_buf_push_fn(NULL, _t13340, 2));
 #line 2198 "compiler/codegen.gem"
                 gem_set_line(2198);
+    GemVal _t13340[] = {gem_v_b, GEM_STR_LIT("        gem_io_release(_req);\n", 30)};
+                (void)(gem_buf_push_fn(NULL, _t13340, 2));
+#line 2199 "compiler/codegen.gem"
+                gem_set_line(2199);
     GemVal _t13342 = gem_v_b;
     GemVal _t13341[] = {GEM_STR_LIT("        return ", 15), gem_v_ret_val, GEM_STR_LIT(";\n", 2)};
     GemVal _t13343[] = {_t13342, gem_interp(3, _t13341)};
@@ -57359,24 +57362,24 @@ static GemVal __anon_187(void *_env, GemVal *args, int argc) {
             }
         }
     }
-#line 2200 "compiler/codegen.gem"
-    gem_set_line(2200);
+#line 2201 "compiler/codegen.gem"
+    gem_set_line(2201);
     GemVal _t13344[] = {gem_v_b, GEM_STR_LIT("    }\n", 6)};
     (void)(gem_buf_push_fn(NULL, _t13344, 2));
-#line 2203 "compiler/codegen.gem"
-    gem_set_line(2203);
-    GemVal gem_v_d_args = GEM_STR_LIT("", 0);
 #line 2204 "compiler/codegen.gem"
     gem_set_line(2204);
+    GemVal gem_v_d_args = GEM_STR_LIT("", 0);
+#line 2205 "compiler/codegen.gem"
+    gem_set_line(2205);
     GemVal gem_v_d_first = gem_bool(1);
-#line 2205 "compiler/codegen.gem"
-    gem_set_line(2205);
+#line 2206 "compiler/codegen.gem"
+    gem_set_line(2206);
     GemVal gem_v___for_i_347 = gem_int(0);
-#line 2205 "compiler/codegen.gem"
-    gem_set_line(2205);
+#line 2206 "compiler/codegen.gem"
+    gem_set_line(2206);
     GemVal gem_v___for_limit_347 = gem_len_1(gem_v_params);
-#line 2205 "compiler/codegen.gem"
-    gem_set_line(2205);
+#line 2206 "compiler/codegen.gem"
+    gem_set_line(2206);
     int _t13346 = 0;
     GemArenaMark _mk350;
     gem_arena_mark(&_mk350);
@@ -57388,185 +57391,185 @@ static GemVal __anon_187(void *_env, GemVal *args, int argc) {
         }
     GemVal _t13345 = gem_v___for_i_347;
         if (!gem_truthy(gem_lt(_t13345, gem_v___for_limit_347))) break;
-#line 2205 "compiler/codegen.gem"
-        gem_set_line(2205);
-        GemVal gem_v_i = gem_v___for_i_347;
-#line 2205 "compiler/codegen.gem"
-        gem_set_line(2205);
-        gem_v___for_i_347 = gem_add(gem_v___for_i_347, gem_int(1));
 #line 2206 "compiler/codegen.gem"
         gem_set_line(2206);
-        if (gem_truthy(gem_not(gem_v_d_first))) {
+        GemVal gem_v_i = gem_v___for_i_347;
+#line 2206 "compiler/codegen.gem"
+        gem_set_line(2206);
+        gem_v___for_i_347 = gem_add(gem_v___for_i_347, gem_int(1));
 #line 2207 "compiler/codegen.gem"
-            gem_set_line(2207);
+        gem_set_line(2207);
+        if (gem_truthy(gem_not(gem_v_d_first))) {
+#line 2208 "compiler/codegen.gem"
+            gem_set_line(2208);
             gem_string_append_to(&gem_v_d_args, GEM_STR_LIT(", ", 2), &_t13346);
 
         }
-#line 2209 "compiler/codegen.gem"
-        gem_set_line(2209);
+#line 2210 "compiler/codegen.gem"
+        gem_set_line(2210);
         gem_v_d_first = gem_bool(0);
-#line 2210 "compiler/codegen.gem"
-        gem_set_line(2210);
+#line 2211 "compiler/codegen.gem"
+        gem_set_line(2211);
         GemVal gem_v___val_346 = GEM_NIL;
-#line 2210 "compiler/codegen.gem"
-        gem_set_line(2210);
+#line 2211 "compiler/codegen.gem"
+        gem_set_line(2211);
     GemVal _t13347 = gem_v_params;
         if (gem_truthy(gem_eq(gem_table_get(gem_table_get(_t13347, gem_v_i), GEM_STR_LIT("type", 4)), GEM_STR_LIT("Bytes", 5)))) {
-#line 2210 "compiler/codegen.gem"
-            gem_set_line(2210);
+#line 2211 "compiler/codegen.gem"
+            gem_set_line(2211);
     GemVal _t13348 = gem_v_i;
     GemVal _t13349[] = {GEM_STR_LIT("_p", 2), _t13348, GEM_STR_LIT(", _p", 4), gem_v_i, GEM_STR_LIT("_len", 4)};
             gem_v___val_346 = gem_interp(5, _t13349);
         } else {
-#line 2210 "compiler/codegen.gem"
-            gem_set_line(2210);
+#line 2211 "compiler/codegen.gem"
+            gem_set_line(2211);
     GemVal _t13350[] = {GEM_STR_LIT("_p", 2), gem_v_i};
             gem_v___val_346 = gem_interp(2, _t13350);
         }
-#line 2210 "compiler/codegen.gem"
-        gem_set_line(2210);
+#line 2211 "compiler/codegen.gem"
+        gem_set_line(2211);
         gem_string_append_to(&gem_v_d_args, gem_v___val_346, &_t13346);
 
     }
     if (_t13346) gem_v_d_args = gem_string_finish(gem_v_d_args);
 
-#line 2212 "compiler/codegen.gem"
-    gem_set_line(2212);
+#line 2213 "compiler/codegen.gem"
+    gem_set_line(2213);
     GemVal _t13351 = gem_v_c_sym;
     GemVal _t13352[] = {_t13351, GEM_STR_LIT("(", 1), gem_v_d_args, GEM_STR_LIT(")", 1)};
     GemVal gem_v_d_call = gem_interp(4, _t13352);
-#line 2214 "compiler/codegen.gem"
-    gem_set_line(2214);
-    GemVal _t13353[] = {gem_v_b, GEM_STR_LIT("    gem_native_call_fence();\n", 29)};
-    (void)(gem_buf_push_fn(NULL, _t13353, 2));
 #line 2215 "compiler/codegen.gem"
     gem_set_line(2215);
-    if (gem_truthy(gem_eq(gem_v_ret_type, GEM_STR_LIT("Nil", 3)))) {
+    GemVal _t13353[] = {gem_v_b, GEM_STR_LIT("    gem_native_call_fence();\n", 29)};
+    (void)(gem_buf_push_fn(NULL, _t13353, 2));
 #line 2216 "compiler/codegen.gem"
-        gem_set_line(2216);
+    gem_set_line(2216);
+    if (gem_truthy(gem_eq(gem_v_ret_type, GEM_STR_LIT("Nil", 3)))) {
+#line 2217 "compiler/codegen.gem"
+        gem_set_line(2217);
     GemVal _t13355 = gem_v_b;
     GemVal _t13354[] = {GEM_STR_LIT("    ", 4), gem_v_d_call, GEM_STR_LIT(";\n", 2)};
     GemVal _t13356[] = {_t13355, gem_interp(3, _t13354)};
         (void)(gem_buf_push_fn(NULL, _t13356, 2));
-#line 2217 "compiler/codegen.gem"
-        gem_set_line(2217);
+#line 2218 "compiler/codegen.gem"
+        gem_set_line(2218);
     GemVal _t13357[] = {gem_v_b, GEM_STR_LIT("    return GEM_NIL;\n", 20)};
         (void)(gem_buf_push_fn(NULL, _t13357, 2));
     } else {
-#line 2218 "compiler/codegen.gem"
-        gem_set_line(2218);
-        if (gem_truthy(gem_eq(gem_v_ret_type, GEM_STR_LIT("Int", 3)))) {
 #line 2219 "compiler/codegen.gem"
-            gem_set_line(2219);
+        gem_set_line(2219);
+        if (gem_truthy(gem_eq(gem_v_ret_type, GEM_STR_LIT("Int", 3)))) {
+#line 2220 "compiler/codegen.gem"
+            gem_set_line(2220);
     GemVal _t13359 = gem_v_b;
     GemVal _t13358[] = {GEM_STR_LIT("    int64_t _ret = ", 19), gem_v_d_call, GEM_STR_LIT(";\n", 2)};
     GemVal _t13360[] = {_t13359, gem_interp(3, _t13358)};
             (void)(gem_buf_push_fn(NULL, _t13360, 2));
-#line 2220 "compiler/codegen.gem"
-            gem_set_line(2220);
+#line 2221 "compiler/codegen.gem"
+            gem_set_line(2221);
     GemVal _t13361[] = {gem_v_b, GEM_STR_LIT("    return gem_int(_ret);\n", 26)};
             (void)(gem_buf_push_fn(NULL, _t13361, 2));
         } else {
-#line 2221 "compiler/codegen.gem"
-            gem_set_line(2221);
-            if (gem_truthy(gem_eq(gem_v_ret_type, GEM_STR_LIT("Float", 5)))) {
 #line 2222 "compiler/codegen.gem"
-                gem_set_line(2222);
+            gem_set_line(2222);
+            if (gem_truthy(gem_eq(gem_v_ret_type, GEM_STR_LIT("Float", 5)))) {
+#line 2223 "compiler/codegen.gem"
+                gem_set_line(2223);
     GemVal _t13363 = gem_v_b;
     GemVal _t13362[] = {GEM_STR_LIT("    double _ret = ", 18), gem_v_d_call, GEM_STR_LIT(";\n", 2)};
     GemVal _t13364[] = {_t13363, gem_interp(3, _t13362)};
                 (void)(gem_buf_push_fn(NULL, _t13364, 2));
-#line 2223 "compiler/codegen.gem"
-                gem_set_line(2223);
+#line 2224 "compiler/codegen.gem"
+                gem_set_line(2224);
     GemVal _t13365[] = {gem_v_b, GEM_STR_LIT("    return gem_float(_ret);\n", 28)};
                 (void)(gem_buf_push_fn(NULL, _t13365, 2));
             } else {
-#line 2224 "compiler/codegen.gem"
-                gem_set_line(2224);
-                if (gem_truthy(gem_eq(gem_v_ret_type, GEM_STR_LIT("String", 6)))) {
 #line 2225 "compiler/codegen.gem"
-                    gem_set_line(2225);
+                gem_set_line(2225);
+                if (gem_truthy(gem_eq(gem_v_ret_type, GEM_STR_LIT("String", 6)))) {
+#line 2226 "compiler/codegen.gem"
+                    gem_set_line(2226);
     GemVal _t13367 = gem_v_b;
     GemVal _t13366[] = {GEM_STR_LIT("    char* _ret = ", 17), gem_v_d_call, GEM_STR_LIT(";\n", 2)};
     GemVal _t13368[] = {_t13367, gem_interp(3, _t13366)};
                     (void)(gem_buf_push_fn(NULL, _t13368, 2));
-#line 2226 "compiler/codegen.gem"
-                    gem_set_line(2226);
-    GemVal _t13369[] = {gem_v_b, GEM_STR_LIT("    GemVal _gv = gem_string(_ret ? _ret : \"\");\n", 47)};
-                    (void)(gem_buf_push_fn(NULL, _t13369, 2));
 #line 2227 "compiler/codegen.gem"
                     gem_set_line(2227);
-    GemVal _t13370[] = {gem_v_b, GEM_STR_LIT("    free(_ret);\n", 16)};
-                    (void)(gem_buf_push_fn(NULL, _t13370, 2));
+    GemVal _t13369[] = {gem_v_b, GEM_STR_LIT("    GemVal _gv = gem_string(_ret ? _ret : \"\");\n", 47)};
+                    (void)(gem_buf_push_fn(NULL, _t13369, 2));
 #line 2228 "compiler/codegen.gem"
                     gem_set_line(2228);
+    GemVal _t13370[] = {gem_v_b, GEM_STR_LIT("    free(_ret);\n", 16)};
+                    (void)(gem_buf_push_fn(NULL, _t13370, 2));
+#line 2229 "compiler/codegen.gem"
+                    gem_set_line(2229);
     GemVal _t13371[] = {gem_v_b, GEM_STR_LIT("    return _gv;\n", 16)};
                     (void)(gem_buf_push_fn(NULL, _t13371, 2));
                 } else {
-#line 2229 "compiler/codegen.gem"
-                    gem_set_line(2229);
-                    if (gem_truthy(gem_eq(gem_v_ret_type, GEM_STR_LIT("Bool", 4)))) {
 #line 2230 "compiler/codegen.gem"
-                        gem_set_line(2230);
+                    gem_set_line(2230);
+                    if (gem_truthy(gem_eq(gem_v_ret_type, GEM_STR_LIT("Bool", 4)))) {
+#line 2231 "compiler/codegen.gem"
+                        gem_set_line(2231);
     GemVal _t13373 = gem_v_b;
     GemVal _t13372[] = {GEM_STR_LIT("    int _ret = ", 15), gem_v_d_call, GEM_STR_LIT(";\n", 2)};
     GemVal _t13374[] = {_t13373, gem_interp(3, _t13372)};
                         (void)(gem_buf_push_fn(NULL, _t13374, 2));
-#line 2231 "compiler/codegen.gem"
-                        gem_set_line(2231);
+#line 2232 "compiler/codegen.gem"
+                        gem_set_line(2232);
     GemVal _t13375[] = {gem_v_b, GEM_STR_LIT("    return gem_bool(_ret);\n", 27)};
                         (void)(gem_buf_push_fn(NULL, _t13375, 2));
                     } else {
-#line 2232 "compiler/codegen.gem"
-                        gem_set_line(2232);
-                        if (gem_truthy(gem_eq(gem_v_ret_type, GEM_STR_LIT("Ptr", 3)))) {
 #line 2233 "compiler/codegen.gem"
-                            gem_set_line(2233);
+                        gem_set_line(2233);
+                        if (gem_truthy(gem_eq(gem_v_ret_type, GEM_STR_LIT("Ptr", 3)))) {
+#line 2234 "compiler/codegen.gem"
+                            gem_set_line(2234);
     GemVal _t13377 = gem_v_b;
     GemVal _t13376[] = {GEM_STR_LIT("    void *_ret = ", 17), gem_v_d_call, GEM_STR_LIT(";\n", 2)};
     GemVal _t13378[] = {_t13377, gem_interp(3, _t13376)};
                             (void)(gem_buf_push_fn(NULL, _t13378, 2));
-#line 2234 "compiler/codegen.gem"
-                            gem_set_line(2234);
+#line 2235 "compiler/codegen.gem"
+                            gem_set_line(2235);
     GemVal _t13379[] = {gem_v_b, GEM_STR_LIT("    return gem_int((int64_t)(intptr_t)_ret);\n", 45)};
                             (void)(gem_buf_push_fn(NULL, _t13379, 2));
                         } else {
-#line 2235 "compiler/codegen.gem"
-                            gem_set_line(2235);
-                            if (gem_truthy(gem_eq(gem_v_ret_type, GEM_STR_LIT("Bytes", 5)))) {
 #line 2236 "compiler/codegen.gem"
-                                gem_set_line(2236);
+                            gem_set_line(2236);
+                            if (gem_truthy(gem_eq(gem_v_ret_type, GEM_STR_LIT("Bytes", 5)))) {
+#line 2237 "compiler/codegen.gem"
+                                gem_set_line(2237);
     GemVal _t13381 = gem_v_b;
     GemVal _t13380[] = {GEM_STR_LIT("    GemBytes _ret = ", 20), gem_v_d_call, GEM_STR_LIT(";\n", 2)};
     GemVal _t13382[] = {_t13381, gem_interp(3, _t13380)};
                                 (void)(gem_buf_push_fn(NULL, _t13382, 2));
-#line 2237 "compiler/codegen.gem"
-                                gem_set_line(2237);
+#line 2238 "compiler/codegen.gem"
+                                gem_set_line(2238);
     GemVal _t13384 = gem_v_b;
     GemVal _t13383[] = {GEM_STR_LIT("    if (_ret.data && _ret.len > GEM_MAX_STRLEN) { free((void*)_ret.data); gem_strlen_check((size_t)_ret.len, \"", 110), gem_v_c_sym, GEM_STR_LIT("\"); }\n", 6)};
     GemVal _t13385[] = {_t13384, gem_interp(3, _t13383)};
                                 (void)(gem_buf_push_fn(NULL, _t13385, 2));
-#line 2238 "compiler/codegen.gem"
-                                gem_set_line(2238);
-    GemVal _t13386[] = {gem_v_b, GEM_STR_LIT("    GemVal _gv = _ret.data ? gem_string_with_len((const char*)_ret.data, _ret.len) : gem_string_with_len(\"\", 0);\n", 113)};
-                                (void)(gem_buf_push_fn(NULL, _t13386, 2));
 #line 2239 "compiler/codegen.gem"
                                 gem_set_line(2239);
-    GemVal _t13387[] = {gem_v_b, GEM_STR_LIT("    if (_ret.data) free((void*)_ret.data);\n", 43)};
-                                (void)(gem_buf_push_fn(NULL, _t13387, 2));
+    GemVal _t13386[] = {gem_v_b, GEM_STR_LIT("    GemVal _gv = _ret.data ? gem_string_with_len((const char*)_ret.data, _ret.len) : gem_string_with_len(\"\", 0);\n", 113)};
+                                (void)(gem_buf_push_fn(NULL, _t13386, 2));
 #line 2240 "compiler/codegen.gem"
                                 gem_set_line(2240);
+    GemVal _t13387[] = {gem_v_b, GEM_STR_LIT("    if (_ret.data) free((void*)_ret.data);\n", 43)};
+                                (void)(gem_buf_push_fn(NULL, _t13387, 2));
+#line 2241 "compiler/codegen.gem"
+                                gem_set_line(2241);
     GemVal _t13388[] = {gem_v_b, GEM_STR_LIT("    return _gv;\n", 16)};
                                 (void)(gem_buf_push_fn(NULL, _t13388, 2));
                             } else {
-#line 2242 "compiler/codegen.gem"
-                                gem_set_line(2242);
+#line 2243 "compiler/codegen.gem"
+                                gem_set_line(2243);
     GemVal _t13390 = gem_v_b;
     GemVal _t13389[] = {GEM_STR_LIT("    ", 4), gem_v_d_call, GEM_STR_LIT(";\n", 2)};
     GemVal _t13391[] = {_t13390, gem_interp(3, _t13389)};
                                 (void)(gem_buf_push_fn(NULL, _t13391, 2));
-#line 2243 "compiler/codegen.gem"
-                                gem_set_line(2243);
+#line 2244 "compiler/codegen.gem"
+                                gem_set_line(2244);
     GemVal _t13392[] = {gem_v_b, GEM_STR_LIT("    return GEM_NIL;\n", 20)};
                                 (void)(gem_buf_push_fn(NULL, _t13392, 2));
                             }
@@ -57576,27 +57579,27 @@ static GemVal __anon_187(void *_env, GemVal *args, int argc) {
             }
         }
     }
-#line 2246 "compiler/codegen.gem"
-    gem_set_line(2246);
+#line 2247 "compiler/codegen.gem"
+    gem_set_line(2247);
     GemVal _t13393[] = {gem_v_b, GEM_STR_LIT("}", 1)};
     (void)(gem_buf_push_fn(NULL, _t13393, 2));
-#line 2248 "compiler/codegen.gem"
-    gem_set_line(2248);
+#line 2249 "compiler/codegen.gem"
+    gem_set_line(2249);
     GemVal _t13395 = (*gem_v_forward_decls);
     GemVal _t13394[] = {GEM_STR_LIT("static GemVal gem_fn_", 21), gem_v_name, GEM_STR_LIT("(void *_env, GemVal *args, int argc);", 37)};
     GemVal _t13396[] = {_t13395, gem_interp(3, _t13394)};
     (void)(gem_push_fn(NULL, _t13396, 2));
-#line 2249 "compiler/codegen.gem"
-    gem_set_line(2249);
+#line 2250 "compiler/codegen.gem"
+    gem_set_line(2250);
     GemVal _t13401 = (*gem_v_emit_extern_c_decl);
     GemVal _t13399 = gem_v_c_sym;
     GemVal _t13398 = gem_v_params;
     GemVal _t13397 = gem_v_ret_type;
     GemVal _t13400[] = {_t13399, _t13398, _t13397, gem_v_node};
-    gem_check_callable(_t13401, "compiler/codegen.gem", 2249);
+    gem_check_callable(_t13401, "compiler/codegen.gem", 2250);
     (void)(_t13401.fn(_t13401.env, _t13400, 4));
-#line 2251 "compiler/codegen.gem"
-    gem_set_line(2251);
+#line 2252 "compiler/codegen.gem"
+    gem_set_line(2252);
     GemVal _t13402[] = {gem_v_b};
     GemVal _t13403 = gem_to_string_fn(NULL, _t13402, 1);
     if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t13403, 1);
@@ -57617,95 +57620,95 @@ static GemVal __anon_188(void *_env, GemVal *args, int argc) {
     GemVal *gem_v_fs = _cls->gem_v_fs;
     GemVal *gem_v_mangle = _cls->gem_v_mangle;
     GemVal *gem_v_setline_str = _cls->gem_v_setline_str;
-    gem_push_frame("anonymous fn", "compiler/codegen.gem", 2256);
+    gem_push_frame("anonymous fn", "compiler/codegen.gem", 2257);
     GemVal gem_v_node = (argc > 0) ? args[0] : GEM_NIL;
     GemVal gem_v_params = (argc > 1) ? args[1] : GEM_NIL;
     GemVal gem_v_cap_set = (argc > 2) ? args[2] : GEM_NIL;
     GemVal gem_v_rebind = (argc > 3) ? args[3] : GEM_NIL;
     GemArenaPoint _ret_pt;
     gem_arena_point(&_ret_pt);
-#line 2257 "compiler/codegen.gem"
-    gem_set_line(2257);
-    GemVal gem_v_b = gem_buf_new_fn(NULL, NULL, 0);
 #line 2258 "compiler/codegen.gem"
     gem_set_line(2258);
+    GemVal gem_v_b = gem_buf_new_fn(NULL, NULL, 0);
+#line 2259 "compiler/codegen.gem"
+    gem_set_line(2259);
     GemVal _t13408 = gem_v_node;
     static GemICacheSlot _ic_2158 = {0};
     GemVal gem_v_defaults = gem_table_get_cached(_t13408, "defaults", &_ic_2158);
-#line 2259 "compiler/codegen.gem"
-    gem_set_line(2259);
-    if (gem_truthy(gem_eq(gem_v_defaults, GEM_NIL))) {
 #line 2260 "compiler/codegen.gem"
-        gem_set_line(2260);
+    gem_set_line(2260);
+    if (gem_truthy(gem_eq(gem_v_defaults, GEM_NIL))) {
+#line 2261 "compiler/codegen.gem"
+        gem_set_line(2261);
     GemVal _t13409 = gem_table_new();
         gem_v_defaults = _t13409;
     }
-#line 2262 "compiler/codegen.gem"
-    gem_set_line(2262);
-    GemVal gem_v_decl_box = GEM_STR_LIT("GemVal *", 8);
 #line 2263 "compiler/codegen.gem"
     gem_set_line(2263);
-    GemVal gem_v_decl_val = GEM_STR_LIT("GemVal ", 7);
+    GemVal gem_v_decl_box = GEM_STR_LIT("GemVal *", 8);
 #line 2264 "compiler/codegen.gem"
     gem_set_line(2264);
-    if (gem_truthy(gem_v_rebind)) {
+    GemVal gem_v_decl_val = GEM_STR_LIT("GemVal ", 7);
 #line 2265 "compiler/codegen.gem"
-        gem_set_line(2265);
-        gem_v_decl_box = GEM_STR_LIT("", 0);
+    gem_set_line(2265);
+    if (gem_truthy(gem_v_rebind)) {
 #line 2266 "compiler/codegen.gem"
         gem_set_line(2266);
+        gem_v_decl_box = GEM_STR_LIT("", 0);
+#line 2267 "compiler/codegen.gem"
+        gem_set_line(2267);
         gem_v_decl_val = GEM_STR_LIT("", 0);
     }
-#line 2269 "compiler/codegen.gem"
-    gem_set_line(2269);
+#line 2270 "compiler/codegen.gem"
+    gem_set_line(2270);
     GemVal _t13410 = (*gem_v_fs);
     static GemICacheSlot _ic_2159 = {0};
     GemVal gem_v_saved_local_names = gem_table_get_cached(_t13410, "local_names", &_ic_2159);
-#line 2270 "compiler/codegen.gem"
-    gem_set_line(2270);
+#line 2271 "compiler/codegen.gem"
+    gem_set_line(2271);
     GemVal _t13416 = gem_g___mod_codegen_set_union;
     GemVal _t13412 = gem_g___mod_codegen_sorted_array_to_set;
     GemVal _t13411[] = {gem_v_params};
-    gem_check_callable(_t13412, "compiler/codegen.gem", 2270);
+    gem_check_callable(_t13412, "compiler/codegen.gem", 2271);
     GemVal _t13414 = _t13412.fn(_t13412.env, _t13411, 1);
     GemVal _t13413 = (*gem_v_fs);
     static GemICacheSlot _ic_2160 = {0};
     GemVal _t13415[] = {_t13414, gem_table_get_cached(_t13413, "closure_captures", &_ic_2160)};
-    gem_check_callable(_t13416, "compiler/codegen.gem", 2270);
+    gem_check_callable(_t13416, "compiler/codegen.gem", 2271);
     GemVal gem_v_entry_scope = _t13416.fn(_t13416.env, _t13415, 2);
-#line 2271 "compiler/codegen.gem"
-    gem_set_line(2271);
+#line 2272 "compiler/codegen.gem"
+    gem_set_line(2272);
     GemVal _t13417 = gem_v_node;
     static GemICacheSlot _ic_2161 = {0};
     if (gem_truthy(gem_neq(gem_table_get_cached(_t13417, "rest_param", &_ic_2161), GEM_NIL))) {
-#line 2272 "compiler/codegen.gem"
-        gem_set_line(2272);
+#line 2273 "compiler/codegen.gem"
+        gem_set_line(2273);
     GemVal _t13421 = gem_g___mod_codegen_set_add;
     GemVal _t13419 = gem_v_entry_scope;
     GemVal _t13418 = gem_v_node;
     static GemICacheSlot _ic_2162 = {0};
     GemVal _t13420[] = {_t13419, gem_table_get_cached(_t13418, "rest_param", &_ic_2162)};
-    gem_check_callable(_t13421, "compiler/codegen.gem", 2272);
+    gem_check_callable(_t13421, "compiler/codegen.gem", 2273);
         (void)(_t13421.fn(_t13421.env, _t13420, 2));
     }
-#line 2274 "compiler/codegen.gem"
-    gem_set_line(2274);
+#line 2275 "compiler/codegen.gem"
+    gem_set_line(2275);
     GemVal _t13426 = (*gem_v_fs);
     GemVal _t13425 = gem_g___mod_codegen_set_intersect;
     GemVal _t13422 = (*gem_v_fs);
     static GemICacheSlot _ic_2163 = {0};
     GemVal _t13423 = gem_table_get_cached(_t13422, "local_names", &_ic_2163);
     GemVal _t13424[] = {_t13423, gem_v_entry_scope};
-    gem_check_callable(_t13425, "compiler/codegen.gem", 2274);
+    gem_check_callable(_t13425, "compiler/codegen.gem", 2275);
     gem_table_set(_t13426, GEM_STR_LIT("local_names", 11), _t13425.fn(_t13425.env, _t13424, 2));
-#line 2275 "compiler/codegen.gem"
-    gem_set_line(2275);
+#line 2276 "compiler/codegen.gem"
+    gem_set_line(2276);
     GemVal gem_v___for_i_349 = gem_int(0);
-#line 2275 "compiler/codegen.gem"
-    gem_set_line(2275);
+#line 2276 "compiler/codegen.gem"
+    gem_set_line(2276);
     GemVal gem_v___for_limit_349 = gem_len_1(gem_v_params);
-#line 2275 "compiler/codegen.gem"
-    gem_set_line(2275);
+#line 2276 "compiler/codegen.gem"
+    gem_set_line(2276);
     GemArenaMark _mk351;
     gem_arena_mark(&_mk351);
     while (1) {
@@ -57716,21 +57719,21 @@ static GemVal __anon_188(void *_env, GemVal *args, int argc) {
         }
     GemVal _t13427 = gem_v___for_i_349;
         if (!gem_truthy(gem_lt(_t13427, gem_v___for_limit_349))) break;
-#line 2275 "compiler/codegen.gem"
-        gem_set_line(2275);
-        GemVal gem_v_i = gem_v___for_i_349;
-#line 2275 "compiler/codegen.gem"
-        gem_set_line(2275);
-        gem_v___for_i_349 = gem_add(gem_v___for_i_349, gem_int(1));
 #line 2276 "compiler/codegen.gem"
         gem_set_line(2276);
+        GemVal gem_v_i = gem_v___for_i_349;
+#line 2276 "compiler/codegen.gem"
+        gem_set_line(2276);
+        gem_v___for_i_349 = gem_add(gem_v___for_i_349, gem_int(1));
+#line 2277 "compiler/codegen.gem"
+        gem_set_line(2277);
     GemVal _t13430 = (*gem_v_mangle);
     GemVal _t13428 = gem_v_params;
     GemVal _t13429[] = {gem_table_get(_t13428, gem_v_i)};
-    gem_check_callable(_t13430, "compiler/codegen.gem", 2276);
+    gem_check_callable(_t13430, "compiler/codegen.gem", 2277);
         GemVal gem_v_mp = _t13430.fn(_t13430.env, _t13429, 1);
-#line 2277 "compiler/codegen.gem"
-        gem_set_line(2277);
+#line 2278 "compiler/codegen.gem"
+        gem_set_line(2278);
     GemVal _t13431 = gem_v_i;
     GemVal _t13432 = gem_lt(_t13431, gem_len_1(gem_v_defaults));
     GemVal _t13434;
@@ -57741,88 +57744,88 @@ static GemVal __anon_188(void *_env, GemVal *args, int argc) {
         _t13434 = gem_neq(gem_table_get(_t13433, gem_v_i), GEM_NIL);
     }
         GemVal gem_v_has_def = _t13434;
-#line 2278 "compiler/codegen.gem"
-        gem_set_line(2278);
-        if (gem_truthy(gem_v_has_def)) {
 #line 2279 "compiler/codegen.gem"
-            gem_set_line(2279);
+        gem_set_line(2279);
+        if (gem_truthy(gem_v_has_def)) {
+#line 2280 "compiler/codegen.gem"
+            gem_set_line(2280);
     GemVal _t13437 = (*gem_v_compile_expr);
     GemVal _t13435 = gem_v_defaults;
     GemVal _t13436[] = {gem_table_get(_t13435, gem_v_i)};
-    gem_check_callable(_t13437, "compiler/codegen.gem", 2279);
+    gem_check_callable(_t13437, "compiler/codegen.gem", 2280);
             GemVal gem_v_r = _t13437.fn(_t13437.env, _t13436, 1);
-#line 2281 "compiler/codegen.gem"
-            gem_set_line(2281);
+#line 2282 "compiler/codegen.gem"
+            gem_set_line(2282);
     GemVal _t13438 = gem_v_defaults;
     GemVal _t13439 = gem_table_get(_t13438, gem_v_i);
     static GemICacheSlot _ic_2164 = {0};
             GemVal gem_v_def_line = gem_table_get_cached(_t13439, "line", &_ic_2164);
-#line 2282 "compiler/codegen.gem"
-            gem_set_line(2282);
-            if (gem_truthy(gem_eq(gem_v_def_line, GEM_NIL))) {
 #line 2283 "compiler/codegen.gem"
-                gem_set_line(2283);
+            gem_set_line(2283);
+            if (gem_truthy(gem_eq(gem_v_def_line, GEM_NIL))) {
+#line 2284 "compiler/codegen.gem"
+                gem_set_line(2284);
     GemVal _t13440 = gem_v_node;
     static GemICacheSlot _ic_2165 = {0};
                 gem_v_def_line = gem_table_get_cached(_t13440, "line", &_ic_2165);
             }
-#line 2285 "compiler/codegen.gem"
-            gem_set_line(2285);
-            GemVal gem_v___val_348 = GEM_NIL;
-#line 2285 "compiler/codegen.gem"
-            gem_set_line(2285);
-            if (gem_truthy(gem_neq(gem_v_def_line, GEM_NIL))) {
-#line 2285 "compiler/codegen.gem"
-                gem_set_line(2285);
-    GemVal _t13442 = (*gem_v_setline_str);
-    GemVal _t13441[] = {gem_v_def_line, GEM_STR_LIT("    ", 4)};
-    gem_check_callable(_t13442, "compiler/codegen.gem", 2285);
-                gem_v___val_348 = _t13442.fn(_t13442.env, _t13441, 2);
-            } else {
-#line 2285 "compiler/codegen.gem"
-                gem_set_line(2285);
-                gem_v___val_348 = GEM_STR_LIT("", 0);
-            }
-#line 2285 "compiler/codegen.gem"
-            gem_set_line(2285);
-            GemVal gem_v_set_def_line = gem_v___val_348;
 #line 2286 "compiler/codegen.gem"
             gem_set_line(2286);
+            GemVal gem_v___val_348 = GEM_NIL;
+#line 2286 "compiler/codegen.gem"
+            gem_set_line(2286);
+            if (gem_truthy(gem_neq(gem_v_def_line, GEM_NIL))) {
+#line 2286 "compiler/codegen.gem"
+                gem_set_line(2286);
+    GemVal _t13442 = (*gem_v_setline_str);
+    GemVal _t13441[] = {gem_v_def_line, GEM_STR_LIT("    ", 4)};
+    gem_check_callable(_t13442, "compiler/codegen.gem", 2286);
+                gem_v___val_348 = _t13442.fn(_t13442.env, _t13441, 2);
+            } else {
+#line 2286 "compiler/codegen.gem"
+                gem_set_line(2286);
+                gem_v___val_348 = GEM_STR_LIT("", 0);
+            }
+#line 2286 "compiler/codegen.gem"
+            gem_set_line(2286);
+            GemVal gem_v_set_def_line = gem_v___val_348;
+#line 2287 "compiler/codegen.gem"
+            gem_set_line(2287);
     GemVal _t13446 = gem_g___mod_codegen_set_contains;
     GemVal _t13444 = gem_v_cap_set;
     GemVal _t13443 = gem_v_params;
     GemVal _t13445[] = {_t13444, gem_table_get(_t13443, gem_v_i)};
-    gem_check_callable(_t13446, "compiler/codegen.gem", 2286);
+    gem_check_callable(_t13446, "compiler/codegen.gem", 2287);
             if (gem_truthy(_t13446.fn(_t13446.env, _t13445, 2))) {
-#line 2287 "compiler/codegen.gem"
-                gem_set_line(2287);
+#line 2288 "compiler/codegen.gem"
+                gem_set_line(2288);
     GemVal _t13449 = gem_v_b;
     GemVal _t13447 = gem_v_decl_box;
     GemVal _t13448[] = {GEM_STR_LIT("    ", 4), _t13447, gem_v_mp, GEM_STR_LIT(" = gem_box_alloc();\n", 20)};
     GemVal _t13450[] = {_t13449, gem_interp(4, _t13448)};
                 (void)(gem_buf_push_fn(NULL, _t13450, 2));
-#line 2288 "compiler/codegen.gem"
-                gem_set_line(2288);
+#line 2289 "compiler/codegen.gem"
+                gem_set_line(2289);
     GemVal _t13454 = gem_v_b;
     GemVal _t13452 = gem_v_i;
     GemVal _t13451 = gem_v_mp;
     GemVal _t13453[] = {GEM_STR_LIT("    if (argc > ", 15), _t13452, GEM_STR_LIT(") { *", 5), _t13451, GEM_STR_LIT(" = args[", 8), gem_v_i, GEM_STR_LIT("]; } else {\n", 12)};
     GemVal _t13455[] = {_t13454, gem_interp(7, _t13453)};
                 (void)(gem_buf_push_fn(NULL, _t13455, 2));
-#line 2289 "compiler/codegen.gem"
-                gem_set_line(2289);
+#line 2290 "compiler/codegen.gem"
+                gem_set_line(2290);
     GemVal _t13456 = gem_v_b;
     GemVal _t13457[] = {_t13456, gem_v_set_def_line};
                 (void)(gem_buf_push_fn(NULL, _t13457, 2));
-#line 2290 "compiler/codegen.gem"
-                gem_set_line(2290);
+#line 2291 "compiler/codegen.gem"
+                gem_set_line(2291);
     GemVal _t13459 = gem_v_b;
     GemVal _t13458 = gem_v_r;
     static GemICacheSlot _ic_2166 = {0};
     GemVal _t13460[] = {_t13459, gem_table_get_cached(_t13458, "setup", &_ic_2166)};
                 (void)(gem_buf_push_fn(NULL, _t13460, 2));
-#line 2291 "compiler/codegen.gem"
-                gem_set_line(2291);
+#line 2292 "compiler/codegen.gem"
+                gem_set_line(2292);
     GemVal _t13464 = gem_v_b;
     GemVal _t13462 = gem_v_mp;
     GemVal _t13461 = gem_v_r;
@@ -57831,38 +57834,38 @@ static GemVal __anon_188(void *_env, GemVal *args, int argc) {
     GemVal _t13465[] = {_t13464, gem_interp(5, _t13463)};
                 (void)(gem_buf_push_fn(NULL, _t13465, 2));
             } else {
-#line 2293 "compiler/codegen.gem"
-                gem_set_line(2293);
-                if (gem_truthy(gem_not(gem_v_rebind))) {
 #line 2294 "compiler/codegen.gem"
-                    gem_set_line(2294);
+                gem_set_line(2294);
+                if (gem_truthy(gem_not(gem_v_rebind))) {
+#line 2295 "compiler/codegen.gem"
+                    gem_set_line(2295);
     GemVal _t13467 = gem_v_b;
     GemVal _t13466[] = {GEM_STR_LIT("    GemVal ", 11), gem_v_mp, GEM_STR_LIT(";\n", 2)};
     GemVal _t13468[] = {_t13467, gem_interp(3, _t13466)};
                     (void)(gem_buf_push_fn(NULL, _t13468, 2));
                 }
-#line 2296 "compiler/codegen.gem"
-                gem_set_line(2296);
+#line 2297 "compiler/codegen.gem"
+                gem_set_line(2297);
     GemVal _t13472 = gem_v_b;
     GemVal _t13470 = gem_v_i;
     GemVal _t13469 = gem_v_mp;
     GemVal _t13471[] = {GEM_STR_LIT("    if (argc > ", 15), _t13470, GEM_STR_LIT(") { ", 4), _t13469, GEM_STR_LIT(" = args[", 8), gem_v_i, GEM_STR_LIT("]; } else {\n", 12)};
     GemVal _t13473[] = {_t13472, gem_interp(7, _t13471)};
                 (void)(gem_buf_push_fn(NULL, _t13473, 2));
-#line 2297 "compiler/codegen.gem"
-                gem_set_line(2297);
+#line 2298 "compiler/codegen.gem"
+                gem_set_line(2298);
     GemVal _t13474 = gem_v_b;
     GemVal _t13475[] = {_t13474, gem_v_set_def_line};
                 (void)(gem_buf_push_fn(NULL, _t13475, 2));
-#line 2298 "compiler/codegen.gem"
-                gem_set_line(2298);
+#line 2299 "compiler/codegen.gem"
+                gem_set_line(2299);
     GemVal _t13477 = gem_v_b;
     GemVal _t13476 = gem_v_r;
     static GemICacheSlot _ic_2168 = {0};
     GemVal _t13478[] = {_t13477, gem_table_get_cached(_t13476, "setup", &_ic_2168)};
                 (void)(gem_buf_push_fn(NULL, _t13478, 2));
-#line 2299 "compiler/codegen.gem"
-                gem_set_line(2299);
+#line 2300 "compiler/codegen.gem"
+                gem_set_line(2300);
     GemVal _t13482 = gem_v_b;
     GemVal _t13480 = gem_v_mp;
     GemVal _t13479 = gem_v_r;
@@ -57872,23 +57875,23 @@ static GemVal __anon_188(void *_env, GemVal *args, int argc) {
                 (void)(gem_buf_push_fn(NULL, _t13483, 2));
             }
         } else {
-#line 2302 "compiler/codegen.gem"
-            gem_set_line(2302);
+#line 2303 "compiler/codegen.gem"
+            gem_set_line(2303);
     GemVal _t13487 = gem_g___mod_codegen_set_contains;
     GemVal _t13485 = gem_v_cap_set;
     GemVal _t13484 = gem_v_params;
     GemVal _t13486[] = {_t13485, gem_table_get(_t13484, gem_v_i)};
-    gem_check_callable(_t13487, "compiler/codegen.gem", 2302);
+    gem_check_callable(_t13487, "compiler/codegen.gem", 2303);
             if (gem_truthy(_t13487.fn(_t13487.env, _t13486, 2))) {
-#line 2303 "compiler/codegen.gem"
-                gem_set_line(2303);
+#line 2304 "compiler/codegen.gem"
+                gem_set_line(2304);
     GemVal _t13490 = gem_v_b;
     GemVal _t13488 = gem_v_decl_box;
     GemVal _t13489[] = {GEM_STR_LIT("    ", 4), _t13488, gem_v_mp, GEM_STR_LIT(" = gem_box_alloc();\n", 20)};
     GemVal _t13491[] = {_t13490, gem_interp(4, _t13489)};
                 (void)(gem_buf_push_fn(NULL, _t13491, 2));
-#line 2304 "compiler/codegen.gem"
-                gem_set_line(2304);
+#line 2305 "compiler/codegen.gem"
+                gem_set_line(2305);
     GemVal _t13495 = gem_v_b;
     GemVal _t13493 = gem_v_mp;
     GemVal _t13492 = gem_v_i;
@@ -57896,8 +57899,8 @@ static GemVal __anon_188(void *_env, GemVal *args, int argc) {
     GemVal _t13496[] = {_t13495, gem_interp(7, _t13494)};
                 (void)(gem_buf_push_fn(NULL, _t13496, 2));
             } else {
-#line 2306 "compiler/codegen.gem"
-                gem_set_line(2306);
+#line 2307 "compiler/codegen.gem"
+                gem_set_line(2307);
     GemVal _t13501 = gem_v_b;
     GemVal _t13499 = gem_v_decl_val;
     GemVal _t13498 = gem_v_mp;
@@ -57909,46 +57912,46 @@ static GemVal __anon_188(void *_env, GemVal *args, int argc) {
         }
     }
 
-#line 2311 "compiler/codegen.gem"
-    gem_set_line(2311);
+#line 2312 "compiler/codegen.gem"
+    gem_set_line(2312);
     GemVal _t13503 = gem_v_node;
     static GemICacheSlot _ic_2170 = {0};
     if (gem_truthy(gem_neq(gem_table_get_cached(_t13503, "rest_param", &_ic_2170), GEM_NIL))) {
-#line 2312 "compiler/codegen.gem"
-        gem_set_line(2312);
-        GemVal gem_v_N = gem_len_1(gem_v_params);
 #line 2313 "compiler/codegen.gem"
         gem_set_line(2313);
+        GemVal gem_v_N = gem_len_1(gem_v_params);
+#line 2314 "compiler/codegen.gem"
+        gem_set_line(2314);
     GemVal _t13506 = (*gem_v_mangle);
     GemVal _t13504 = gem_v_node;
     static GemICacheSlot _ic_2171 = {0};
     GemVal _t13505[] = {gem_table_get_cached(_t13504, "rest_param", &_ic_2171)};
-    gem_check_callable(_t13506, "compiler/codegen.gem", 2313);
+    gem_check_callable(_t13506, "compiler/codegen.gem", 2314);
         GemVal gem_v_mp_rest = _t13506.fn(_t13506.env, _t13505, 1);
-#line 2314 "compiler/codegen.gem"
-        gem_set_line(2314);
+#line 2315 "compiler/codegen.gem"
+        gem_set_line(2315);
     GemVal _t13510 = gem_g___mod_codegen_set_contains;
     GemVal _t13508 = gem_v_cap_set;
     GemVal _t13507 = gem_v_node;
     static GemICacheSlot _ic_2172 = {0};
     GemVal _t13509[] = {_t13508, gem_table_get_cached(_t13507, "rest_param", &_ic_2172)};
-    gem_check_callable(_t13510, "compiler/codegen.gem", 2314);
+    gem_check_callable(_t13510, "compiler/codegen.gem", 2315);
         if (gem_truthy(_t13510.fn(_t13510.env, _t13509, 2))) {
-#line 2315 "compiler/codegen.gem"
-            gem_set_line(2315);
+#line 2316 "compiler/codegen.gem"
+            gem_set_line(2316);
     GemVal _t13513 = gem_v_b;
     GemVal _t13511 = gem_v_decl_box;
     GemVal _t13512[] = {GEM_STR_LIT("    ", 4), _t13511, gem_v_mp_rest, GEM_STR_LIT(" = gem_box_alloc();\n", 20)};
     GemVal _t13514[] = {_t13513, gem_interp(4, _t13512)};
             (void)(gem_buf_push_fn(NULL, _t13514, 2));
-#line 2316 "compiler/codegen.gem"
-            gem_set_line(2316);
+#line 2317 "compiler/codegen.gem"
+            gem_set_line(2317);
     GemVal _t13516 = gem_v_b;
     GemVal _t13515[] = {GEM_STR_LIT("    *", 5), gem_v_mp_rest, GEM_STR_LIT(" = gem_table_new();\n", 20)};
     GemVal _t13517[] = {_t13516, gem_interp(3, _t13515)};
             (void)(gem_buf_push_fn(NULL, _t13517, 2));
-#line 2317 "compiler/codegen.gem"
-            gem_set_line(2317);
+#line 2318 "compiler/codegen.gem"
+            gem_set_line(2318);
     GemVal _t13521 = gem_v_b;
     GemVal _t13519 = gem_v_N;
     GemVal _t13518 = gem_v_mp_rest;
@@ -57956,15 +57959,15 @@ static GemVal __anon_188(void *_env, GemVal *args, int argc) {
     GemVal _t13522[] = {_t13521, gem_interp(7, _t13520)};
             (void)(gem_buf_push_fn(NULL, _t13522, 2));
         } else {
-#line 2319 "compiler/codegen.gem"
-            gem_set_line(2319);
+#line 2320 "compiler/codegen.gem"
+            gem_set_line(2320);
     GemVal _t13525 = gem_v_b;
     GemVal _t13523 = gem_v_decl_val;
     GemVal _t13524[] = {GEM_STR_LIT("    ", 4), _t13523, gem_v_mp_rest, GEM_STR_LIT(" = gem_table_new();\n", 20)};
     GemVal _t13526[] = {_t13525, gem_interp(4, _t13524)};
             (void)(gem_buf_push_fn(NULL, _t13526, 2));
-#line 2320 "compiler/codegen.gem"
-            gem_set_line(2320);
+#line 2321 "compiler/codegen.gem"
+            gem_set_line(2321);
     GemVal _t13530 = gem_v_b;
     GemVal _t13528 = gem_v_N;
     GemVal _t13527 = gem_v_mp_rest;
@@ -57973,12 +57976,12 @@ static GemVal __anon_188(void *_env, GemVal *args, int argc) {
             (void)(gem_buf_push_fn(NULL, _t13531, 2));
         }
     }
-#line 2323 "compiler/codegen.gem"
-    gem_set_line(2323);
-    GemVal _t13532 = (*gem_v_fs);
-    gem_table_set(_t13532, GEM_STR_LIT("local_names", 11), gem_v_saved_local_names);
 #line 2324 "compiler/codegen.gem"
     gem_set_line(2324);
+    GemVal _t13532 = (*gem_v_fs);
+    gem_table_set(_t13532, GEM_STR_LIT("local_names", 11), gem_v_saved_local_names);
+#line 2325 "compiler/codegen.gem"
+    gem_set_line(2325);
     GemVal _t13533[] = {gem_v_b};
     GemVal _t13534 = gem_to_string_fn(NULL, _t13533, 1);
     if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t13534, 1);
@@ -57993,19 +57996,19 @@ struct _closure___anon_189 {
 static GemVal __anon_189(void *_env, GemVal *args, int argc) {
     struct _closure___anon_189 *_cls = (struct _closure___anon_189 *)_env;
     GemVal *gem_v_emit_param_bindings_impl = _cls->gem_v_emit_param_bindings_impl;
-    gem_push_frame("anonymous fn", "compiler/codegen.gem", 2327);
+    gem_push_frame("anonymous fn", "compiler/codegen.gem", 2328);
     GemVal gem_v_node = (argc > 0) ? args[0] : GEM_NIL;
     GemVal gem_v_params = (argc > 1) ? args[1] : GEM_NIL;
     GemVal gem_v_cap_set = (argc > 2) ? args[2] : GEM_NIL;
     GemArenaPoint _ret_pt;
     gem_arena_point(&_ret_pt);
-#line 2328 "compiler/codegen.gem"
-    gem_set_line(2328);
+#line 2329 "compiler/codegen.gem"
+    gem_set_line(2329);
     GemVal _t13541 = (*gem_v_emit_param_bindings_impl);
     GemVal _t13539 = gem_v_node;
     GemVal _t13538 = gem_v_params;
     GemVal _t13540[] = {_t13539, _t13538, gem_v_cap_set, gem_bool(0)};
-    gem_check_callable(_t13541, "compiler/codegen.gem", 2328);
+    gem_check_callable(_t13541, "compiler/codegen.gem", 2329);
     GemVal _t13542 = _t13541.fn(_t13541.env, _t13540, 4);
     if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t13542, 1);
     gem_pop_frame();
@@ -58023,24 +58026,24 @@ static GemVal __anon_190(void *_env, GemVal *args, int argc) {
     GemVal *gem_v_compile_stmt = _cls->gem_v_compile_stmt;
     GemVal *gem_v_compile_stmt_return = _cls->gem_v_compile_stmt_return;
     GemVal *gem_v_return_nil_str = _cls->gem_v_return_nil_str;
-    gem_push_frame("anonymous fn", "compiler/codegen.gem", 2331);
+    gem_push_frame("anonymous fn", "compiler/codegen.gem", 2332);
     GemVal gem_v_body = (argc > 0) ? args[0] : GEM_NIL;
     GemArenaPoint _ret_pt;
     gem_arena_point(&_ret_pt);
-#line 2332 "compiler/codegen.gem"
-    gem_set_line(2332);
-    GemVal gem_v_b = gem_buf_new_fn(NULL, NULL, 0);
 #line 2333 "compiler/codegen.gem"
     gem_set_line(2333);
+    GemVal gem_v_b = gem_buf_new_fn(NULL, NULL, 0);
+#line 2334 "compiler/codegen.gem"
+    gem_set_line(2334);
     if (gem_truthy(gem_gt(gem_len_1(gem_v_body), gem_int(0)))) {
-#line 2334 "compiler/codegen.gem"
-        gem_set_line(2334);
+#line 2335 "compiler/codegen.gem"
+        gem_set_line(2335);
         GemVal gem_v___for_i_350 = gem_int(0);
-#line 2334 "compiler/codegen.gem"
-        gem_set_line(2334);
+#line 2335 "compiler/codegen.gem"
+        gem_set_line(2335);
         GemVal gem_v___for_limit_350 = gem_sub(gem_len_1(gem_v_body), gem_int(1));
-#line 2334 "compiler/codegen.gem"
-        gem_set_line(2334);
+#line 2335 "compiler/codegen.gem"
+        gem_set_line(2335);
         GemArenaMark _mk352;
         gem_arena_mark(&_mk352);
         while (1) {
@@ -58051,51 +58054,51 @@ static GemVal __anon_190(void *_env, GemVal *args, int argc) {
             }
     GemVal _t13545 = gem_v___for_i_350;
             if (!gem_truthy(gem_lt(_t13545, gem_v___for_limit_350))) break;
-#line 2334 "compiler/codegen.gem"
-            gem_set_line(2334);
-            GemVal gem_v_i = gem_v___for_i_350;
-#line 2334 "compiler/codegen.gem"
-            gem_set_line(2334);
-            gem_v___for_i_350 = gem_add(gem_v___for_i_350, gem_int(1));
 #line 2335 "compiler/codegen.gem"
             gem_set_line(2335);
+            GemVal gem_v_i = gem_v___for_i_350;
+#line 2335 "compiler/codegen.gem"
+            gem_set_line(2335);
+            gem_v___for_i_350 = gem_add(gem_v___for_i_350, gem_int(1));
+#line 2336 "compiler/codegen.gem"
+            gem_set_line(2336);
     GemVal _t13549 = gem_v_b;
     GemVal _t13548 = (*gem_v_compile_stmt);
     GemVal _t13546 = gem_v_body;
     GemVal _t13547[] = {gem_table_get(_t13546, gem_v_i), gem_int(1)};
-    gem_check_callable(_t13548, "compiler/codegen.gem", 2335);
+    gem_check_callable(_t13548, "compiler/codegen.gem", 2336);
     GemVal _t13550[] = {_t13549, _t13548.fn(_t13548.env, _t13547, 2)};
             (void)(gem_buf_push_fn(NULL, _t13550, 2));
-#line 2336 "compiler/codegen.gem"
-            gem_set_line(2336);
+#line 2337 "compiler/codegen.gem"
+            gem_set_line(2337);
     GemVal _t13551[] = {gem_v_b, GEM_STR_LIT("\n", 1)};
             (void)(gem_buf_push_fn(NULL, _t13551, 2));
         }
 
-#line 2338 "compiler/codegen.gem"
-        gem_set_line(2338);
+#line 2339 "compiler/codegen.gem"
+        gem_set_line(2339);
     GemVal _t13554 = gem_v_b;
     GemVal _t13553 = (*gem_v_compile_stmt_return);
     GemVal _t13552[] = {gem_table_get(gem_v_body, gem_int(-1)), gem_int(1)};
-    gem_check_callable(_t13553, "compiler/codegen.gem", 2338);
+    gem_check_callable(_t13553, "compiler/codegen.gem", 2339);
     GemVal _t13555[] = {_t13554, _t13553.fn(_t13553.env, _t13552, 2)};
         (void)(gem_buf_push_fn(NULL, _t13555, 2));
-#line 2339 "compiler/codegen.gem"
-        gem_set_line(2339);
+#line 2340 "compiler/codegen.gem"
+        gem_set_line(2340);
     GemVal _t13556[] = {gem_v_b, GEM_STR_LIT("\n", 1)};
         (void)(gem_buf_push_fn(NULL, _t13556, 2));
     } else {
-#line 2341 "compiler/codegen.gem"
-        gem_set_line(2341);
+#line 2342 "compiler/codegen.gem"
+        gem_set_line(2342);
     GemVal _t13559 = gem_v_b;
     GemVal _t13558 = (*gem_v_return_nil_str);
     GemVal _t13557[] = {GEM_STR_LIT("    ", 4)};
-    gem_check_callable(_t13558, "compiler/codegen.gem", 2341);
+    gem_check_callable(_t13558, "compiler/codegen.gem", 2342);
     GemVal _t13560[] = {_t13559, gem_add(_t13558.fn(_t13558.env, _t13557, 1), GEM_STR_LIT("\n", 1))};
         (void)(gem_buf_push_fn(NULL, _t13560, 2));
     }
-#line 2343 "compiler/codegen.gem"
-    gem_set_line(2343);
+#line 2344 "compiler/codegen.gem"
+    gem_set_line(2344);
     GemVal _t13561[] = {gem_v_b};
     GemVal _t13562 = gem_to_string_fn(NULL, _t13561, 1);
     if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t13562, 1);
@@ -58140,98 +58143,98 @@ static GemVal __anon_191(void *_env, GemVal *args, int argc) {
     GemVal *gem_v_return_nil_str = _cls->gem_v_return_nil_str;
     GemVal *gem_v_scc_member_to_id = _cls->gem_v_scc_member_to_id;
     GemVal *gem_v_scc_wrapper_for = _cls->gem_v_scc_wrapper_for;
-    gem_push_frame("anonymous fn", "compiler/codegen.gem", 2346);
+    gem_push_frame("anonymous fn", "compiler/codegen.gem", 2347);
     GemVal gem_v_node = (argc > 0) ? args[0] : GEM_NIL;
     GemArenaPoint _ret_pt;
     gem_arena_point(&_ret_pt);
-#line 2347 "compiler/codegen.gem"
-    gem_set_line(2347);
+#line 2348 "compiler/codegen.gem"
+    gem_set_line(2348);
     GemVal gem_v___d4 = gem_v_node;
-#line 2347 "compiler/codegen.gem"
-    gem_set_line(2347);
+#line 2348 "compiler/codegen.gem"
+    gem_set_line(2348);
     GemVal _t13565 = gem_v___d4;
     static GemICacheSlot _ic_2173 = {0};
     GemVal gem_v_params = gem_table_get_cached(_t13565, "params", &_ic_2173);
-#line 2347 "compiler/codegen.gem"
-    gem_set_line(2347);
+#line 2348 "compiler/codegen.gem"
+    gem_set_line(2348);
     GemVal _t13566 = gem_v___d4;
     static GemICacheSlot _ic_2174 = {0};
     GemVal gem_v_body = gem_table_get_cached(_t13566, "body", &_ic_2174);
-#line 2347 "compiler/codegen.gem"
-    gem_set_line(2347);
+#line 2348 "compiler/codegen.gem"
+    gem_set_line(2348);
     GemVal _t13567 = gem_v___d4;
     static GemICacheSlot _ic_2175 = {0};
     GemVal gem_v_name = gem_table_get_cached(_t13567, "name", &_ic_2175);
 
-#line 2349 "compiler/codegen.gem"
-    gem_set_line(2349);
-    GemVal _t13569 = gem_g___mod_codegen_sorted_array_to_set;
-    GemVal _t13568[] = {gem_v_params};
-    gem_check_callable(_t13569, "compiler/codegen.gem", 2349);
-    GemVal gem_v_scope_vars = _t13569.fn(_t13569.env, _t13568, 1);
 #line 2350 "compiler/codegen.gem"
     gem_set_line(2350);
+    GemVal _t13569 = gem_g___mod_codegen_sorted_array_to_set;
+    GemVal _t13568[] = {gem_v_params};
+    gem_check_callable(_t13569, "compiler/codegen.gem", 2350);
+    GemVal gem_v_scope_vars = _t13569.fn(_t13569.env, _t13568, 1);
+#line 2351 "compiler/codegen.gem"
+    gem_set_line(2351);
     GemVal _t13570 = gem_v_node;
     static GemICacheSlot _ic_2176 = {0};
     if (gem_truthy(gem_neq(gem_table_get_cached(_t13570, "rest_param", &_ic_2176), GEM_NIL))) {
-#line 2351 "compiler/codegen.gem"
-        gem_set_line(2351);
+#line 2352 "compiler/codegen.gem"
+        gem_set_line(2352);
     GemVal _t13574 = gem_g___mod_codegen_set_add;
     GemVal _t13572 = gem_v_scope_vars;
     GemVal _t13571 = gem_v_node;
     static GemICacheSlot _ic_2177 = {0};
     GemVal _t13573[] = {_t13572, gem_table_get_cached(_t13571, "rest_param", &_ic_2177)};
-    gem_check_callable(_t13574, "compiler/codegen.gem", 2351);
+    gem_check_callable(_t13574, "compiler/codegen.gem", 2352);
         (void)(_t13574.fn(_t13574.env, _t13573, 2));
     }
-#line 2353 "compiler/codegen.gem"
-    gem_set_line(2353);
+#line 2354 "compiler/codegen.gem"
+    gem_set_line(2354);
     GemVal _t13577 = gem_g___mod_codegen_collect_top_let_names;
     GemVal _t13575 = gem_v_body;
     GemVal _t13576[] = {_t13575, gem_v_scope_vars};
-    gem_check_callable(_t13577, "compiler/codegen.gem", 2353);
+    gem_check_callable(_t13577, "compiler/codegen.gem", 2354);
     (void)(_t13577.fn(_t13577.env, _t13576, 2));
-#line 2356 "compiler/codegen.gem"
-    gem_set_line(2356);
+#line 2357 "compiler/codegen.gem"
+    gem_set_line(2357);
     GemVal _t13581 = gem_g___mod_codegen_set_union;
     GemVal _t13579 = gem_v_scope_vars;
     GemVal _t13578 = gem_table_new_braces();
     GemVal _t13580[] = {_t13579, _t13578};
-    gem_check_callable(_t13581, "compiler/codegen.gem", 2356);
+    gem_check_callable(_t13581, "compiler/codegen.gem", 2357);
     GemVal gem_v_shadowed_locals = _t13581.fn(_t13581.env, _t13580, 2);
-#line 2357 "compiler/codegen.gem"
-    gem_set_line(2357);
+#line 2358 "compiler/codegen.gem"
+    gem_set_line(2358);
     GemVal _t13584 = gem_g___mod_codegen_collect_shadow_lets_in_fn;
     GemVal _t13582 = gem_v_body;
     GemVal _t13583[] = {_t13582, gem_v_shadowed_locals};
-    gem_check_callable(_t13584, "compiler/codegen.gem", 2357);
+    gem_check_callable(_t13584, "compiler/codegen.gem", 2358);
     (void)(_t13584.fn(_t13584.env, _t13583, 2));
-#line 2359 "compiler/codegen.gem"
-    gem_set_line(2359);
-    GemVal gem_v_outer_fs = (*gem_v_fs);
 #line 2360 "compiler/codegen.gem"
     gem_set_line(2360);
-    GemVal _t13585 = (*gem_v_new_fn_state);
-    gem_check_callable(_t13585, "compiler/codegen.gem", 2360);
-    (*gem_v_fs) = _t13585.fn(_t13585.env, NULL, 0);
+    GemVal gem_v_outer_fs = (*gem_v_fs);
 #line 2361 "compiler/codegen.gem"
     gem_set_line(2361);
+    GemVal _t13585 = (*gem_v_new_fn_state);
+    gem_check_callable(_t13585, "compiler/codegen.gem", 2361);
+    (*gem_v_fs) = _t13585.fn(_t13585.env, NULL, 0);
+#line 2362 "compiler/codegen.gem"
+    gem_set_line(2362);
     GemVal _t13586 = (*gem_v_fs);
     gem_table_set(_t13586, GEM_STR_LIT("local_names", 11), gem_v_shadowed_locals);
-#line 2363 "compiler/codegen.gem"
-    gem_set_line(2363);
+#line 2364 "compiler/codegen.gem"
+    gem_set_line(2364);
     GemVal _t13589 = (*gem_v_fs);
     GemVal _t13588 = gem_g___mod_codegen_sorted_array_to_set;
     GemVal _t13587[] = {gem_v_params};
-    gem_check_callable(_t13588, "compiler/codegen.gem", 2363);
+    gem_check_callable(_t13588, "compiler/codegen.gem", 2364);
     gem_table_set(_t13589, GEM_STR_LIT("fn_scope_locals", 15), _t13588.fn(_t13588.env, _t13587, 1));
-#line 2364 "compiler/codegen.gem"
-    gem_set_line(2364);
+#line 2365 "compiler/codegen.gem"
+    gem_set_line(2365);
     GemVal _t13590 = gem_v_node;
     static GemICacheSlot _ic_2178 = {0};
     if (gem_truthy(gem_neq(gem_table_get_cached(_t13590, "rest_param", &_ic_2178), GEM_NIL))) {
-#line 2365 "compiler/codegen.gem"
-        gem_set_line(2365);
+#line 2366 "compiler/codegen.gem"
+        gem_set_line(2366);
     GemVal _t13595 = gem_g___mod_codegen_set_add;
     GemVal _t13591 = (*gem_v_fs);
     static GemICacheSlot _ic_2179 = {0};
@@ -58239,64 +58242,64 @@ static GemVal __anon_191(void *_env, GemVal *args, int argc) {
     GemVal _t13592 = gem_v_node;
     static GemICacheSlot _ic_2180 = {0};
     GemVal _t13594[] = {_t13593, gem_table_get_cached(_t13592, "rest_param", &_ic_2180)};
-    gem_check_callable(_t13595, "compiler/codegen.gem", 2365);
+    gem_check_callable(_t13595, "compiler/codegen.gem", 2366);
         (void)(_t13595.fn(_t13595.env, _t13594, 2));
     }
-#line 2367 "compiler/codegen.gem"
-    gem_set_line(2367);
+#line 2368 "compiler/codegen.gem"
+    gem_set_line(2368);
     GemVal _t13599 = (*gem_v_fs);
     GemVal _t13598 = (*gem_v_fn_is_leaf);
     GemVal _t13596 = gem_v_node;
     GemVal _t13597[] = {_t13596, gem_v_body};
-    gem_check_callable(_t13598, "compiler/codegen.gem", 2367);
+    gem_check_callable(_t13598, "compiler/codegen.gem", 2368);
     gem_table_set(_t13599, GEM_STR_LIT("in_leaf_fn", 10), _t13598.fn(_t13598.env, _t13597, 2));
-#line 2369 "compiler/codegen.gem"
-    gem_set_line(2369);
+#line 2370 "compiler/codegen.gem"
+    gem_set_line(2370);
     GemVal _t13605 = gem_g___mod_codegen_find_captured_in_scope;
     GemVal _t13601 = gem_g___mod_codegen_fn_stmts;
     GemVal _t13600[] = {gem_v_node};
-    gem_check_callable(_t13601, "compiler/codegen.gem", 2369);
+    gem_check_callable(_t13601, "compiler/codegen.gem", 2370);
     GemVal _t13603 = _t13601.fn(_t13601.env, _t13600, 1);
     GemVal _t13602 = gem_v_scope_vars;
     GemVal _t13604[] = {_t13603, _t13602, (*gem_v_is_global_name)};
-    gem_check_callable(_t13605, "compiler/codegen.gem", 2369);
+    gem_check_callable(_t13605, "compiler/codegen.gem", 2370);
     GemVal gem_v_captured = _t13605.fn(_t13605.env, _t13604, 3);
-#line 2373 "compiler/codegen.gem"
-    gem_set_line(2373);
+#line 2374 "compiler/codegen.gem"
+    gem_set_line(2374);
     GemVal _t13610 = gem_g___mod_codegen_find_capture_writes_in_scope;
     GemVal _t13607 = gem_g___mod_codegen_fn_stmts;
     GemVal _t13606[] = {gem_v_node};
-    gem_check_callable(_t13607, "compiler/codegen.gem", 2373);
+    gem_check_callable(_t13607, "compiler/codegen.gem", 2374);
     GemVal _t13608 = _t13607.fn(_t13607.env, _t13606, 1);
     GemVal _t13609[] = {_t13608, gem_v_shadowed_locals};
-    gem_check_callable(_t13610, "compiler/codegen.gem", 2373);
+    gem_check_callable(_t13610, "compiler/codegen.gem", 2374);
     GemVal gem_v_cap_writes = _t13610.fn(_t13610.env, _t13609, 2);
-#line 2374 "compiler/codegen.gem"
-    gem_set_line(2374);
+#line 2375 "compiler/codegen.gem"
+    gem_set_line(2375);
     GemVal _t13614 = (*gem_v_fs);
     GemVal _t13613 = gem_g___mod_codegen_set_intersect;
     GemVal _t13611 = gem_v_captured;
     GemVal _t13612[] = {_t13611, gem_v_cap_writes};
-    gem_check_callable(_t13613, "compiler/codegen.gem", 2374);
+    gem_check_callable(_t13613, "compiler/codegen.gem", 2375);
     gem_table_set(_t13614, GEM_STR_LIT("boxed_vars", 10), _t13613.fn(_t13613.env, _t13612, 2));
-#line 2376 "compiler/codegen.gem"
-    gem_set_line(2376);
-    GemVal gem_v_has_defs = gem_bool(0);
 #line 2377 "compiler/codegen.gem"
     gem_set_line(2377);
+    GemVal gem_v_has_defs = gem_bool(0);
+#line 2378 "compiler/codegen.gem"
+    gem_set_line(2378);
     GemVal _t13615 = gem_v_node;
     static GemICacheSlot _ic_2181 = {0};
     if (gem_truthy(gem_neq(gem_table_get_cached(_t13615, "defaults", &_ic_2181), GEM_NIL))) {
-#line 2378 "compiler/codegen.gem"
-        gem_set_line(2378);
+#line 2379 "compiler/codegen.gem"
+        gem_set_line(2379);
     GemVal _t13616 = gem_v_node;
     static GemICacheSlot _ic_2182 = {0};
         GemVal gem_v___for_items_351 = gem_for_items_1(gem_table_get_cached(_t13616, "defaults", &_ic_2182));
-#line 2378 "compiler/codegen.gem"
-        gem_set_line(2378);
+#line 2379 "compiler/codegen.gem"
+        gem_set_line(2379);
         GemVal gem_v___for_i_351 = gem_int(0);
-#line 2378 "compiler/codegen.gem"
-        gem_set_line(2378);
+#line 2379 "compiler/codegen.gem"
+        gem_set_line(2379);
         GemArenaMark _mk353;
         gem_arena_mark(&_mk353);
         while (1) {
@@ -58307,49 +58310,49 @@ static GemVal __anon_191(void *_env, GemVal *args, int argc) {
             }
     GemVal _t13617 = gem_v___for_i_351;
             if (!gem_truthy(gem_lt(_t13617, gem_for_len_1(gem_v___for_items_351)))) break;
-#line 2378 "compiler/codegen.gem"
-            gem_set_line(2378);
-    GemVal _t13618 = gem_v___for_items_351;
-            GemVal gem_v_d = gem_table_get(_t13618, gem_v___for_i_351);
-#line 2378 "compiler/codegen.gem"
-            gem_set_line(2378);
-            gem_v___for_i_351 = gem_add(gem_v___for_i_351, gem_int(1));
 #line 2379 "compiler/codegen.gem"
             gem_set_line(2379);
-            if (gem_truthy(gem_neq(gem_v_d, GEM_NIL))) {
+    GemVal _t13618 = gem_v___for_items_351;
+            GemVal gem_v_d = gem_table_get(_t13618, gem_v___for_i_351);
+#line 2379 "compiler/codegen.gem"
+            gem_set_line(2379);
+            gem_v___for_i_351 = gem_add(gem_v___for_i_351, gem_int(1));
 #line 2380 "compiler/codegen.gem"
-                gem_set_line(2380);
+            gem_set_line(2380);
+            if (gem_truthy(gem_neq(gem_v_d, GEM_NIL))) {
+#line 2381 "compiler/codegen.gem"
+                gem_set_line(2381);
                 gem_v_has_defs = gem_bool(1);
                 break;
             }
         }
 
     }
-#line 2385 "compiler/codegen.gem"
-    gem_set_line(2385);
-    GemVal _t13620 = gem_g___mod_codegen_fn_def_is_tco;
-    GemVal _t13619[] = {gem_v_node};
-    gem_check_callable(_t13620, "compiler/codegen.gem", 2385);
-    GemVal gem_v_use_tco = _t13620.fn(_t13620.env, _t13619, 1);
 #line 2386 "compiler/codegen.gem"
     gem_set_line(2386);
-    if (gem_truthy(gem_v_use_tco)) {
+    GemVal _t13620 = gem_g___mod_codegen_fn_def_is_tco;
+    GemVal _t13619[] = {gem_v_node};
+    gem_check_callable(_t13620, "compiler/codegen.gem", 2386);
+    GemVal gem_v_use_tco = _t13620.fn(_t13620.env, _t13619, 1);
 #line 2387 "compiler/codegen.gem"
-        gem_set_line(2387);
-    GemVal _t13621 = (*gem_v_fs);
-        gem_table_set(_t13621, GEM_STR_LIT("tco_fn_name", 11), gem_v_name);
+    gem_set_line(2387);
+    if (gem_truthy(gem_v_use_tco)) {
 #line 2388 "compiler/codegen.gem"
         gem_set_line(2388);
-    GemVal _t13622 = (*gem_v_fs);
-        gem_table_set(_t13622, GEM_STR_LIT("tco_params", 10), gem_v_params);
+    GemVal _t13621 = (*gem_v_fs);
+        gem_table_set(_t13621, GEM_STR_LIT("tco_fn_name", 11), gem_v_name);
 #line 2389 "compiler/codegen.gem"
         gem_set_line(2389);
+    GemVal _t13622 = (*gem_v_fs);
+        gem_table_set(_t13622, GEM_STR_LIT("tco_params", 10), gem_v_params);
+#line 2390 "compiler/codegen.gem"
+        gem_set_line(2390);
     GemVal _t13624 = (*gem_v_fs);
     GemVal _t13623 = (*gem_v_fs);
     static GemICacheSlot _ic_2183 = {0};
         gem_table_set(_t13624, GEM_STR_LIT("tco_boxed", 9), gem_table_get_cached(_t13623, "boxed_vars", &_ic_2183));
-#line 2390 "compiler/codegen.gem"
-        gem_set_line(2390);
+#line 2391 "compiler/codegen.gem"
+        gem_set_line(2391);
     GemVal _t13628 = (*gem_v_fs);
     GemVal _t13625 = gem_v_has_defs;
     GemVal _t13627;
@@ -58362,42 +58365,42 @@ static GemVal __anon_191(void *_env, GemVal *args, int argc) {
     }
         gem_table_set(_t13628, GEM_STR_LIT("tco_rebind", 10), _t13627);
     }
-#line 2394 "compiler/codegen.gem"
-    gem_set_line(2394);
-    GemVal _t13629 = (*gem_v_scc_member_to_id);
-    GemVal gem_v_scc_id = gem_table_get(_t13629, gem_v_name);
 #line 2395 "compiler/codegen.gem"
     gem_set_line(2395);
-    GemVal _t13630[] = {GEM_STR_LIT("gem_fn_", 7), gem_v_name};
-    GemVal gem_v_body_fn_name = gem_interp(2, _t13630);
+    GemVal _t13629 = (*gem_v_scc_member_to_id);
+    GemVal gem_v_scc_id = gem_table_get(_t13629, gem_v_name);
 #line 2396 "compiler/codegen.gem"
     gem_set_line(2396);
-    if (gem_truthy(gem_neq(gem_v_scc_id, GEM_NIL))) {
+    GemVal _t13630[] = {GEM_STR_LIT("gem_fn_", 7), gem_v_name};
+    GemVal gem_v_body_fn_name = gem_interp(2, _t13630);
 #line 2397 "compiler/codegen.gem"
-        gem_set_line(2397);
-    GemVal _t13631 = (*gem_v_fs);
-        gem_table_set(_t13631, GEM_STR_LIT("current_scc_id", 14), gem_v_scc_id);
+    gem_set_line(2397);
+    if (gem_truthy(gem_neq(gem_v_scc_id, GEM_NIL))) {
 #line 2398 "compiler/codegen.gem"
         gem_set_line(2398);
+    GemVal _t13631 = (*gem_v_fs);
+        gem_table_set(_t13631, GEM_STR_LIT("current_scc_id", 14), gem_v_scc_id);
+#line 2399 "compiler/codegen.gem"
+        gem_set_line(2399);
     GemVal _t13632[] = {GEM_STR_LIT("gem_sccbody_", 12), gem_v_name};
         gem_v_body_fn_name = gem_interp(2, _t13632);
     }
-#line 2401 "compiler/codegen.gem"
-    gem_set_line(2401);
-    GemVal gem_v_b = gem_buf_new_fn(NULL, NULL, 0);
 #line 2402 "compiler/codegen.gem"
     gem_set_line(2402);
+    GemVal gem_v_b = gem_buf_new_fn(NULL, NULL, 0);
+#line 2403 "compiler/codegen.gem"
+    gem_set_line(2403);
     GemVal _t13634 = gem_v_b;
     GemVal _t13633[] = {GEM_STR_LIT("static GemVal ", 14), gem_v_body_fn_name, GEM_STR_LIT("(void *_env, GemVal *args, int argc) {\n", 39)};
     GemVal _t13635[] = {_t13634, gem_interp(3, _t13633)};
     (void)(gem_buf_push_fn(NULL, _t13635, 2));
-#line 2404 "compiler/codegen.gem"
-    gem_set_line(2404);
+#line 2405 "compiler/codegen.gem"
+    gem_set_line(2405);
     GemVal _t13636 = gem_v_node;
     static GemICacheSlot _ic_2185 = {0};
     if (gem_truthy(gem_neq(gem_table_get_cached(_t13636, "line", &_ic_2185), GEM_NIL))) {
-#line 2405 "compiler/codegen.gem"
-        gem_set_line(2405);
+#line 2406 "compiler/codegen.gem"
+        gem_set_line(2406);
     GemVal _t13646 = gem_v_b;
     GemVal _t13637 = gem_v_node;
     static GemICacheSlot _ic_2186 = {0};
@@ -58406,88 +58409,88 @@ static GemVal __anon_191(void *_env, GemVal *args, int argc) {
     GemVal _t13641 = (*gem_v_rel_path);
     GemVal _t13639 = (*gem_v_file_of);
     GemVal _t13638[] = {gem_v_node};
-    gem_check_callable(_t13639, "compiler/codegen.gem", 2405);
+    gem_check_callable(_t13639, "compiler/codegen.gem", 2406);
     GemVal _t13640[] = {_t13639.fn(_t13639.env, _t13638, 1)};
-    gem_check_callable(_t13641, "compiler/codegen.gem", 2405);
+    gem_check_callable(_t13641, "compiler/codegen.gem", 2406);
     GemVal _t13642[] = {_t13641.fn(_t13641.env, _t13640, 1)};
-    gem_check_callable(_t13643, "compiler/codegen.gem", 2405);
+    gem_check_callable(_t13643, "compiler/codegen.gem", 2406);
     GemVal _t13645[] = {GEM_STR_LIT("#line ", 6), _t13644, GEM_STR_LIT(" \"", 2), _t13643.fn(_t13643.env, _t13642, 1), GEM_STR_LIT("\"\n", 2)};
     GemVal _t13647[] = {_t13646, gem_interp(5, _t13645)};
         (void)(gem_buf_push_fn(NULL, _t13647, 2));
     }
-#line 2408 "compiler/codegen.gem"
-    gem_set_line(2408);
+#line 2409 "compiler/codegen.gem"
+    gem_set_line(2409);
     GemVal gem_v___val_352 = GEM_NIL;
-#line 2408 "compiler/codegen.gem"
-    gem_set_line(2408);
+#line 2409 "compiler/codegen.gem"
+    gem_set_line(2409);
     GemVal _t13648 = gem_v_node;
     static GemICacheSlot _ic_2187 = {0};
     if (gem_truthy(gem_neq(gem_table_get_cached(_t13648, "line", &_ic_2187), GEM_NIL))) {
-#line 2408 "compiler/codegen.gem"
-        gem_set_line(2408);
+#line 2409 "compiler/codegen.gem"
+        gem_set_line(2409);
     GemVal _t13649 = gem_v_node;
     static GemICacheSlot _ic_2188 = {0};
         gem_v___val_352 = gem_table_get_cached(_t13649, "line", &_ic_2188);
     } else {
-#line 2408 "compiler/codegen.gem"
-        gem_set_line(2408);
+#line 2409 "compiler/codegen.gem"
+        gem_set_line(2409);
         gem_v___val_352 = gem_int(0);
     }
-#line 2408 "compiler/codegen.gem"
-    gem_set_line(2408);
+#line 2409 "compiler/codegen.gem"
+    gem_set_line(2409);
     GemVal gem_v_fn_line = gem_v___val_352;
-#line 2410 "compiler/codegen.gem"
-    gem_set_line(2410);
+#line 2411 "compiler/codegen.gem"
+    gem_set_line(2411);
     GemVal _t13650 = (*gem_v_fs);
     static GemICacheSlot _ic_2189 = {0};
     if (gem_truthy(gem_table_get_cached(_t13650, "in_leaf_fn", &_ic_2189))) {
-#line 2411 "compiler/codegen.gem"
-        gem_set_line(2411);
+#line 2412 "compiler/codegen.gem"
+        gem_set_line(2412);
     GemVal _t13662 = gem_v_b;
     GemVal _t13661 = (*gem_v_leaf_entry_str);
     GemVal _t13652 = (*gem_v_frame_name);
     GemVal _t13651[] = {gem_v_name};
-    gem_check_callable(_t13652, "compiler/codegen.gem", 2411);
+    gem_check_callable(_t13652, "compiler/codegen.gem", 2412);
     GemVal _t13659 = _t13652.fn(_t13652.env, _t13651, 1);
     GemVal _t13656 = (*gem_v_rel_path);
     GemVal _t13654 = (*gem_v_file_of);
     GemVal _t13653[] = {gem_v_node};
-    gem_check_callable(_t13654, "compiler/codegen.gem", 2411);
+    gem_check_callable(_t13654, "compiler/codegen.gem", 2412);
     GemVal _t13655[] = {_t13654.fn(_t13654.env, _t13653, 1)};
-    gem_check_callable(_t13656, "compiler/codegen.gem", 2411);
+    gem_check_callable(_t13656, "compiler/codegen.gem", 2412);
     GemVal _t13658 = _t13656.fn(_t13656.env, _t13655, 1);
     GemVal _t13657 = gem_v_fn_line;
     GemVal _t13660[] = {_t13659, _t13658, _t13657, gem_v_body};
-    gem_check_callable(_t13661, "compiler/codegen.gem", 2411);
+    gem_check_callable(_t13661, "compiler/codegen.gem", 2412);
     GemVal _t13663[] = {_t13662, _t13661.fn(_t13661.env, _t13660, 4)};
         (void)(gem_buf_push_fn(NULL, _t13663, 2));
     } else {
-#line 2413 "compiler/codegen.gem"
-        gem_set_line(2413);
+#line 2414 "compiler/codegen.gem"
+        gem_set_line(2414);
     GemVal _t13677 = gem_v_b;
     GemVal _t13667 = gem_g___mod_codegen_escape_c_string;
     GemVal _t13665 = (*gem_v_frame_name);
     GemVal _t13664[] = {gem_v_name};
-    gem_check_callable(_t13665, "compiler/codegen.gem", 2413);
+    gem_check_callable(_t13665, "compiler/codegen.gem", 2414);
     GemVal _t13666[] = {_t13665.fn(_t13665.env, _t13664, 1)};
-    gem_check_callable(_t13667, "compiler/codegen.gem", 2413);
+    gem_check_callable(_t13667, "compiler/codegen.gem", 2414);
     GemVal _t13675 = _t13667.fn(_t13667.env, _t13666, 1);
     GemVal _t13673 = gem_g___mod_codegen_escape_c_string;
     GemVal _t13671 = (*gem_v_rel_path);
     GemVal _t13669 = (*gem_v_file_of);
     GemVal _t13668[] = {gem_v_node};
-    gem_check_callable(_t13669, "compiler/codegen.gem", 2413);
+    gem_check_callable(_t13669, "compiler/codegen.gem", 2414);
     GemVal _t13670[] = {_t13669.fn(_t13669.env, _t13668, 1)};
-    gem_check_callable(_t13671, "compiler/codegen.gem", 2413);
+    gem_check_callable(_t13671, "compiler/codegen.gem", 2414);
     GemVal _t13672[] = {_t13671.fn(_t13671.env, _t13670, 1)};
-    gem_check_callable(_t13673, "compiler/codegen.gem", 2413);
+    gem_check_callable(_t13673, "compiler/codegen.gem", 2414);
     GemVal _t13674 = _t13673.fn(_t13673.env, _t13672, 1);
     GemVal _t13676[] = {GEM_STR_LIT("    gem_push_frame(\"", 20), _t13675, GEM_STR_LIT("\", \"", 4), _t13674, GEM_STR_LIT("\", ", 3), gem_v_fn_line, GEM_STR_LIT(");\n", 3)};
     GemVal _t13678[] = {_t13677, gem_interp(7, _t13676)};
         (void)(gem_buf_push_fn(NULL, _t13678, 2));
     }
-#line 2415 "compiler/codegen.gem"
-    gem_set_line(2415);
+#line 2416 "compiler/codegen.gem"
+    gem_set_line(2416);
     GemVal _t13684 = gem_v_b;
     GemVal _t13683 = (*gem_v_emit_param_bindings);
     GemVal _t13681 = gem_v_node;
@@ -58495,11 +58498,11 @@ static GemVal __anon_191(void *_env, GemVal *args, int argc) {
     GemVal _t13679 = (*gem_v_fs);
     static GemICacheSlot _ic_2190 = {0};
     GemVal _t13682[] = {_t13681, _t13680, gem_table_get_cached(_t13679, "boxed_vars", &_ic_2190)};
-    gem_check_callable(_t13683, "compiler/codegen.gem", 2415);
+    gem_check_callable(_t13683, "compiler/codegen.gem", 2416);
     GemVal _t13685[] = {_t13684, _t13683.fn(_t13683.env, _t13682, 3)};
     (void)(gem_buf_push_fn(NULL, _t13685, 2));
-#line 2418 "compiler/codegen.gem"
-    gem_set_line(2418);
+#line 2419 "compiler/codegen.gem"
+    gem_set_line(2419);
     GemVal _t13686 = (*gem_v_fs);
     static GemICacheSlot _ic_2191 = {0};
     GemVal _t13687 = gem_not(gem_table_get_cached(_t13686, "in_leaf_fn", &_ic_2191));
@@ -58510,34 +58513,34 @@ static GemVal __anon_191(void *_env, GemVal *args, int argc) {
         _t13688 = gem_eq(gem_v_scc_id, GEM_NIL);
     }
     if (gem_truthy(_t13688)) {
-#line 2419 "compiler/codegen.gem"
-        gem_set_line(2419);
-        if (gem_truthy(gem_v_use_tco)) {
 #line 2420 "compiler/codegen.gem"
-            gem_set_line(2420);
-            gem_table_set((*gem_v_fs), GEM_STR_LIT("ret_point", 9), GEM_STR_LIT("_tco_mk.base", 12));
-        } else {
+        gem_set_line(2420);
+        if (gem_truthy(gem_v_use_tco)) {
 #line 2421 "compiler/codegen.gem"
             gem_set_line(2421);
+            gem_table_set((*gem_v_fs), GEM_STR_LIT("ret_point", 9), GEM_STR_LIT("_tco_mk.base", 12));
+        } else {
+#line 2422 "compiler/codegen.gem"
+            gem_set_line(2422);
     GemVal _t13689 = gem_v_node;
     static GemICacheSlot _ic_2192 = {0};
             if (gem_truthy(gem_eq(gem_table_get_cached(_t13689, "may_recurse", &_ic_2192), gem_bool(1)))) {
-#line 2422 "compiler/codegen.gem"
-                gem_set_line(2422);
-                gem_table_set((*gem_v_fs), GEM_STR_LIT("ret_point", 9), GEM_STR_LIT("_ret_pt", 7));
 #line 2423 "compiler/codegen.gem"
                 gem_set_line(2423);
-    GemVal _t13690[] = {gem_v_b, GEM_STR_LIT("    GemArenaPoint _ret_pt;\n", 27)};
-                (void)(gem_buf_push_fn(NULL, _t13690, 2));
+                gem_table_set((*gem_v_fs), GEM_STR_LIT("ret_point", 9), GEM_STR_LIT("_ret_pt", 7));
 #line 2424 "compiler/codegen.gem"
                 gem_set_line(2424);
+    GemVal _t13690[] = {gem_v_b, GEM_STR_LIT("    GemArenaPoint _ret_pt;\n", 27)};
+                (void)(gem_buf_push_fn(NULL, _t13690, 2));
+#line 2425 "compiler/codegen.gem"
+                gem_set_line(2425);
     GemVal _t13691[] = {gem_v_b, GEM_STR_LIT("    gem_arena_point(&_ret_pt);\n", 31)};
                 (void)(gem_buf_push_fn(NULL, _t13691, 2));
             }
         }
     }
-#line 2428 "compiler/codegen.gem"
-    gem_set_line(2428);
+#line 2429 "compiler/codegen.gem"
+    gem_set_line(2429);
     GemVal _t13692 = gem_v_use_tco;
     GemVal _t13694;
     if (!gem_truthy(_t13692)) {
@@ -58548,30 +58551,30 @@ static GemVal __anon_191(void *_env, GemVal *args, int argc) {
         _t13694 = gem_table_get_cached(_t13693, "tco_rebind", &_ic_2193);
     }
     if (gem_truthy(_t13694)) {
-#line 2430 "compiler/codegen.gem"
-        gem_set_line(2430);
+#line 2431 "compiler/codegen.gem"
+        gem_set_line(2431);
     GemVal _t13699 = (*gem_v_emit_param_bindings_impl);
     GemVal _t13697 = gem_v_node;
     GemVal _t13696 = gem_v_params;
     GemVal _t13695 = (*gem_v_fs);
     static GemICacheSlot _ic_2194 = {0};
     GemVal _t13698[] = {_t13697, _t13696, gem_table_get_cached(_t13695, "boxed_vars", &_ic_2194), gem_bool(1)};
-    gem_check_callable(_t13699, "compiler/codegen.gem", 2430);
+    gem_check_callable(_t13699, "compiler/codegen.gem", 2431);
         GemVal gem_v_rebind_c = _t13699.fn(_t13699.env, _t13698, 4);
-#line 2431 "compiler/codegen.gem"
-        gem_set_line(2431);
-        GemVal gem_v_bb = gem_buf_new_fn(NULL, NULL, 0);
 #line 2432 "compiler/codegen.gem"
         gem_set_line(2432);
+        GemVal gem_v_bb = gem_buf_new_fn(NULL, NULL, 0);
+#line 2433 "compiler/codegen.gem"
+        gem_set_line(2433);
         if (gem_truthy(gem_gt(gem_len_1(gem_v_body), gem_int(0)))) {
-#line 2433 "compiler/codegen.gem"
-            gem_set_line(2433);
+#line 2434 "compiler/codegen.gem"
+            gem_set_line(2434);
             GemVal gem_v___for_i_353 = gem_int(0);
-#line 2433 "compiler/codegen.gem"
-            gem_set_line(2433);
+#line 2434 "compiler/codegen.gem"
+            gem_set_line(2434);
             GemVal gem_v___for_limit_353 = gem_sub(gem_len_1(gem_v_body), gem_int(1));
-#line 2433 "compiler/codegen.gem"
-            gem_set_line(2433);
+#line 2434 "compiler/codegen.gem"
+            gem_set_line(2434);
             GemArenaMark _mk354;
             gem_arena_mark(&_mk354);
             while (1) {
@@ -58582,128 +58585,128 @@ static GemVal __anon_191(void *_env, GemVal *args, int argc) {
                 }
     GemVal _t13700 = gem_v___for_i_353;
                 if (!gem_truthy(gem_lt(_t13700, gem_v___for_limit_353))) break;
-#line 2433 "compiler/codegen.gem"
-                gem_set_line(2433);
-                GemVal gem_v_i = gem_v___for_i_353;
-#line 2433 "compiler/codegen.gem"
-                gem_set_line(2433);
-                gem_v___for_i_353 = gem_add(gem_v___for_i_353, gem_int(1));
 #line 2434 "compiler/codegen.gem"
                 gem_set_line(2434);
+                GemVal gem_v_i = gem_v___for_i_353;
+#line 2434 "compiler/codegen.gem"
+                gem_set_line(2434);
+                gem_v___for_i_353 = gem_add(gem_v___for_i_353, gem_int(1));
+#line 2435 "compiler/codegen.gem"
+                gem_set_line(2435);
     GemVal _t13704 = gem_v_bb;
     GemVal _t13703 = (*gem_v_compile_stmt);
     GemVal _t13701 = gem_v_body;
     GemVal _t13702[] = {gem_table_get(_t13701, gem_v_i), gem_int(3)};
-    gem_check_callable(_t13703, "compiler/codegen.gem", 2434);
+    gem_check_callable(_t13703, "compiler/codegen.gem", 2435);
     GemVal _t13705[] = {_t13704, _t13703.fn(_t13703.env, _t13702, 2)};
                 (void)(gem_buf_push_fn(NULL, _t13705, 2));
-#line 2435 "compiler/codegen.gem"
-                gem_set_line(2435);
+#line 2436 "compiler/codegen.gem"
+                gem_set_line(2436);
     GemVal _t13706[] = {gem_v_bb, GEM_STR_LIT("\n", 1)};
                 (void)(gem_buf_push_fn(NULL, _t13706, 2));
             }
 
-#line 2437 "compiler/codegen.gem"
-            gem_set_line(2437);
+#line 2438 "compiler/codegen.gem"
+            gem_set_line(2438);
     GemVal _t13709 = gem_v_bb;
     GemVal _t13708 = (*gem_v_compile_stmt_return);
     GemVal _t13707[] = {gem_table_get(gem_v_body, gem_int(-1)), gem_int(3)};
-    gem_check_callable(_t13708, "compiler/codegen.gem", 2437);
+    gem_check_callable(_t13708, "compiler/codegen.gem", 2438);
     GemVal _t13710[] = {_t13709, _t13708.fn(_t13708.env, _t13707, 2)};
             (void)(gem_buf_push_fn(NULL, _t13710, 2));
-#line 2438 "compiler/codegen.gem"
-            gem_set_line(2438);
+#line 2439 "compiler/codegen.gem"
+            gem_set_line(2439);
     GemVal _t13711[] = {gem_v_bb, GEM_STR_LIT("\n", 1)};
             (void)(gem_buf_push_fn(NULL, _t13711, 2));
         } else {
-#line 2440 "compiler/codegen.gem"
-            gem_set_line(2440);
+#line 2441 "compiler/codegen.gem"
+            gem_set_line(2441);
     GemVal _t13714 = gem_v_bb;
     GemVal _t13713 = (*gem_v_return_nil_str);
     GemVal _t13712[] = {GEM_STR_LIT("            ", 12)};
-    gem_check_callable(_t13713, "compiler/codegen.gem", 2440);
+    gem_check_callable(_t13713, "compiler/codegen.gem", 2441);
     GemVal _t13715[] = {_t13714, gem_add(_t13713.fn(_t13713.env, _t13712, 1), GEM_STR_LIT("\n", 1))};
             (void)(gem_buf_push_fn(NULL, _t13715, 2));
         }
-#line 2442 "compiler/codegen.gem"
-        gem_set_line(2442);
+#line 2443 "compiler/codegen.gem"
+        gem_set_line(2443);
     GemVal _t13716 = (*gem_v_fs);
     static GemICacheSlot _ic_2195 = {0};
         GemVal gem_v_argv_n = gem_table_get_cached(_t13716, "tco_argv_max", &_ic_2195);
-#line 2443 "compiler/codegen.gem"
-        gem_set_line(2443);
-        if (gem_truthy(gem_lt(gem_v_argv_n, gem_int(1)))) {
 #line 2444 "compiler/codegen.gem"
-            gem_set_line(2444);
+        gem_set_line(2444);
+        if (gem_truthy(gem_lt(gem_v_argv_n, gem_int(1)))) {
+#line 2445 "compiler/codegen.gem"
+            gem_set_line(2445);
             gem_v_argv_n = gem_int(1);
         }
-#line 2446 "compiler/codegen.gem"
-        gem_set_line(2446);
+#line 2447 "compiler/codegen.gem"
+        gem_set_line(2447);
     GemVal _t13718 = gem_v_b;
     GemVal _t13717[] = {GEM_STR_LIT("    GemVal _tco_argv[", 21), gem_v_argv_n, GEM_STR_LIT("];\n", 3)};
     GemVal _t13719[] = {_t13718, gem_interp(3, _t13717)};
         (void)(gem_buf_push_fn(NULL, _t13719, 2));
-#line 2447 "compiler/codegen.gem"
-        gem_set_line(2447);
-    GemVal _t13720[] = {gem_v_b, GEM_STR_LIT("    GemArenaMark _tco_mk;\n", 26)};
-        (void)(gem_buf_push_fn(NULL, _t13720, 2));
 #line 2448 "compiler/codegen.gem"
         gem_set_line(2448);
-    GemVal _t13721[] = {gem_v_b, GEM_STR_LIT("    gem_arena_mark(&_tco_mk);\n", 30)};
-        (void)(gem_buf_push_fn(NULL, _t13721, 2));
+    GemVal _t13720[] = {gem_v_b, GEM_STR_LIT("    GemArenaMark _tco_mk;\n", 26)};
+        (void)(gem_buf_push_fn(NULL, _t13720, 2));
 #line 2449 "compiler/codegen.gem"
         gem_set_line(2449);
-    GemVal _t13722[] = {gem_v_b, GEM_STR_LIT("    while(1) {\n", 15)};
-        (void)(gem_buf_push_fn(NULL, _t13722, 2));
+    GemVal _t13721[] = {gem_v_b, GEM_STR_LIT("    gem_arena_mark(&_tco_mk);\n", 30)};
+        (void)(gem_buf_push_fn(NULL, _t13721, 2));
 #line 2450 "compiler/codegen.gem"
         gem_set_line(2450);
-    GemVal _t13723[] = {gem_v_b, GEM_STR_LIT("        gem_yield_check();\n", 27)};
-        (void)(gem_buf_push_fn(NULL, _t13723, 2));
+    GemVal _t13722[] = {gem_v_b, GEM_STR_LIT("    while(1) {\n", 15)};
+        (void)(gem_buf_push_fn(NULL, _t13722, 2));
 #line 2451 "compiler/codegen.gem"
         gem_set_line(2451);
-    GemVal _t13724[] = {gem_v_b, GEM_STR_LIT("        {\n", 10)};
-        (void)(gem_buf_push_fn(NULL, _t13724, 2));
+    GemVal _t13723[] = {gem_v_b, GEM_STR_LIT("        gem_yield_check();\n", 27)};
+        (void)(gem_buf_push_fn(NULL, _t13723, 2));
 #line 2452 "compiler/codegen.gem"
         gem_set_line(2452);
+    GemVal _t13724[] = {gem_v_b, GEM_STR_LIT("        {\n", 10)};
+        (void)(gem_buf_push_fn(NULL, _t13724, 2));
+#line 2453 "compiler/codegen.gem"
+        gem_set_line(2453);
     GemVal _t13726 = gem_v_b;
     GemVal _t13725[] = {gem_v_bb};
     GemVal _t13727[] = {_t13726, gem_to_string_fn(NULL, _t13725, 1)};
         (void)(gem_buf_push_fn(NULL, _t13727, 2));
-#line 2453 "compiler/codegen.gem"
-        gem_set_line(2453);
-    GemVal _t13728[] = {gem_v_b, GEM_STR_LIT("        }\n", 10)};
-        (void)(gem_buf_push_fn(NULL, _t13728, 2));
 #line 2454 "compiler/codegen.gem"
         gem_set_line(2454);
-    GemVal _t13729[] = {gem_v_b, GEM_STR_LIT("    _tco_rebind: ;\n", 19)};
-        (void)(gem_buf_push_fn(NULL, _t13729, 2));
+    GemVal _t13728[] = {gem_v_b, GEM_STR_LIT("        }\n", 10)};
+        (void)(gem_buf_push_fn(NULL, _t13728, 2));
 #line 2455 "compiler/codegen.gem"
         gem_set_line(2455);
+    GemVal _t13729[] = {gem_v_b, GEM_STR_LIT("    _tco_rebind: ;\n", 19)};
+        (void)(gem_buf_push_fn(NULL, _t13729, 2));
+#line 2456 "compiler/codegen.gem"
+        gem_set_line(2456);
     GemVal _t13730 = gem_v_b;
     GemVal _t13731[] = {_t13730, gem_v_rebind_c};
         (void)(gem_buf_push_fn(NULL, _t13731, 2));
-#line 2456 "compiler/codegen.gem"
-        gem_set_line(2456);
+#line 2457 "compiler/codegen.gem"
+        gem_set_line(2457);
     GemVal _t13732[] = {gem_v_b, GEM_STR_LIT("    }\n", 6)};
         (void)(gem_buf_push_fn(NULL, _t13732, 2));
     } else {
-#line 2457 "compiler/codegen.gem"
-        gem_set_line(2457);
-        if (gem_truthy(gem_v_use_tco)) {
 #line 2458 "compiler/codegen.gem"
-            gem_set_line(2458);
-            GemVal gem_v_bb = gem_buf_new_fn(NULL, NULL, 0);
+        gem_set_line(2458);
+        if (gem_truthy(gem_v_use_tco)) {
 #line 2459 "compiler/codegen.gem"
             gem_set_line(2459);
+            GemVal gem_v_bb = gem_buf_new_fn(NULL, NULL, 0);
+#line 2460 "compiler/codegen.gem"
+            gem_set_line(2460);
             if (gem_truthy(gem_gt(gem_len_1(gem_v_body), gem_int(0)))) {
-#line 2460 "compiler/codegen.gem"
-                gem_set_line(2460);
+#line 2461 "compiler/codegen.gem"
+                gem_set_line(2461);
                 GemVal gem_v___for_i_354 = gem_int(0);
-#line 2460 "compiler/codegen.gem"
-                gem_set_line(2460);
+#line 2461 "compiler/codegen.gem"
+                gem_set_line(2461);
                 GemVal gem_v___for_limit_354 = gem_sub(gem_len_1(gem_v_body), gem_int(1));
-#line 2460 "compiler/codegen.gem"
-                gem_set_line(2460);
+#line 2461 "compiler/codegen.gem"
+                gem_set_line(2461);
                 GemArenaMark _mk355;
                 gem_arena_mark(&_mk355);
                 while (1) {
@@ -58714,122 +58717,122 @@ static GemVal __anon_191(void *_env, GemVal *args, int argc) {
                     }
     GemVal _t13733 = gem_v___for_i_354;
                     if (!gem_truthy(gem_lt(_t13733, gem_v___for_limit_354))) break;
-#line 2460 "compiler/codegen.gem"
-                    gem_set_line(2460);
-                    GemVal gem_v_i = gem_v___for_i_354;
-#line 2460 "compiler/codegen.gem"
-                    gem_set_line(2460);
-                    gem_v___for_i_354 = gem_add(gem_v___for_i_354, gem_int(1));
 #line 2461 "compiler/codegen.gem"
                     gem_set_line(2461);
+                    GemVal gem_v_i = gem_v___for_i_354;
+#line 2461 "compiler/codegen.gem"
+                    gem_set_line(2461);
+                    gem_v___for_i_354 = gem_add(gem_v___for_i_354, gem_int(1));
+#line 2462 "compiler/codegen.gem"
+                    gem_set_line(2462);
     GemVal _t13737 = gem_v_bb;
     GemVal _t13736 = (*gem_v_compile_stmt);
     GemVal _t13734 = gem_v_body;
     GemVal _t13735[] = {gem_table_get(_t13734, gem_v_i), gem_int(2)};
-    gem_check_callable(_t13736, "compiler/codegen.gem", 2461);
+    gem_check_callable(_t13736, "compiler/codegen.gem", 2462);
     GemVal _t13738[] = {_t13737, _t13736.fn(_t13736.env, _t13735, 2)};
                     (void)(gem_buf_push_fn(NULL, _t13738, 2));
-#line 2462 "compiler/codegen.gem"
-                    gem_set_line(2462);
+#line 2463 "compiler/codegen.gem"
+                    gem_set_line(2463);
     GemVal _t13739[] = {gem_v_bb, GEM_STR_LIT("\n", 1)};
                     (void)(gem_buf_push_fn(NULL, _t13739, 2));
                 }
 
-#line 2464 "compiler/codegen.gem"
-                gem_set_line(2464);
+#line 2465 "compiler/codegen.gem"
+                gem_set_line(2465);
     GemVal _t13742 = gem_v_bb;
     GemVal _t13741 = (*gem_v_compile_stmt_return);
     GemVal _t13740[] = {gem_table_get(gem_v_body, gem_int(-1)), gem_int(2)};
-    gem_check_callable(_t13741, "compiler/codegen.gem", 2464);
+    gem_check_callable(_t13741, "compiler/codegen.gem", 2465);
     GemVal _t13743[] = {_t13742, _t13741.fn(_t13741.env, _t13740, 2)};
                 (void)(gem_buf_push_fn(NULL, _t13743, 2));
-#line 2465 "compiler/codegen.gem"
-                gem_set_line(2465);
+#line 2466 "compiler/codegen.gem"
+                gem_set_line(2466);
     GemVal _t13744[] = {gem_v_bb, GEM_STR_LIT("\n", 1)};
                 (void)(gem_buf_push_fn(NULL, _t13744, 2));
             } else {
-#line 2467 "compiler/codegen.gem"
-                gem_set_line(2467);
+#line 2468 "compiler/codegen.gem"
+                gem_set_line(2468);
     GemVal _t13747 = gem_v_bb;
     GemVal _t13746 = (*gem_v_return_nil_str);
     GemVal _t13745[] = {GEM_STR_LIT("        ", 8)};
-    gem_check_callable(_t13746, "compiler/codegen.gem", 2467);
+    gem_check_callable(_t13746, "compiler/codegen.gem", 2468);
     GemVal _t13748[] = {_t13747, gem_add(_t13746.fn(_t13746.env, _t13745, 1), GEM_STR_LIT("\n", 1))};
                 (void)(gem_buf_push_fn(NULL, _t13748, 2));
             }
-#line 2469 "compiler/codegen.gem"
-            gem_set_line(2469);
-    GemVal _t13749[] = {gem_v_b, GEM_STR_LIT("    GemArenaMark _tco_mk;\n", 26)};
-            (void)(gem_buf_push_fn(NULL, _t13749, 2));
 #line 2470 "compiler/codegen.gem"
             gem_set_line(2470);
-    GemVal _t13750[] = {gem_v_b, GEM_STR_LIT("    gem_arena_mark(&_tco_mk);\n", 30)};
-            (void)(gem_buf_push_fn(NULL, _t13750, 2));
+    GemVal _t13749[] = {gem_v_b, GEM_STR_LIT("    GemArenaMark _tco_mk;\n", 26)};
+            (void)(gem_buf_push_fn(NULL, _t13749, 2));
 #line 2471 "compiler/codegen.gem"
             gem_set_line(2471);
+    GemVal _t13750[] = {gem_v_b, GEM_STR_LIT("    gem_arena_mark(&_tco_mk);\n", 30)};
+            (void)(gem_buf_push_fn(NULL, _t13750, 2));
+#line 2472 "compiler/codegen.gem"
+            gem_set_line(2472);
     GemVal _t13751 = (*gem_v_fs);
     static GemICacheSlot _ic_2196 = {0};
             if (gem_truthy(gem_table_get_cached(_t13751, "tco_top_used", &_ic_2196))) {
-#line 2472 "compiler/codegen.gem"
-                gem_set_line(2472);
+#line 2473 "compiler/codegen.gem"
+                gem_set_line(2473);
     GemVal _t13752[] = {gem_v_b, GEM_STR_LIT("    _tco_top:\n", 14)};
                 (void)(gem_buf_push_fn(NULL, _t13752, 2));
             }
-#line 2474 "compiler/codegen.gem"
-            gem_set_line(2474);
-    GemVal _t13753[] = {gem_v_b, GEM_STR_LIT("    while(1) {\n", 15)};
-            (void)(gem_buf_push_fn(NULL, _t13753, 2));
 #line 2475 "compiler/codegen.gem"
             gem_set_line(2475);
-    GemVal _t13754[] = {gem_v_b, GEM_STR_LIT("        gem_yield_check();\n", 27)};
-            (void)(gem_buf_push_fn(NULL, _t13754, 2));
+    GemVal _t13753[] = {gem_v_b, GEM_STR_LIT("    while(1) {\n", 15)};
+            (void)(gem_buf_push_fn(NULL, _t13753, 2));
 #line 2476 "compiler/codegen.gem"
             gem_set_line(2476);
+    GemVal _t13754[] = {gem_v_b, GEM_STR_LIT("        gem_yield_check();\n", 27)};
+            (void)(gem_buf_push_fn(NULL, _t13754, 2));
+#line 2477 "compiler/codegen.gem"
+            gem_set_line(2477);
     GemVal _t13756 = gem_v_b;
     GemVal _t13755[] = {gem_v_bb};
     GemVal _t13757[] = {_t13756, gem_to_string_fn(NULL, _t13755, 1)};
             (void)(gem_buf_push_fn(NULL, _t13757, 2));
-#line 2477 "compiler/codegen.gem"
-            gem_set_line(2477);
+#line 2478 "compiler/codegen.gem"
+            gem_set_line(2478);
     GemVal _t13758[] = {gem_v_b, GEM_STR_LIT("    }\n", 6)};
             (void)(gem_buf_push_fn(NULL, _t13758, 2));
         } else {
-#line 2479 "compiler/codegen.gem"
-            gem_set_line(2479);
+#line 2480 "compiler/codegen.gem"
+            gem_set_line(2480);
     GemVal _t13761 = gem_v_b;
     GemVal _t13760 = (*gem_v_emit_fn_body);
     GemVal _t13759[] = {gem_v_body};
-    gem_check_callable(_t13760, "compiler/codegen.gem", 2479);
+    gem_check_callable(_t13760, "compiler/codegen.gem", 2480);
     GemVal _t13762[] = {_t13761, _t13760.fn(_t13760.env, _t13759, 1)};
             (void)(gem_buf_push_fn(NULL, _t13762, 2));
         }
     }
-#line 2482 "compiler/codegen.gem"
-    gem_set_line(2482);
+#line 2483 "compiler/codegen.gem"
+    gem_set_line(2483);
     GemVal _t13763[] = {gem_v_b, GEM_STR_LIT("}", 1)};
     (void)(gem_buf_push_fn(NULL, _t13763, 2));
-#line 2484 "compiler/codegen.gem"
-    gem_set_line(2484);
-    if (gem_truthy(gem_neq(gem_v_scc_id, GEM_NIL))) {
 #line 2485 "compiler/codegen.gem"
-        gem_set_line(2485);
-    GemVal _t13764[] = {gem_v_b, GEM_STR_LIT("\n\n", 2)};
-        (void)(gem_buf_push_fn(NULL, _t13764, 2));
+    gem_set_line(2485);
+    if (gem_truthy(gem_neq(gem_v_scc_id, GEM_NIL))) {
 #line 2486 "compiler/codegen.gem"
         gem_set_line(2486);
+    GemVal _t13764[] = {gem_v_b, GEM_STR_LIT("\n\n", 2)};
+        (void)(gem_buf_push_fn(NULL, _t13764, 2));
+#line 2487 "compiler/codegen.gem"
+        gem_set_line(2487);
     GemVal _t13768 = gem_v_b;
     GemVal _t13767 = (*gem_v_scc_wrapper_for);
     GemVal _t13765 = gem_v_node;
     GemVal _t13766[] = {_t13765, gem_v_scc_id};
-    gem_check_callable(_t13767, "compiler/codegen.gem", 2486);
+    gem_check_callable(_t13767, "compiler/codegen.gem", 2487);
     GemVal _t13769[] = {_t13768, _t13767.fn(_t13767.env, _t13766, 2)};
         (void)(gem_buf_push_fn(NULL, _t13769, 2));
     }
-#line 2489 "compiler/codegen.gem"
-    gem_set_line(2489);
-    (*gem_v_fs) = gem_v_outer_fs;
 #line 2490 "compiler/codegen.gem"
     gem_set_line(2490);
+    (*gem_v_fs) = gem_v_outer_fs;
+#line 2491 "compiler/codegen.gem"
+    gem_set_line(2491);
     GemVal _t13770[] = {gem_v_b};
     GemVal _t13771 = gem_to_string_fn(NULL, _t13770, 1);
     if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t13771, 1);
@@ -58866,106 +58869,106 @@ static GemVal __anon_192(void *_env, GemVal *args, int argc) {
     GemVal *gem_v_mangle = _cls->gem_v_mangle;
     GemVal *gem_v_new_fn_state = _cls->gem_v_new_fn_state;
     GemVal *gem_v_rel_path = _cls->gem_v_rel_path;
-    gem_push_frame("anonymous fn", "compiler/codegen.gem", 2493);
+    gem_push_frame("anonymous fn", "compiler/codegen.gem", 2494);
     GemVal gem_v_node = (argc > 0) ? args[0] : GEM_NIL;
     GemVal gem_v_captures = (argc > 1) ? args[1] : GEM_NIL;
     GemArenaPoint _ret_pt;
     gem_arena_point(&_ret_pt);
-#line 2494 "compiler/codegen.gem"
-    gem_set_line(2494);
+#line 2495 "compiler/codegen.gem"
+    gem_set_line(2495);
     GemVal gem_v___d5 = gem_v_node;
-#line 2494 "compiler/codegen.gem"
-    gem_set_line(2494);
+#line 2495 "compiler/codegen.gem"
+    gem_set_line(2495);
     GemVal _t13784 = gem_v___d5;
     static GemICacheSlot _ic_2197 = {0};
     GemVal gem_v_params = gem_table_get_cached(_t13784, "params", &_ic_2197);
-#line 2494 "compiler/codegen.gem"
-    gem_set_line(2494);
+#line 2495 "compiler/codegen.gem"
+    gem_set_line(2495);
     GemVal _t13785 = gem_v___d5;
     static GemICacheSlot _ic_2198 = {0};
     GemVal gem_v_body = gem_table_get_cached(_t13785, "body", &_ic_2198);
 
-#line 2495 "compiler/codegen.gem"
-    gem_set_line(2495);
+#line 2496 "compiler/codegen.gem"
+    gem_set_line(2496);
     GemVal _t13786 = (*gem_v_anon_name);
-    gem_check_callable(_t13786, "compiler/codegen.gem", 2495);
+    gem_check_callable(_t13786, "compiler/codegen.gem", 2496);
     GemVal gem_v_name = _t13786.fn(_t13786.env, NULL, 0);
-#line 2497 "compiler/codegen.gem"
-    gem_set_line(2497);
-    GemVal _t13788 = gem_g___mod_codegen_sorted_array_to_set;
-    GemVal _t13787[] = {gem_v_params};
-    gem_check_callable(_t13788, "compiler/codegen.gem", 2497);
-    GemVal gem_v_inner_scope = _t13788.fn(_t13788.env, _t13787, 1);
 #line 2498 "compiler/codegen.gem"
     gem_set_line(2498);
+    GemVal _t13788 = gem_g___mod_codegen_sorted_array_to_set;
+    GemVal _t13787[] = {gem_v_params};
+    gem_check_callable(_t13788, "compiler/codegen.gem", 2498);
+    GemVal gem_v_inner_scope = _t13788.fn(_t13788.env, _t13787, 1);
+#line 2499 "compiler/codegen.gem"
+    gem_set_line(2499);
     GemVal _t13789 = gem_v_node;
     static GemICacheSlot _ic_2199 = {0};
     if (gem_truthy(gem_neq(gem_table_get_cached(_t13789, "rest_param", &_ic_2199), GEM_NIL))) {
-#line 2499 "compiler/codegen.gem"
-        gem_set_line(2499);
+#line 2500 "compiler/codegen.gem"
+        gem_set_line(2500);
     GemVal _t13793 = gem_g___mod_codegen_set_add;
     GemVal _t13791 = gem_v_inner_scope;
     GemVal _t13790 = gem_v_node;
     static GemICacheSlot _ic_2200 = {0};
     GemVal _t13792[] = {_t13791, gem_table_get_cached(_t13790, "rest_param", &_ic_2200)};
-    gem_check_callable(_t13793, "compiler/codegen.gem", 2499);
+    gem_check_callable(_t13793, "compiler/codegen.gem", 2500);
         (void)(_t13793.fn(_t13793.env, _t13792, 2));
     }
-#line 2501 "compiler/codegen.gem"
-    gem_set_line(2501);
+#line 2502 "compiler/codegen.gem"
+    gem_set_line(2502);
     GemVal _t13796 = gem_g___mod_codegen_collect_top_let_names;
     GemVal _t13794 = gem_v_body;
     GemVal _t13795[] = {_t13794, gem_v_inner_scope};
-    gem_check_callable(_t13796, "compiler/codegen.gem", 2501);
+    gem_check_callable(_t13796, "compiler/codegen.gem", 2502);
     (void)(_t13796.fn(_t13796.env, _t13795, 2));
-#line 2503 "compiler/codegen.gem"
-    gem_set_line(2503);
+#line 2504 "compiler/codegen.gem"
+    gem_set_line(2504);
     GemVal _t13800 = gem_g___mod_codegen_set_union;
     GemVal _t13798 = gem_v_inner_scope;
     GemVal _t13797 = gem_table_new_braces();
     GemVal _t13799[] = {_t13798, _t13797};
-    gem_check_callable(_t13800, "compiler/codegen.gem", 2503);
+    gem_check_callable(_t13800, "compiler/codegen.gem", 2504);
     GemVal gem_v_shadowed_locals = _t13800.fn(_t13800.env, _t13799, 2);
-#line 2504 "compiler/codegen.gem"
-    gem_set_line(2504);
+#line 2505 "compiler/codegen.gem"
+    gem_set_line(2505);
     GemVal _t13803 = gem_g___mod_codegen_collect_shadow_lets_in_fn;
     GemVal _t13801 = gem_v_body;
     GemVal _t13802[] = {_t13801, gem_v_shadowed_locals};
-    gem_check_callable(_t13803, "compiler/codegen.gem", 2504);
+    gem_check_callable(_t13803, "compiler/codegen.gem", 2505);
     (void)(_t13803.fn(_t13803.env, _t13802, 2));
-#line 2507 "compiler/codegen.gem"
-    gem_set_line(2507);
-    GemVal gem_v_outer_fs = (*gem_v_fs);
 #line 2508 "compiler/codegen.gem"
     gem_set_line(2508);
-    GemVal _t13804 = (*gem_v_new_fn_state);
-    gem_check_callable(_t13804, "compiler/codegen.gem", 2508);
-    (*gem_v_fs) = _t13804.fn(_t13804.env, NULL, 0);
+    GemVal gem_v_outer_fs = (*gem_v_fs);
 #line 2509 "compiler/codegen.gem"
     gem_set_line(2509);
+    GemVal _t13804 = (*gem_v_new_fn_state);
+    gem_check_callable(_t13804, "compiler/codegen.gem", 2509);
+    (*gem_v_fs) = _t13804.fn(_t13804.env, NULL, 0);
+#line 2510 "compiler/codegen.gem"
+    gem_set_line(2510);
     GemVal _t13810 = (*gem_v_fs);
     GemVal _t13809 = gem_g___mod_codegen_set_union;
     GemVal _t13807 = gem_v_shadowed_locals;
     GemVal _t13806 = gem_g___mod_codegen_sorted_array_to_set;
     GemVal _t13805[] = {gem_v_captures};
-    gem_check_callable(_t13806, "compiler/codegen.gem", 2509);
+    gem_check_callable(_t13806, "compiler/codegen.gem", 2510);
     GemVal _t13808[] = {_t13807, _t13806.fn(_t13806.env, _t13805, 1)};
-    gem_check_callable(_t13809, "compiler/codegen.gem", 2509);
+    gem_check_callable(_t13809, "compiler/codegen.gem", 2510);
     gem_table_set(_t13810, GEM_STR_LIT("local_names", 11), _t13809.fn(_t13809.env, _t13808, 2));
-#line 2510 "compiler/codegen.gem"
-    gem_set_line(2510);
+#line 2511 "compiler/codegen.gem"
+    gem_set_line(2511);
     GemVal _t13813 = (*gem_v_fs);
     GemVal _t13812 = gem_g___mod_codegen_sorted_array_to_set;
     GemVal _t13811[] = {gem_v_params};
-    gem_check_callable(_t13812, "compiler/codegen.gem", 2510);
+    gem_check_callable(_t13812, "compiler/codegen.gem", 2511);
     gem_table_set(_t13813, GEM_STR_LIT("fn_scope_locals", 15), _t13812.fn(_t13812.env, _t13811, 1));
-#line 2511 "compiler/codegen.gem"
-    gem_set_line(2511);
+#line 2512 "compiler/codegen.gem"
+    gem_set_line(2512);
     GemVal _t13814 = gem_v_node;
     static GemICacheSlot _ic_2201 = {0};
     if (gem_truthy(gem_neq(gem_table_get_cached(_t13814, "rest_param", &_ic_2201), GEM_NIL))) {
-#line 2512 "compiler/codegen.gem"
-        gem_set_line(2512);
+#line 2513 "compiler/codegen.gem"
+        gem_set_line(2513);
     GemVal _t13819 = gem_g___mod_codegen_set_add;
     GemVal _t13815 = (*gem_v_fs);
     static GemICacheSlot _ic_2202 = {0};
@@ -58973,81 +58976,81 @@ static GemVal __anon_192(void *_env, GemVal *args, int argc) {
     GemVal _t13816 = gem_v_node;
     static GemICacheSlot _ic_2203 = {0};
     GemVal _t13818[] = {_t13817, gem_table_get_cached(_t13816, "rest_param", &_ic_2203)};
-    gem_check_callable(_t13819, "compiler/codegen.gem", 2512);
+    gem_check_callable(_t13819, "compiler/codegen.gem", 2513);
         (void)(_t13819.fn(_t13819.env, _t13818, 2));
     }
-#line 2514 "compiler/codegen.gem"
-    gem_set_line(2514);
+#line 2515 "compiler/codegen.gem"
+    gem_set_line(2515);
     GemVal _t13823 = (*gem_v_fs);
     GemVal _t13822 = (*gem_v_fn_is_leaf);
     GemVal _t13820 = gem_v_node;
     GemVal _t13821[] = {_t13820, gem_v_body};
-    gem_check_callable(_t13822, "compiler/codegen.gem", 2514);
+    gem_check_callable(_t13822, "compiler/codegen.gem", 2515);
     gem_table_set(_t13823, GEM_STR_LIT("in_leaf_fn", 10), _t13822.fn(_t13822.env, _t13821, 2));
-#line 2516 "compiler/codegen.gem"
-    gem_set_line(2516);
+#line 2517 "compiler/codegen.gem"
+    gem_set_line(2517);
     GemVal _t13829 = gem_g___mod_codegen_find_captured_in_scope;
     GemVal _t13825 = gem_g___mod_codegen_fn_stmts;
     GemVal _t13824[] = {gem_v_node};
-    gem_check_callable(_t13825, "compiler/codegen.gem", 2516);
+    gem_check_callable(_t13825, "compiler/codegen.gem", 2517);
     GemVal _t13827 = _t13825.fn(_t13825.env, _t13824, 1);
     GemVal _t13826 = gem_v_inner_scope;
     GemVal _t13828[] = {_t13827, _t13826, (*gem_v_is_global_name)};
-    gem_check_callable(_t13829, "compiler/codegen.gem", 2516);
+    gem_check_callable(_t13829, "compiler/codegen.gem", 2517);
     GemVal gem_v_inner_captured = _t13829.fn(_t13829.env, _t13828, 3);
-#line 2519 "compiler/codegen.gem"
-    gem_set_line(2519);
+#line 2520 "compiler/codegen.gem"
+    gem_set_line(2520);
     GemVal _t13834 = gem_g___mod_codegen_find_capture_writes_in_scope;
     GemVal _t13831 = gem_g___mod_codegen_fn_stmts;
     GemVal _t13830[] = {gem_v_node};
-    gem_check_callable(_t13831, "compiler/codegen.gem", 2519);
+    gem_check_callable(_t13831, "compiler/codegen.gem", 2520);
     GemVal _t13832 = _t13831.fn(_t13831.env, _t13830, 1);
     GemVal _t13833[] = {_t13832, gem_v_shadowed_locals};
-    gem_check_callable(_t13834, "compiler/codegen.gem", 2519);
+    gem_check_callable(_t13834, "compiler/codegen.gem", 2520);
     GemVal gem_v_inner_writes = _t13834.fn(_t13834.env, _t13833, 2);
-#line 2520 "compiler/codegen.gem"
-    gem_set_line(2520);
+#line 2521 "compiler/codegen.gem"
+    gem_set_line(2521);
     GemVal _t13837 = gem_g___mod_codegen_set_intersect;
     GemVal _t13835 = gem_v_inner_captured;
     GemVal _t13836[] = {_t13835, gem_v_inner_writes};
-    gem_check_callable(_t13837, "compiler/codegen.gem", 2520);
+    gem_check_callable(_t13837, "compiler/codegen.gem", 2521);
     GemVal gem_v_inner_boxed = _t13837.fn(_t13837.env, _t13836, 2);
-#line 2523 "compiler/codegen.gem"
-    gem_set_line(2523);
+#line 2524 "compiler/codegen.gem"
+    gem_set_line(2524);
     GemVal _t13843 = (*gem_v_fs);
     GemVal _t13842 = gem_g___mod_codegen_set_union;
     GemVal _t13840 = gem_v_inner_boxed;
     GemVal _t13839 = gem_g___mod_codegen_sorted_array_to_set;
     GemVal _t13838[] = {gem_v_captures};
-    gem_check_callable(_t13839, "compiler/codegen.gem", 2523);
+    gem_check_callable(_t13839, "compiler/codegen.gem", 2524);
     GemVal _t13841[] = {_t13840, _t13839.fn(_t13839.env, _t13838, 1)};
-    gem_check_callable(_t13842, "compiler/codegen.gem", 2523);
+    gem_check_callable(_t13842, "compiler/codegen.gem", 2524);
     gem_table_set(_t13843, GEM_STR_LIT("boxed_vars", 10), _t13842.fn(_t13842.env, _t13841, 2));
-#line 2525 "compiler/codegen.gem"
-    gem_set_line(2525);
-    GemVal _t13844[] = {GEM_STR_LIT("_closure_", 9), gem_v_name};
-    GemVal gem_v_struct_name = gem_interp(2, _t13844);
 #line 2526 "compiler/codegen.gem"
     gem_set_line(2526);
-    GemVal gem_v_sb = gem_buf_new_fn(NULL, NULL, 0);
+    GemVal _t13844[] = {GEM_STR_LIT("_closure_", 9), gem_v_name};
+    GemVal gem_v_struct_name = gem_interp(2, _t13844);
 #line 2527 "compiler/codegen.gem"
     gem_set_line(2527);
+    GemVal gem_v_sb = gem_buf_new_fn(NULL, NULL, 0);
+#line 2528 "compiler/codegen.gem"
+    gem_set_line(2528);
     GemVal _t13846 = gem_v_sb;
     GemVal _t13845[] = {GEM_STR_LIT("struct ", 7), gem_v_struct_name, GEM_STR_LIT(" {\n", 3)};
     GemVal _t13847[] = {_t13846, gem_interp(3, _t13845)};
     (void)(gem_buf_push_fn(NULL, _t13847, 2));
-#line 2528 "compiler/codegen.gem"
-    gem_set_line(2528);
+#line 2529 "compiler/codegen.gem"
+    gem_set_line(2529);
     GemVal _t13848[] = {gem_v_sb, GEM_STR_LIT("    intptr_t _num_captures;\n", 28)};
     (void)(gem_buf_push_fn(NULL, _t13848, 2));
-#line 2529 "compiler/codegen.gem"
-    gem_set_line(2529);
+#line 2530 "compiler/codegen.gem"
+    gem_set_line(2530);
     GemVal gem_v___for_items_355 = gem_for_items_1(gem_v_captures);
-#line 2529 "compiler/codegen.gem"
-    gem_set_line(2529);
+#line 2530 "compiler/codegen.gem"
+    gem_set_line(2530);
     GemVal gem_v___for_i_355 = gem_int(0);
-#line 2529 "compiler/codegen.gem"
-    gem_set_line(2529);
+#line 2530 "compiler/codegen.gem"
+    gem_set_line(2530);
     GemArenaMark _mk356;
     gem_arena_mark(&_mk356);
     while (1) {
@@ -59058,59 +59061,59 @@ static GemVal __anon_192(void *_env, GemVal *args, int argc) {
         }
     GemVal _t13849 = gem_v___for_i_355;
         if (!gem_truthy(gem_lt(_t13849, gem_for_len_1(gem_v___for_items_355)))) break;
-#line 2529 "compiler/codegen.gem"
-        gem_set_line(2529);
-    GemVal _t13850 = gem_v___for_items_355;
-        GemVal gem_v_cap = gem_table_get(_t13850, gem_v___for_i_355);
-#line 2529 "compiler/codegen.gem"
-        gem_set_line(2529);
-        gem_v___for_i_355 = gem_add(gem_v___for_i_355, gem_int(1));
 #line 2530 "compiler/codegen.gem"
         gem_set_line(2530);
+    GemVal _t13850 = gem_v___for_items_355;
+        GemVal gem_v_cap = gem_table_get(_t13850, gem_v___for_i_355);
+#line 2530 "compiler/codegen.gem"
+        gem_set_line(2530);
+        gem_v___for_i_355 = gem_add(gem_v___for_i_355, gem_int(1));
+#line 2531 "compiler/codegen.gem"
+        gem_set_line(2531);
     GemVal _t13854 = gem_v_sb;
     GemVal _t13852 = (*gem_v_mangle);
     GemVal _t13851[] = {gem_v_cap};
-    gem_check_callable(_t13852, "compiler/codegen.gem", 2530);
+    gem_check_callable(_t13852, "compiler/codegen.gem", 2531);
     GemVal _t13853[] = {GEM_STR_LIT("    GemVal *", 12), _t13852.fn(_t13852.env, _t13851, 1), GEM_STR_LIT(";\n", 2)};
     GemVal _t13855[] = {_t13854, gem_interp(3, _t13853)};
         (void)(gem_buf_push_fn(NULL, _t13855, 2));
     }
 
-#line 2532 "compiler/codegen.gem"
-    gem_set_line(2532);
-    GemVal _t13856[] = {gem_v_sb, GEM_STR_LIT("};\n", 3)};
-    (void)(gem_buf_push_fn(NULL, _t13856, 2));
 #line 2533 "compiler/codegen.gem"
     gem_set_line(2533);
+    GemVal _t13856[] = {gem_v_sb, GEM_STR_LIT("};\n", 3)};
+    (void)(gem_buf_push_fn(NULL, _t13856, 2));
+#line 2534 "compiler/codegen.gem"
+    gem_set_line(2534);
     GemVal _t13857[] = {gem_v_sb};
     GemVal gem_v_struct_def = gem_to_string_fn(NULL, _t13857, 1);
-#line 2535 "compiler/codegen.gem"
-    gem_set_line(2535);
-    GemVal gem_v_fb = gem_buf_new_fn(NULL, NULL, 0);
 #line 2536 "compiler/codegen.gem"
     gem_set_line(2536);
+    GemVal gem_v_fb = gem_buf_new_fn(NULL, NULL, 0);
+#line 2537 "compiler/codegen.gem"
+    gem_set_line(2537);
     GemVal _t13859 = gem_v_fb;
     GemVal _t13858[] = {GEM_STR_LIT("static GemVal ", 14), gem_v_name, GEM_STR_LIT("(void *_env, GemVal *args, int argc) {\n", 39)};
     GemVal _t13860[] = {_t13859, gem_interp(3, _t13858)};
     (void)(gem_buf_push_fn(NULL, _t13860, 2));
-#line 2537 "compiler/codegen.gem"
-    gem_set_line(2537);
-    if (gem_truthy(gem_gt(gem_len_1(gem_v_captures), gem_int(0)))) {
 #line 2538 "compiler/codegen.gem"
-        gem_set_line(2538);
+    gem_set_line(2538);
+    if (gem_truthy(gem_gt(gem_len_1(gem_v_captures), gem_int(0)))) {
+#line 2539 "compiler/codegen.gem"
+        gem_set_line(2539);
     GemVal _t13863 = gem_v_fb;
     GemVal _t13861 = gem_v_struct_name;
     GemVal _t13862[] = {GEM_STR_LIT("    struct ", 11), _t13861, GEM_STR_LIT(" *_cls = (struct ", 17), gem_v_struct_name, GEM_STR_LIT(" *)_env;\n", 9)};
     GemVal _t13864[] = {_t13863, gem_interp(5, _t13862)};
         (void)(gem_buf_push_fn(NULL, _t13864, 2));
-#line 2539 "compiler/codegen.gem"
-        gem_set_line(2539);
+#line 2540 "compiler/codegen.gem"
+        gem_set_line(2540);
         GemVal gem_v___for_items_356 = gem_for_items_1(gem_v_captures);
-#line 2539 "compiler/codegen.gem"
-        gem_set_line(2539);
+#line 2540 "compiler/codegen.gem"
+        gem_set_line(2540);
         GemVal gem_v___for_i_356 = gem_int(0);
-#line 2539 "compiler/codegen.gem"
-        gem_set_line(2539);
+#line 2540 "compiler/codegen.gem"
+        gem_set_line(2540);
         GemArenaMark _mk357;
         gem_arena_mark(&_mk357);
         while (1) {
@@ -59121,21 +59124,21 @@ static GemVal __anon_192(void *_env, GemVal *args, int argc) {
             }
     GemVal _t13865 = gem_v___for_i_356;
             if (!gem_truthy(gem_lt(_t13865, gem_for_len_1(gem_v___for_items_356)))) break;
-#line 2539 "compiler/codegen.gem"
-            gem_set_line(2539);
-    GemVal _t13866 = gem_v___for_items_356;
-            GemVal gem_v_cap = gem_table_get(_t13866, gem_v___for_i_356);
-#line 2539 "compiler/codegen.gem"
-            gem_set_line(2539);
-            gem_v___for_i_356 = gem_add(gem_v___for_i_356, gem_int(1));
 #line 2540 "compiler/codegen.gem"
             gem_set_line(2540);
-    GemVal _t13868 = (*gem_v_mangle);
-    GemVal _t13867[] = {gem_v_cap};
-    gem_check_callable(_t13868, "compiler/codegen.gem", 2540);
-            GemVal gem_v_mc = _t13868.fn(_t13868.env, _t13867, 1);
+    GemVal _t13866 = gem_v___for_items_356;
+            GemVal gem_v_cap = gem_table_get(_t13866, gem_v___for_i_356);
+#line 2540 "compiler/codegen.gem"
+            gem_set_line(2540);
+            gem_v___for_i_356 = gem_add(gem_v___for_i_356, gem_int(1));
 #line 2541 "compiler/codegen.gem"
             gem_set_line(2541);
+    GemVal _t13868 = (*gem_v_mangle);
+    GemVal _t13867[] = {gem_v_cap};
+    gem_check_callable(_t13868, "compiler/codegen.gem", 2541);
+            GemVal gem_v_mc = _t13868.fn(_t13868.env, _t13867, 1);
+#line 2542 "compiler/codegen.gem"
+            gem_set_line(2542);
     GemVal _t13871 = gem_v_fb;
     GemVal _t13869 = gem_v_mc;
     GemVal _t13870[] = {GEM_STR_LIT("    GemVal *", 12), _t13869, GEM_STR_LIT(" = _cls->", 9), gem_v_mc, GEM_STR_LIT(";\n", 2)};
@@ -59144,23 +59147,23 @@ static GemVal __anon_192(void *_env, GemVal *args, int argc) {
         }
 
     }
-#line 2545 "compiler/codegen.gem"
-    gem_set_line(2545);
+#line 2546 "compiler/codegen.gem"
+    gem_set_line(2546);
     GemVal _t13875 = (*gem_v_fs);
     GemVal _t13874 = gem_g___mod_codegen_sorted_array_to_set;
     GemVal _t13873[] = {gem_v_captures};
-    gem_check_callable(_t13874, "compiler/codegen.gem", 2545);
+    gem_check_callable(_t13874, "compiler/codegen.gem", 2546);
     gem_table_set(_t13875, GEM_STR_LIT("closure_captures", 16), _t13874.fn(_t13874.env, _t13873, 1));
-#line 2546 "compiler/codegen.gem"
-    gem_set_line(2546);
-    GemVal _t13876 = (*gem_v_fs);
-    gem_table_set(_t13876, GEM_STR_LIT("current_closure_struct_name", 27), gem_v_struct_name);
 #line 2547 "compiler/codegen.gem"
     gem_set_line(2547);
-    GemVal _t13877 = (*gem_v_fs);
-    gem_table_set(_t13877, GEM_STR_LIT("current_closure_captures", 24), gem_v_captures);
+    GemVal _t13876 = (*gem_v_fs);
+    gem_table_set(_t13876, GEM_STR_LIT("current_closure_struct_name", 27), gem_v_struct_name);
 #line 2548 "compiler/codegen.gem"
     gem_set_line(2548);
+    GemVal _t13877 = (*gem_v_fs);
+    gem_table_set(_t13877, GEM_STR_LIT("current_closure_captures", 24), gem_v_captures);
+#line 2549 "compiler/codegen.gem"
+    gem_set_line(2549);
     GemVal _t13878 = gem_v_node;
     static GemICacheSlot _ic_2204 = {0};
     GemVal _t13879 = gem_eq(gem_table_get_cached(_t13878, "non_escaping", &_ic_2204), gem_bool(1));
@@ -59171,29 +59174,29 @@ static GemVal __anon_192(void *_env, GemVal *args, int argc) {
         _t13880 = gem_gt(gem_len_1(gem_v_captures), gem_int(0));
     }
     if (gem_truthy(_t13880)) {
-#line 2549 "compiler/codegen.gem"
-        gem_set_line(2549);
-    GemVal _t13882 = gem_g___mod_codegen_sorted_array_to_set;
-    GemVal _t13881[] = {gem_v_params};
-    gem_check_callable(_t13882, "compiler/codegen.gem", 2549);
-        GemVal gem_v_own = _t13882.fn(_t13882.env, _t13881, 1);
 #line 2550 "compiler/codegen.gem"
         gem_set_line(2550);
+    GemVal _t13882 = gem_g___mod_codegen_sorted_array_to_set;
+    GemVal _t13881[] = {gem_v_params};
+    gem_check_callable(_t13882, "compiler/codegen.gem", 2550);
+        GemVal gem_v_own = _t13882.fn(_t13882.env, _t13881, 1);
+#line 2551 "compiler/codegen.gem"
+        gem_set_line(2551);
     GemVal _t13883 = gem_v_node;
     static GemICacheSlot _ic_2205 = {0};
         if (gem_truthy(gem_neq(gem_table_get_cached(_t13883, "rest_param", &_ic_2205), GEM_NIL))) {
-#line 2551 "compiler/codegen.gem"
-            gem_set_line(2551);
+#line 2552 "compiler/codegen.gem"
+            gem_set_line(2552);
     GemVal _t13887 = gem_g___mod_codegen_set_add;
     GemVal _t13885 = gem_v_own;
     GemVal _t13884 = gem_v_node;
     static GemICacheSlot _ic_2206 = {0};
     GemVal _t13886[] = {_t13885, gem_table_get_cached(_t13884, "rest_param", &_ic_2206)};
-    gem_check_callable(_t13887, "compiler/codegen.gem", 2551);
+    gem_check_callable(_t13887, "compiler/codegen.gem", 2552);
             (void)(_t13887.fn(_t13887.env, _t13886, 2));
         }
-#line 2553 "compiler/codegen.gem"
-        gem_set_line(2553);
+#line 2554 "compiler/codegen.gem"
+        gem_set_line(2554);
     GemVal _t13893 = (*gem_v_fs);
     GemVal _t13892 = gem_g___mod_codegen_find_writes_in_closure_body;
     GemVal _t13890 = gem_v_body;
@@ -59201,81 +59204,81 @@ static GemVal __anon_192(void *_env, GemVal *args, int argc) {
     static GemICacheSlot _ic_2207 = {0};
     GemVal _t13889 = gem_table_get_cached(_t13888, "closure_captures", &_ic_2207);
     GemVal _t13891[] = {_t13890, _t13889, gem_v_own};
-    gem_check_callable(_t13892, "compiler/codegen.gem", 2553);
+    gem_check_callable(_t13892, "compiler/codegen.gem", 2554);
         gem_table_set(_t13893, GEM_STR_LIT("stack_env_writes", 16), _t13892.fn(_t13892.env, _t13891, 3));
     }
-#line 2556 "compiler/codegen.gem"
-    gem_set_line(2556);
+#line 2557 "compiler/codegen.gem"
+    gem_set_line(2557);
     GemVal gem_v___val_357 = GEM_NIL;
-#line 2556 "compiler/codegen.gem"
-    gem_set_line(2556);
+#line 2557 "compiler/codegen.gem"
+    gem_set_line(2557);
     GemVal _t13894 = gem_v_node;
     static GemICacheSlot _ic_2208 = {0};
     if (gem_truthy(gem_neq(gem_table_get_cached(_t13894, "line", &_ic_2208), GEM_NIL))) {
-#line 2556 "compiler/codegen.gem"
-        gem_set_line(2556);
+#line 2557 "compiler/codegen.gem"
+        gem_set_line(2557);
     GemVal _t13895 = gem_v_node;
     static GemICacheSlot _ic_2209 = {0};
         gem_v___val_357 = gem_table_get_cached(_t13895, "line", &_ic_2209);
     } else {
-#line 2556 "compiler/codegen.gem"
-        gem_set_line(2556);
+#line 2557 "compiler/codegen.gem"
+        gem_set_line(2557);
         gem_v___val_357 = gem_int(0);
     }
-#line 2556 "compiler/codegen.gem"
-    gem_set_line(2556);
+#line 2557 "compiler/codegen.gem"
+    gem_set_line(2557);
     GemVal gem_v_anon_line = gem_v___val_357;
-#line 2558 "compiler/codegen.gem"
-    gem_set_line(2558);
+#line 2559 "compiler/codegen.gem"
+    gem_set_line(2559);
     GemVal _t13896 = (*gem_v_fs);
     static GemICacheSlot _ic_2210 = {0};
     if (gem_truthy(gem_table_get_cached(_t13896, "in_leaf_fn", &_ic_2210))) {
-#line 2559 "compiler/codegen.gem"
-        gem_set_line(2559);
+#line 2560 "compiler/codegen.gem"
+        gem_set_line(2560);
     GemVal _t13905 = gem_v_fb;
     GemVal _t13904 = (*gem_v_leaf_entry_str);
     GemVal _t13900 = (*gem_v_rel_path);
     GemVal _t13898 = (*gem_v_file_of);
     GemVal _t13897[] = {gem_v_node};
-    gem_check_callable(_t13898, "compiler/codegen.gem", 2559);
+    gem_check_callable(_t13898, "compiler/codegen.gem", 2560);
     GemVal _t13899[] = {_t13898.fn(_t13898.env, _t13897, 1)};
-    gem_check_callable(_t13900, "compiler/codegen.gem", 2559);
+    gem_check_callable(_t13900, "compiler/codegen.gem", 2560);
     GemVal _t13902 = _t13900.fn(_t13900.env, _t13899, 1);
     GemVal _t13901 = gem_v_anon_line;
     GemVal _t13903[] = {GEM_STR_LIT("anonymous fn", 12), _t13902, _t13901, gem_v_body};
-    gem_check_callable(_t13904, "compiler/codegen.gem", 2559);
+    gem_check_callable(_t13904, "compiler/codegen.gem", 2560);
     GemVal _t13906[] = {_t13905, _t13904.fn(_t13904.env, _t13903, 4)};
         (void)(gem_buf_push_fn(NULL, _t13906, 2));
     } else {
-#line 2561 "compiler/codegen.gem"
-        gem_set_line(2561);
+#line 2562 "compiler/codegen.gem"
+        gem_set_line(2562);
     GemVal _t13915 = gem_v_fb;
     GemVal _t13912 = gem_g___mod_codegen_escape_c_string;
     GemVal _t13910 = (*gem_v_rel_path);
     GemVal _t13908 = (*gem_v_file_of);
     GemVal _t13907[] = {gem_v_node};
-    gem_check_callable(_t13908, "compiler/codegen.gem", 2561);
+    gem_check_callable(_t13908, "compiler/codegen.gem", 2562);
     GemVal _t13909[] = {_t13908.fn(_t13908.env, _t13907, 1)};
-    gem_check_callable(_t13910, "compiler/codegen.gem", 2561);
+    gem_check_callable(_t13910, "compiler/codegen.gem", 2562);
     GemVal _t13911[] = {_t13910.fn(_t13910.env, _t13909, 1)};
-    gem_check_callable(_t13912, "compiler/codegen.gem", 2561);
+    gem_check_callable(_t13912, "compiler/codegen.gem", 2562);
     GemVal _t13913 = _t13912.fn(_t13912.env, _t13911, 1);
     GemVal _t13914[] = {GEM_STR_LIT("    gem_push_frame(\"anonymous fn\", \"", 36), _t13913, GEM_STR_LIT("\", ", 3), gem_v_anon_line, GEM_STR_LIT(");\n", 3)};
     GemVal _t13916[] = {_t13915, gem_interp(5, _t13914)};
         (void)(gem_buf_push_fn(NULL, _t13916, 2));
     }
-#line 2563 "compiler/codegen.gem"
-    gem_set_line(2563);
+#line 2564 "compiler/codegen.gem"
+    gem_set_line(2564);
     GemVal _t13921 = gem_v_fb;
     GemVal _t13920 = (*gem_v_emit_param_bindings);
     GemVal _t13918 = gem_v_node;
     GemVal _t13917 = gem_v_params;
     GemVal _t13919[] = {_t13918, _t13917, gem_v_inner_boxed};
-    gem_check_callable(_t13920, "compiler/codegen.gem", 2563);
+    gem_check_callable(_t13920, "compiler/codegen.gem", 2564);
     GemVal _t13922[] = {_t13921, _t13920.fn(_t13920.env, _t13919, 3)};
     (void)(gem_buf_push_fn(NULL, _t13922, 2));
-#line 2565 "compiler/codegen.gem"
-    gem_set_line(2565);
+#line 2566 "compiler/codegen.gem"
+    gem_set_line(2566);
     GemVal _t13923 = (*gem_v_fs);
     static GemICacheSlot _ic_2211 = {0};
     GemVal _t13924 = gem_not(gem_table_get_cached(_t13923, "in_leaf_fn", &_ic_2211));
@@ -59296,42 +59299,42 @@ static GemVal __anon_192(void *_env, GemVal *args, int argc) {
         _t13928 = gem_eq(gem_table_get_cached(_t13927, "may_recurse", &_ic_2213), gem_bool(1));
     }
     if (gem_truthy(_t13928)) {
-#line 2566 "compiler/codegen.gem"
-        gem_set_line(2566);
-        gem_table_set((*gem_v_fs), GEM_STR_LIT("ret_point", 9), GEM_STR_LIT("_ret_pt", 7));
 #line 2567 "compiler/codegen.gem"
         gem_set_line(2567);
-    GemVal _t13929[] = {gem_v_fb, GEM_STR_LIT("    GemArenaPoint _ret_pt;\n", 27)};
-        (void)(gem_buf_push_fn(NULL, _t13929, 2));
+        gem_table_set((*gem_v_fs), GEM_STR_LIT("ret_point", 9), GEM_STR_LIT("_ret_pt", 7));
 #line 2568 "compiler/codegen.gem"
         gem_set_line(2568);
+    GemVal _t13929[] = {gem_v_fb, GEM_STR_LIT("    GemArenaPoint _ret_pt;\n", 27)};
+        (void)(gem_buf_push_fn(NULL, _t13929, 2));
+#line 2569 "compiler/codegen.gem"
+        gem_set_line(2569);
     GemVal _t13930[] = {gem_v_fb, GEM_STR_LIT("    gem_arena_point(&_ret_pt);\n", 31)};
         (void)(gem_buf_push_fn(NULL, _t13930, 2));
     }
-#line 2570 "compiler/codegen.gem"
-    gem_set_line(2570);
+#line 2571 "compiler/codegen.gem"
+    gem_set_line(2571);
     GemVal _t13933 = gem_v_fb;
     GemVal _t13932 = (*gem_v_emit_fn_body);
     GemVal _t13931[] = {gem_v_body};
-    gem_check_callable(_t13932, "compiler/codegen.gem", 2570);
+    gem_check_callable(_t13932, "compiler/codegen.gem", 2571);
     GemVal _t13934[] = {_t13933, _t13932.fn(_t13932.env, _t13931, 1)};
     (void)(gem_buf_push_fn(NULL, _t13934, 2));
-#line 2571 "compiler/codegen.gem"
-    gem_set_line(2571);
+#line 2572 "compiler/codegen.gem"
+    gem_set_line(2572);
     GemVal _t13935[] = {gem_v_fb, GEM_STR_LIT("}", 1)};
     (void)(gem_buf_push_fn(NULL, _t13935, 2));
-#line 2573 "compiler/codegen.gem"
-    gem_set_line(2573);
+#line 2574 "compiler/codegen.gem"
+    gem_set_line(2574);
     (*gem_v_fs) = gem_v_outer_fs;
-#line 2575 "compiler/codegen.gem"
-    gem_set_line(2575);
+#line 2576 "compiler/codegen.gem"
+    gem_set_line(2576);
     GemVal _t13938 = (*gem_v_functions);
     GemVal _t13937 = gem_v_struct_def;
     GemVal _t13936[] = {gem_v_fb};
     GemVal _t13939[] = {_t13938, gem_add(_t13937, gem_to_string_fn(NULL, _t13936, 1))};
     (void)(gem_push_fn(NULL, _t13939, 2));
-#line 2577 "compiler/codegen.gem"
-    gem_set_line(2577);
+#line 2578 "compiler/codegen.gem"
+    gem_set_line(2578);
     GemVal _t13940 = gem_table_new_braces();
     gem_table_set(_t13940, GEM_STR_LIT("fn_name", 7), gem_v_name);
     gem_table_set(_t13940, GEM_STR_LIT("struct_name", 11), gem_v_struct_name);
@@ -59355,30 +59358,30 @@ static GemVal __anon_193(void *_env, GemVal *args, int argc) {
     GemVal *gem_v_rel_path = _cls->gem_v_rel_path;
     GemVal *gem_v_sink = _cls->gem_v_sink;
     GemVal *gem_v_source_of = _cls->gem_v_source_of;
-    gem_push_frame("anonymous fn", "compiler/codegen.gem", 2583);
+    gem_push_frame("anonymous fn", "compiler/codegen.gem", 2584);
     GemVal gem_v_ob = (argc > 0) ? args[0] : GEM_NIL;
     GemVal gem_v_includes = (argc > 1) ? args[1] : GEM_NIL;
     GemVal gem_v_c_file = (argc > 2) ? args[2] : GEM_NIL;
     GemArenaPoint _ret_pt;
     gem_arena_point(&_ret_pt);
-#line 2584 "compiler/codegen.gem"
-    gem_set_line(2584);
-    GemVal gem_v_phys = gem_int(0);
 #line 2585 "compiler/codegen.gem"
     gem_set_line(2585);
-    GemVal gem_v_redirected = gem_bool(0);
+    GemVal gem_v_phys = gem_int(0);
 #line 2586 "compiler/codegen.gem"
     gem_set_line(2586);
+    GemVal gem_v_redirected = gem_bool(0);
+#line 2587 "compiler/codegen.gem"
+    gem_set_line(2587);
     GemVal _t13954 = gem_table_new_braces();
     GemVal gem_v_seen = _t13954;
-#line 2587 "compiler/codegen.gem"
-    gem_set_line(2587);
+#line 2588 "compiler/codegen.gem"
+    gem_set_line(2588);
     GemVal gem_v___for_items_359 = gem_for_items_1(gem_v_includes);
-#line 2587 "compiler/codegen.gem"
-    gem_set_line(2587);
+#line 2588 "compiler/codegen.gem"
+    gem_set_line(2588);
     GemVal gem_v___for_i_359 = gem_int(0);
-#line 2587 "compiler/codegen.gem"
-    gem_set_line(2587);
+#line 2588 "compiler/codegen.gem"
+    gem_set_line(2588);
     int _t13956 = 0;
     GemArenaMark _mk358;
     gem_arena_mark(&_mk358);
@@ -59390,47 +59393,47 @@ static GemVal __anon_193(void *_env, GemVal *args, int argc) {
         }
     GemVal _t13955 = gem_v___for_i_359;
         if (!gem_truthy(gem_lt(_t13955, gem_for_len_1(gem_v___for_items_359)))) break;
-#line 2587 "compiler/codegen.gem"
-        gem_set_line(2587);
-    GemVal _t13957 = gem_v___for_items_359;
-        GemVal gem_v_ei = gem_table_get(_t13957, gem_v___for_i_359);
-#line 2587 "compiler/codegen.gem"
-        gem_set_line(2587);
-        gem_v___for_i_359 = gem_add(gem_v___for_i_359, gem_int(1));
 #line 2588 "compiler/codegen.gem"
         gem_set_line(2588);
+    GemVal _t13957 = gem_v___for_items_359;
+        GemVal gem_v_ei = gem_table_get(_t13957, gem_v___for_i_359);
+#line 2588 "compiler/codegen.gem"
+        gem_set_line(2588);
+        gem_v___for_i_359 = gem_add(gem_v___for_i_359, gem_int(1));
+#line 2589 "compiler/codegen.gem"
+        gem_set_line(2589);
     GemVal _t13958 = gem_v_ei;
     static GemICacheSlot _ic_2214 = {0};
         GemVal gem_v_path = gem_table_get_cached(_t13958, "path", &_ic_2214);
-#line 2589 "compiler/codegen.gem"
-        gem_set_line(2589);
+#line 2590 "compiler/codegen.gem"
+        gem_set_line(2590);
     GemVal _t13959 = gem_v_ei;
     static GemICacheSlot _ic_2215 = {0};
         GemVal gem_v_line = gem_table_get_cached(_t13959, "line", &_ic_2215);
-#line 2590 "compiler/codegen.gem"
-        gem_set_line(2590);
-        if (gem_truthy(gem_eq(gem_v_line, GEM_NIL))) {
-#line 2590 "compiler/codegen.gem"
-            gem_set_line(2590);
-            gem_v_line = gem_int(0);
-        }
 #line 2591 "compiler/codegen.gem"
         gem_set_line(2591);
+        if (gem_truthy(gem_eq(gem_v_line, GEM_NIL))) {
+#line 2591 "compiler/codegen.gem"
+            gem_set_line(2591);
+            gem_v_line = gem_int(0);
+        }
+#line 2592 "compiler/codegen.gem"
+        gem_set_line(2592);
     GemVal _t13960 = gem_v_ei;
     static GemICacheSlot _ic_2216 = {0};
         GemVal gem_v_col = gem_table_get_cached(_t13960, "col", &_ic_2216);
-#line 2592 "compiler/codegen.gem"
-        gem_set_line(2592);
-        if (gem_truthy(gem_eq(gem_v_col, GEM_NIL))) {
-#line 2592 "compiler/codegen.gem"
-            gem_set_line(2592);
-            gem_v_col = gem_int(0);
-        }
 #line 2593 "compiler/codegen.gem"
         gem_set_line(2593);
-        GemVal gem_v_span = gem_add(gem_len_1(gem_v_path), gem_int(2));
+        if (gem_truthy(gem_eq(gem_v_col, GEM_NIL))) {
+#line 2593 "compiler/codegen.gem"
+            gem_set_line(2593);
+            gem_v_col = gem_int(0);
+        }
 #line 2594 "compiler/codegen.gem"
         gem_set_line(2594);
+        GemVal gem_v_span = gem_add(gem_len_1(gem_v_path), gem_int(2));
+#line 2595 "compiler/codegen.gem"
+        gem_set_line(2595);
     GemVal _t13961 = gem_eq(gem_v_path, GEM_STR_LIT("", 0));
     GemVal _t13964;
     if (gem_truthy(_t13961)) {
@@ -59449,46 +59452,46 @@ static GemVal __anon_193(void *_env, GemVal *args, int argc) {
         _t13967 = gem_neq(_t13966, gem_v_path);
     }
         if (gem_truthy(_t13967)) {
-#line 2595 "compiler/codegen.gem"
-            gem_set_line(2595);
+#line 2596 "compiler/codegen.gem"
+            gem_set_line(2596);
     GemVal _t13968 = (*gem_v_sink);
     static GemICacheSlot _ic_2217 = {0};
     GemVal _t13982 = gem_table_get_cached(_t13968, "report", &_ic_2217);
     GemVal _t13970 = (*gem_v_source_of);
     GemVal _t13969[] = {gem_v_ei};
-    gem_check_callable(_t13970, "compiler/codegen.gem", 2595);
+    gem_check_callable(_t13970, "compiler/codegen.gem", 2596);
     GemVal _t13980 = _t13970.fn(_t13970.env, _t13969, 1);
     GemVal _t13972 = (*gem_v_file_of);
     GemVal _t13971[] = {gem_v_ei};
-    gem_check_callable(_t13972, "compiler/codegen.gem", 2595);
+    gem_check_callable(_t13972, "compiler/codegen.gem", 2596);
     GemVal _t13979 = _t13972.fn(_t13972.env, _t13971, 1);
     GemVal _t13978 = gem_v_line;
     GemVal _t13977 = gem_v_col;
     GemVal _t13976 = gem_v_span;
     GemVal _t13974 = gem_g___mod_codegen_escape_c_string;
     GemVal _t13973[] = {gem_v_path};
-    gem_check_callable(_t13974, "compiler/codegen.gem", 2595);
+    gem_check_callable(_t13974, "compiler/codegen.gem", 2596);
     GemVal _t13975[] = {GEM_STR_LIT("invalid header path in extern include: \"", 40), _t13974.fn(_t13974.env, _t13973, 1), GEM_STR_LIT("\"", 1)};
     GemVal _t13981[] = {_t13980, _t13979, _t13978, _t13977, _t13976, gem_interp(3, _t13975), GEM_NIL};
-    gem_check_callable_field(_t13982, "report", "compiler/codegen.gem", 2595);
+    gem_check_callable_field(_t13982, "report", "compiler/codegen.gem", 2596);
             (void)(_t13982.fn(_t13982.env, _t13981, 7));
             continue;
         }
-#line 2598 "compiler/codegen.gem"
-        gem_set_line(2598);
-    GemVal _t13983[] = {gem_v_path, gem_int(0), gem_int(1)};
-        GemVal gem_v_is_abs = gem_eq(gem_substr_fn(NULL, _t13983, 3), GEM_STR_LIT("/", 1));
 #line 2599 "compiler/codegen.gem"
         gem_set_line(2599);
+    GemVal _t13983[] = {gem_v_path, gem_int(0), gem_int(1)};
+        GemVal gem_v_is_abs = gem_eq(gem_substr_fn(NULL, _t13983, 3), GEM_STR_LIT("/", 1));
+#line 2600 "compiler/codegen.gem"
+        gem_set_line(2600);
     GemVal _t13985 = (*gem_v_file_of);
     GemVal _t13984[] = {gem_v_ei};
-    gem_check_callable(_t13985, "compiler/codegen.gem", 2599);
+    gem_check_callable(_t13985, "compiler/codegen.gem", 2600);
     GemVal _t13986[] = {_t13985.fn(_t13985.env, _t13984, 1)};
     GemVal _t13987 = gem_dirname_fn(NULL, _t13986, 1);
     GemVal _t13988[] = {_t13987, gem_v_path};
         GemVal gem_v_candidate = gem_path_join_fn(NULL, _t13988, 2);
-#line 2600 "compiler/codegen.gem"
-        gem_set_line(2600);
+#line 2601 "compiler/codegen.gem"
+        gem_set_line(2601);
     GemVal _t13989[] = {gem_v_candidate};
     GemVal _t13990 = gem_file_exists_fn(NULL, _t13989, 1);
     GemVal _t13992;
@@ -59499,47 +59502,47 @@ static GemVal __anon_193(void *_env, GemVal *args, int argc) {
         _t13992 = gem_not(gem_is_dir_fn(NULL, _t13991, 1));
     }
         if (gem_truthy(_t13992)) {
-#line 2601 "compiler/codegen.gem"
-            gem_set_line(2601);
+#line 2602 "compiler/codegen.gem"
+            gem_set_line(2602);
             GemVal gem_v___val_358 = GEM_NIL;
-#line 2601 "compiler/codegen.gem"
-            gem_set_line(2601);
+#line 2602 "compiler/codegen.gem"
+            gem_set_line(2602);
             if (gem_truthy(gem_not(gem_v_is_abs))) {
-#line 2601 "compiler/codegen.gem"
-                gem_set_line(2601);
+#line 2602 "compiler/codegen.gem"
+                gem_set_line(2602);
     GemVal _t13993[] = {gem_v_candidate};
                 gem_v___val_358 = gem_normalize_path_fn(NULL, _t13993, 1);
             } else {
-#line 2601 "compiler/codegen.gem"
-                gem_set_line(2601);
+#line 2602 "compiler/codegen.gem"
+                gem_set_line(2602);
                 gem_v___val_358 = gem_v_path;
             }
-#line 2601 "compiler/codegen.gem"
-            gem_set_line(2601);
-            GemVal gem_v_full = gem_v___val_358;
 #line 2602 "compiler/codegen.gem"
             gem_set_line(2602);
+            GemVal gem_v_full = gem_v___val_358;
+#line 2603 "compiler/codegen.gem"
+            gem_set_line(2603);
     GemVal _t13994 = gem_v_seen;
     GemVal _t13995[] = {_t13994, gem_v_full};
             if (gem_truthy(gem_not(gem_has_key_fn(NULL, _t13995, 2)))) {
-#line 2603 "compiler/codegen.gem"
-                gem_set_line(2603);
-    GemVal _t13996 = gem_v_seen;
-                gem_table_set(_t13996, gem_v_full, gem_bool(1));
 #line 2604 "compiler/codegen.gem"
                 gem_set_line(2604);
+    GemVal _t13996 = gem_v_seen;
+                gem_table_set(_t13996, gem_v_full, gem_bool(1));
+#line 2605 "compiler/codegen.gem"
+                gem_set_line(2605);
     GemVal _t13998 = gem_v_ob;
     GemVal _t13997[] = {GEM_STR_LIT("#include \"", 10), gem_v_full, GEM_STR_LIT("\"\n", 2)};
     GemVal _t13999[] = {_t13998, gem_interp(3, _t13997)};
                 (void)(gem_buf_push_fn(NULL, _t13999, 2));
-#line 2605 "compiler/codegen.gem"
-                gem_set_line(2605);
+#line 2606 "compiler/codegen.gem"
+                gem_set_line(2606);
                 gem_string_append_to(&gem_v_phys, gem_int(1), &_t13956);
 
             }
         } else {
-#line 2607 "compiler/codegen.gem"
-            gem_set_line(2607);
+#line 2608 "compiler/codegen.gem"
+            gem_set_line(2608);
     GemVal _t14000 = gem_v_is_abs;
     GemVal _t14002;
     if (gem_truthy(_t14000)) {
@@ -59556,42 +59559,42 @@ static GemVal __anon_193(void *_env, GemVal *args, int argc) {
         _t14004 = gem_eq(gem_substr_fn(NULL, _t14003, 3), GEM_STR_LIT("../", 3));
     }
             if (gem_truthy(_t14004)) {
-#line 2608 "compiler/codegen.gem"
-                gem_set_line(2608);
-                if (gem_truthy(gem_v_is_abs)) {
 #line 2609 "compiler/codegen.gem"
-                    gem_set_line(2609);
+                gem_set_line(2609);
+                if (gem_truthy(gem_v_is_abs)) {
+#line 2610 "compiler/codegen.gem"
+                    gem_set_line(2610);
     GemVal _t14005 = (*gem_v_sink);
     static GemICacheSlot _ic_2218 = {0};
     GemVal _t14017 = gem_table_get_cached(_t14005, "report", &_ic_2218);
     GemVal _t14007 = (*gem_v_source_of);
     GemVal _t14006[] = {gem_v_ei};
-    gem_check_callable(_t14007, "compiler/codegen.gem", 2609);
+    gem_check_callable(_t14007, "compiler/codegen.gem", 2610);
     GemVal _t14015 = _t14007.fn(_t14007.env, _t14006, 1);
     GemVal _t14009 = (*gem_v_file_of);
     GemVal _t14008[] = {gem_v_ei};
-    gem_check_callable(_t14009, "compiler/codegen.gem", 2609);
+    gem_check_callable(_t14009, "compiler/codegen.gem", 2610);
     GemVal _t14014 = _t14009.fn(_t14009.env, _t14008, 1);
     GemVal _t14013 = gem_v_line;
     GemVal _t14012 = gem_v_col;
     GemVal _t14011 = gem_v_span;
     GemVal _t14010[] = {GEM_STR_LIT("header not found: ", 18), gem_v_path};
     GemVal _t14016[] = {_t14015, _t14014, _t14013, _t14012, _t14011, gem_interp(2, _t14010), GEM_NIL};
-    gem_check_callable_field(_t14017, "report", "compiler/codegen.gem", 2609);
+    gem_check_callable_field(_t14017, "report", "compiler/codegen.gem", 2610);
                     (void)(_t14017.fn(_t14017.env, _t14016, 7));
                 } else {
-#line 2611 "compiler/codegen.gem"
-                    gem_set_line(2611);
+#line 2612 "compiler/codegen.gem"
+                    gem_set_line(2612);
     GemVal _t14018 = (*gem_v_sink);
     static GemICacheSlot _ic_2219 = {0};
     GemVal _t14036 = gem_table_get_cached(_t14018, "report", &_ic_2219);
     GemVal _t14020 = (*gem_v_source_of);
     GemVal _t14019[] = {gem_v_ei};
-    gem_check_callable(_t14020, "compiler/codegen.gem", 2611);
+    gem_check_callable(_t14020, "compiler/codegen.gem", 2612);
     GemVal _t14034 = _t14020.fn(_t14020.env, _t14019, 1);
     GemVal _t14022 = (*gem_v_file_of);
     GemVal _t14021[] = {gem_v_ei};
-    gem_check_callable(_t14022, "compiler/codegen.gem", 2611);
+    gem_check_callable(_t14022, "compiler/codegen.gem", 2612);
     GemVal _t14033 = _t14022.fn(_t14022.env, _t14021, 1);
     GemVal _t14032 = gem_v_line;
     GemVal _t14031 = gem_v_col;
@@ -59600,18 +59603,18 @@ static GemVal __anon_193(void *_env, GemVal *args, int argc) {
     GemVal _t14026 = (*gem_v_rel_path);
     GemVal _t14024 = (*gem_v_file_of);
     GemVal _t14023[] = {gem_v_ei};
-    gem_check_callable(_t14024, "compiler/codegen.gem", 2611);
+    gem_check_callable(_t14024, "compiler/codegen.gem", 2612);
     GemVal _t14025[] = {_t14024.fn(_t14024.env, _t14023, 1)};
-    gem_check_callable(_t14026, "compiler/codegen.gem", 2611);
+    gem_check_callable(_t14026, "compiler/codegen.gem", 2612);
     GemVal _t14027[] = {_t14026.fn(_t14026.env, _t14025, 1)};
     GemVal _t14029[] = {GEM_STR_LIT("header not found: ", 18), _t14028, GEM_STR_LIT(" (looked in ", 12), gem_dirname_fn(NULL, _t14027, 1), GEM_STR_LIT("/)", 2)};
     GemVal _t14035[] = {_t14034, _t14033, _t14032, _t14031, _t14030, gem_interp(5, _t14029), GEM_STR_LIT("a relative path is resolved against the directory of the .gem file that contains the extern include", 99)};
-    gem_check_callable_field(_t14036, "report", "compiler/codegen.gem", 2611);
+    gem_check_callable_field(_t14036, "report", "compiler/codegen.gem", 2612);
                     (void)(_t14036.fn(_t14036.env, _t14035, 7));
                 }
             } else {
-#line 2614 "compiler/codegen.gem"
-                gem_set_line(2614);
+#line 2615 "compiler/codegen.gem"
+                gem_set_line(2615);
     GemVal _t14037 = gem_neq(gem_v_c_file, GEM_NIL);
     GemVal _t14038;
     if (!gem_truthy(_t14037)) {
@@ -59620,38 +59623,38 @@ static GemVal __anon_193(void *_env, GemVal *args, int argc) {
         _t14038 = gem_gt(gem_v_line, gem_int(0));
     }
                 if (gem_truthy(_t14038)) {
-#line 2615 "compiler/codegen.gem"
-                    gem_set_line(2615);
+#line 2616 "compiler/codegen.gem"
+                    gem_set_line(2616);
     GemVal _t14047 = gem_v_ob;
     GemVal _t14045 = gem_v_line;
     GemVal _t14044 = gem_g___mod_codegen_escape_c_string;
     GemVal _t14042 = (*gem_v_rel_path);
     GemVal _t14040 = (*gem_v_file_of);
     GemVal _t14039[] = {gem_v_ei};
-    gem_check_callable(_t14040, "compiler/codegen.gem", 2615);
+    gem_check_callable(_t14040, "compiler/codegen.gem", 2616);
     GemVal _t14041[] = {_t14040.fn(_t14040.env, _t14039, 1)};
-    gem_check_callable(_t14042, "compiler/codegen.gem", 2615);
+    gem_check_callable(_t14042, "compiler/codegen.gem", 2616);
     GemVal _t14043[] = {_t14042.fn(_t14042.env, _t14041, 1)};
-    gem_check_callable(_t14044, "compiler/codegen.gem", 2615);
+    gem_check_callable(_t14044, "compiler/codegen.gem", 2616);
     GemVal _t14046[] = {GEM_STR_LIT("#line ", 6), _t14045, GEM_STR_LIT(" \"", 2), _t14044.fn(_t14044.env, _t14043, 1), GEM_STR_LIT("\"\n", 2)};
     GemVal _t14048[] = {_t14047, gem_interp(5, _t14046)};
                     (void)(gem_buf_push_fn(NULL, _t14048, 2));
-#line 2616 "compiler/codegen.gem"
-                    gem_set_line(2616);
-                    gem_string_append_to(&gem_v_phys, gem_int(1), &_t13956);
-
 #line 2617 "compiler/codegen.gem"
                     gem_set_line(2617);
+                    gem_string_append_to(&gem_v_phys, gem_int(1), &_t13956);
+
+#line 2618 "compiler/codegen.gem"
+                    gem_set_line(2618);
                     gem_v_redirected = gem_bool(1);
                 }
-#line 2619 "compiler/codegen.gem"
-                gem_set_line(2619);
+#line 2620 "compiler/codegen.gem"
+                gem_set_line(2620);
     GemVal _t14050 = gem_v_ob;
     GemVal _t14049[] = {GEM_STR_LIT("#include \"", 10), gem_v_path, GEM_STR_LIT("\"\n", 2)};
     GemVal _t14051[] = {_t14050, gem_interp(3, _t14049)};
                 (void)(gem_buf_push_fn(NULL, _t14051, 2));
-#line 2620 "compiler/codegen.gem"
-                gem_set_line(2620);
+#line 2621 "compiler/codegen.gem"
+                gem_set_line(2621);
                 gem_string_append_to(&gem_v_phys, gem_int(1), &_t13956);
 
             }
@@ -59659,16 +59662,16 @@ static GemVal __anon_193(void *_env, GemVal *args, int argc) {
     }
     if (_t13956) gem_v_phys = gem_string_finish(gem_v_phys);
 
-#line 2623 "compiler/codegen.gem"
-    gem_set_line(2623);
-    if (gem_truthy(gem_v_redirected)) {
 #line 2624 "compiler/codegen.gem"
-        gem_set_line(2624);
+    gem_set_line(2624);
+    if (gem_truthy(gem_v_redirected)) {
+#line 2625 "compiler/codegen.gem"
+        gem_set_line(2625);
     GemVal _t14056 = gem_v_ob;
     GemVal _t14054 = gem_add(gem_v_phys, gem_int(2));
     GemVal _t14053 = gem_g___mod_codegen_escape_c_string;
     GemVal _t14052[] = {gem_v_c_file};
-    gem_check_callable(_t14053, "compiler/codegen.gem", 2624);
+    gem_check_callable(_t14053, "compiler/codegen.gem", 2625);
     GemVal _t14055[] = {GEM_STR_LIT("#line ", 6), _t14054, GEM_STR_LIT(" \"", 2), _t14053.fn(_t14053.env, _t14052, 1), GEM_STR_LIT("\"\n", 2)};
     GemVal _t14057[] = {_t14056, gem_interp(5, _t14055)};
         GemVal _t14058 = gem_buf_push_fn(NULL, _t14057, 2);
@@ -59695,18 +59698,18 @@ static GemVal __anon_195(void *_env, GemVal *args, int argc) {
     GemVal *gem_v_rel_path = _cls->gem_v_rel_path;
     GemVal *gem_v_sink = _cls->gem_v_sink;
     GemVal *gem_v_source_of = _cls->gem_v_source_of;
-    gem_push_frame("anonymous fn", "compiler/codegen.gem", 2652);
+    gem_push_frame("anonymous fn", "compiler/codegen.gem", 2653);
     GemVal gem_v_node = (argc > 0) ? args[0] : GEM_NIL;
     GemVal gem_v_name = (argc > 1) ? args[1] : GEM_NIL;
     GemVal gem_v_kind = (argc > 2) ? args[2] : GEM_NIL;
     GemVal gem_v_decl = (argc > 3) ? args[3] : GEM_NIL;
     GemArenaPoint _ret_pt;
     gem_arena_point(&_ret_pt);
-#line 2654 "compiler/codegen.gem"
-    gem_set_line(2654);
+#line 2655 "compiler/codegen.gem"
+    gem_set_line(2655);
     GemVal gem_v___val_362 = GEM_NIL;
-#line 2654 "compiler/codegen.gem"
-    gem_set_line(2654);
+#line 2655 "compiler/codegen.gem"
+    gem_set_line(2655);
     GemVal _t14088 = gem_eq(gem_v_decl, GEM_NIL);
     GemVal _t14090;
     if (gem_truthy(_t14088)) {
@@ -59717,35 +59720,35 @@ static GemVal __anon_195(void *_env, GemVal *args, int argc) {
         _t14090 = gem_eq(gem_table_get_cached(_t14089, "line", &_ic_2226), GEM_NIL);
     }
     if (gem_truthy(_t14090)) {
-#line 2655 "compiler/codegen.gem"
-        gem_set_line(2655);
-        gem_v___val_362 = GEM_STR_LIT("", 0);
-    } else {
 #line 2656 "compiler/codegen.gem"
         gem_set_line(2656);
+        gem_v___val_362 = GEM_STR_LIT("", 0);
+    } else {
+#line 2657 "compiler/codegen.gem"
+        gem_set_line(2657);
     GemVal _t14092 = (*gem_v_file_of);
     GemVal _t14091[] = {gem_v_decl};
-    gem_check_callable(_t14092, "compiler/codegen.gem", 2656);
+    gem_check_callable(_t14092, "compiler/codegen.gem", 2657);
     GemVal _t14095 = _t14092.fn(_t14092.env, _t14091, 1);
     GemVal _t14094 = (*gem_v_file_of);
     GemVal _t14093[] = {gem_v_node};
-    gem_check_callable(_t14094, "compiler/codegen.gem", 2656);
+    gem_check_callable(_t14094, "compiler/codegen.gem", 2657);
         if (gem_truthy(gem_eq(_t14095, _t14094.fn(_t14094.env, _t14093, 1)))) {
-#line 2657 "compiler/codegen.gem"
-            gem_set_line(2657);
+#line 2658 "compiler/codegen.gem"
+            gem_set_line(2658);
     GemVal _t14096 = gem_v_decl;
     static GemICacheSlot _ic_2227 = {0};
     GemVal _t14097[] = {GEM_STR_LIT(" at line ", 9), gem_table_get_cached(_t14096, "line", &_ic_2227)};
             gem_v___val_362 = gem_interp(2, _t14097);
         } else {
-#line 2659 "compiler/codegen.gem"
-            gem_set_line(2659);
+#line 2660 "compiler/codegen.gem"
+            gem_set_line(2660);
     GemVal _t14101 = (*gem_v_rel_path);
     GemVal _t14099 = (*gem_v_file_of);
     GemVal _t14098[] = {gem_v_decl};
-    gem_check_callable(_t14099, "compiler/codegen.gem", 2659);
+    gem_check_callable(_t14099, "compiler/codegen.gem", 2660);
     GemVal _t14100[] = {_t14099.fn(_t14099.env, _t14098, 1)};
-    gem_check_callable(_t14101, "compiler/codegen.gem", 2659);
+    gem_check_callable(_t14101, "compiler/codegen.gem", 2660);
     GemVal _t14103 = _t14101.fn(_t14101.env, _t14100, 1);
     GemVal _t14102 = gem_v_decl;
     static GemICacheSlot _ic_2228 = {0};
@@ -59753,43 +59756,43 @@ static GemVal __anon_195(void *_env, GemVal *args, int argc) {
             gem_v___val_362 = gem_interp(4, _t14104);
         }
     }
-#line 2654 "compiler/codegen.gem"
-    gem_set_line(2654);
+#line 2655 "compiler/codegen.gem"
+    gem_set_line(2655);
     GemVal gem_v_where = gem_v___val_362;
-#line 2661 "compiler/codegen.gem"
-    gem_set_line(2661);
+#line 2662 "compiler/codegen.gem"
+    gem_set_line(2662);
     GemVal gem_v___val_363 = GEM_NIL;
-#line 2661 "compiler/codegen.gem"
-    gem_set_line(2661);
+#line 2662 "compiler/codegen.gem"
+    gem_set_line(2662);
     if (gem_truthy(gem_neq(gem_v_where, GEM_STR_LIT("", 0)))) {
-#line 2661 "compiler/codegen.gem"
-        gem_set_line(2661);
+#line 2662 "compiler/codegen.gem"
+        gem_set_line(2662);
     GemVal _t14105[] = {gem_v_where, GEM_STR_LIT(",", 1)};
         gem_v___val_363 = gem_interp(2, _t14105);
     } else {
-#line 2661 "compiler/codegen.gem"
-        gem_set_line(2661);
+#line 2662 "compiler/codegen.gem"
+        gem_set_line(2662);
         gem_v___val_363 = GEM_STR_LIT("", 0);
     }
-#line 2661 "compiler/codegen.gem"
-    gem_set_line(2661);
+#line 2662 "compiler/codegen.gem"
+    gem_set_line(2662);
     GemVal gem_v_at = gem_v___val_363;
-#line 2662 "compiler/codegen.gem"
-    gem_set_line(2662);
+#line 2663 "compiler/codegen.gem"
+    gem_set_line(2663);
     GemVal gem_v___val_364 = GEM_NIL;
-#line 2662 "compiler/codegen.gem"
-    gem_set_line(2662);
+#line 2663 "compiler/codegen.gem"
+    gem_set_line(2663);
     GemVal gem_v___match_365 = gem_v_kind;
     if (gem_truthy(gem_eq(gem_v___match_365, GEM_STR_LIT("later", 5)))) {
-#line 2664 "compiler/codegen.gem"
-        gem_set_line(2664);
+#line 2665 "compiler/codegen.gem"
+        gem_set_line(2665);
     GemVal _t14106 = gem_v_name;
     GemVal _t14107[] = {GEM_STR_LIT("`", 1), _t14106, GEM_STR_LIT("` is declared", 13), gem_v_at, GEM_STR_LIT(" after this use or in a block that does not contain it; a `let` is visible from its declaration to the end of its block", 119)};
         gem_v___val_364 = gem_interp(5, _t14107);
     } else {
     if (gem_truthy(gem_eq(gem_v___match_365, GEM_STR_LIT("later_closure", 13)))) {
-#line 2666 "compiler/codegen.gem"
-        gem_set_line(2666);
+#line 2667 "compiler/codegen.gem"
+        gem_set_line(2667);
     GemVal _t14110 = gem_v_name;
     GemVal _t14109 = gem_v_where;
     GemVal _t14108 = gem_v_name;
@@ -59797,51 +59800,51 @@ static GemVal __anon_195(void *_env, GemVal *args, int argc) {
         gem_v___val_364 = gem_interp(9, _t14111);
     } else {
     if (gem_truthy(gem_eq(gem_v___match_365, GEM_STR_LIT("param_later", 11)))) {
-#line 2668 "compiler/codegen.gem"
-        gem_set_line(2668);
+#line 2669 "compiler/codegen.gem"
+        gem_set_line(2669);
         gem_v___val_364 = GEM_STR_LIT("a parameter's default can use only the parameters before it", 59);
     } else {
-#line 2670 "compiler/codegen.gem"
-        gem_set_line(2670);
+#line 2671 "compiler/codegen.gem"
+        gem_set_line(2671);
         GemVal gem_v___val_366 = GEM_NIL;
-#line 2670 "compiler/codegen.gem"
-        gem_set_line(2670);
+#line 2671 "compiler/codegen.gem"
+        gem_set_line(2671);
         if (gem_truthy(gem_neq(gem_v_decl, GEM_NIL))) {
-#line 2670 "compiler/codegen.gem"
-            gem_set_line(2670);
+#line 2671 "compiler/codegen.gem"
+            gem_set_line(2671);
     GemVal _t14112 = gem_v_decl;
     static GemICacheSlot _ic_2229 = {0};
             gem_v___val_366 = gem_table_get_cached(_t14112, "block_kw", &_ic_2229);
         } else {
-#line 2670 "compiler/codegen.gem"
-            gem_set_line(2670);
-            gem_v___val_366 = GEM_NIL;
-        }
-#line 2670 "compiler/codegen.gem"
-        gem_set_line(2670);
-        GemVal gem_v_kw = gem_v___val_366;
-#line 2671 "compiler/codegen.gem"
-        gem_set_line(2671);
-        GemVal gem_v___val_367 = GEM_NIL;
-#line 2671 "compiler/codegen.gem"
-        gem_set_line(2671);
-        if (gem_truthy(gem_neq(gem_v_kw, GEM_NIL))) {
 #line 2671 "compiler/codegen.gem"
             gem_set_line(2671);
+            gem_v___val_366 = GEM_NIL;
+        }
+#line 2671 "compiler/codegen.gem"
+        gem_set_line(2671);
+        GemVal gem_v_kw = gem_v___val_366;
+#line 2672 "compiler/codegen.gem"
+        gem_set_line(2672);
+        GemVal gem_v___val_367 = GEM_NIL;
+#line 2672 "compiler/codegen.gem"
+        gem_set_line(2672);
+        if (gem_truthy(gem_neq(gem_v_kw, GEM_NIL))) {
+#line 2672 "compiler/codegen.gem"
+            gem_set_line(2672);
     GemVal _t14114 = gem_v_kw;
     GemVal _t14113 = gem_v_name;
     GemVal _t14115[] = {GEM_STR_LIT("give the `", 10), _t14114, GEM_STR_LIT("` the value (`let ", 18), _t14113, GEM_STR_LIT(" = ", 3), gem_v_kw, GEM_STR_LIT(" ...`), or ", 11)};
             gem_v___val_367 = gem_interp(7, _t14115);
         } else {
-#line 2671 "compiler/codegen.gem"
-            gem_set_line(2671);
+#line 2672 "compiler/codegen.gem"
+            gem_set_line(2672);
             gem_v___val_367 = GEM_STR_LIT("", 0);
         }
-#line 2671 "compiler/codegen.gem"
-        gem_set_line(2671);
-        GemVal gem_v_give = gem_v___val_367;
 #line 2672 "compiler/codegen.gem"
         gem_set_line(2672);
+        GemVal gem_v_give = gem_v___val_367;
+#line 2673 "compiler/codegen.gem"
+        gem_set_line(2673);
     GemVal _t14118 = gem_v_name;
     GemVal _t14117 = gem_v_at;
     GemVal _t14116 = gem_v_give;
@@ -59850,21 +59853,21 @@ static GemVal __anon_195(void *_env, GemVal *args, int argc) {
     }
     }
     }
-#line 2662 "compiler/codegen.gem"
-    gem_set_line(2662);
+#line 2663 "compiler/codegen.gem"
+    gem_set_line(2663);
     GemVal gem_v_hint = gem_v___val_364;
-#line 2674 "compiler/codegen.gem"
-    gem_set_line(2674);
+#line 2675 "compiler/codegen.gem"
+    gem_set_line(2675);
     GemVal _t14120 = (*gem_v_sink);
     static GemICacheSlot _ic_2230 = {0};
     GemVal _t14135 = gem_table_get_cached(_t14120, "report", &_ic_2230);
     GemVal _t14122 = (*gem_v_source_of);
     GemVal _t14121[] = {gem_v_node};
-    gem_check_callable(_t14122, "compiler/codegen.gem", 2674);
+    gem_check_callable(_t14122, "compiler/codegen.gem", 2675);
     GemVal _t14133 = _t14122.fn(_t14122.env, _t14121, 1);
     GemVal _t14124 = (*gem_v_file_of);
     GemVal _t14123[] = {gem_v_node};
-    gem_check_callable(_t14124, "compiler/codegen.gem", 2674);
+    gem_check_callable(_t14124, "compiler/codegen.gem", 2675);
     GemVal _t14132 = _t14124.fn(_t14124.env, _t14123, 1);
     GemVal _t14125 = gem_v_node;
     static GemICacheSlot _ic_2231 = {0};
@@ -59876,7 +59879,7 @@ static GemVal __anon_195(void *_env, GemVal *args, int argc) {
     GemVal _t14127[] = {GEM_STR_LIT("undeclared identifier `", 23), gem_v_name, GEM_STR_LIT("`", 1)};
     GemVal _t14128 = gem_interp(3, _t14127);
     GemVal _t14134[] = {_t14133, _t14132, _t14131, _t14130, _t14129, _t14128, gem_v_hint};
-    gem_check_callable_field(_t14135, "report", "compiler/codegen.gem", 2674);
+    gem_check_callable_field(_t14135, "report", "compiler/codegen.gem", 2675);
     GemVal _t14136 = _t14135.fn(_t14135.env, _t14134, 7);
     if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t14136, 1);
     gem_pop_frame();
@@ -59938,37 +59941,37 @@ static GemVal __anon_194(void *_env, GemVal *args, int argc) {
     GemVal *gem_v_source_name = _cls->gem_v_source_name;
     GemVal *gem_v_source_of = _cls->gem_v_source_of;
     GemVal *gem_v_top_level_vars = _cls->gem_v_top_level_vars;
-    gem_push_frame("anonymous fn", "compiler/codegen.gem", 2628);
+    gem_push_frame("anonymous fn", "compiler/codegen.gem", 2629);
     GemVal gem_v_ast = (argc > 0) ? args[0] : GEM_NIL;
     GemVal gem_v_c_file = (argc > 1) ? args[1] : GEM_NIL;
     GemArenaPoint _ret_pt;
     gem_arena_point(&_ret_pt);
-#line 2629 "compiler/codegen.gem"
-    gem_set_line(2629);
-    GemVal _t14063 = gem_table_new();
-    GemVal gem_v_fn_defs = _t14063;
 #line 2630 "compiler/codegen.gem"
     gem_set_line(2630);
-    GemVal _t14064 = gem_table_new();
-    GemVal gem_v_extern_fns_list = _t14064;
+    GemVal _t14063 = gem_table_new();
+    GemVal gem_v_fn_defs = _t14063;
 #line 2631 "compiler/codegen.gem"
     gem_set_line(2631);
-    GemVal _t14065 = gem_table_new();
-    GemVal gem_v_extern_includes = _t14065;
+    GemVal _t14064 = gem_table_new();
+    GemVal gem_v_extern_fns_list = _t14064;
 #line 2632 "compiler/codegen.gem"
     gem_set_line(2632);
+    GemVal _t14065 = gem_table_new();
+    GemVal gem_v_extern_includes = _t14065;
+#line 2633 "compiler/codegen.gem"
+    gem_set_line(2633);
     GemVal _t14066 = gem_table_new();
     GemVal gem_v_top_stmts = _t14066;
-#line 2634 "compiler/codegen.gem"
-    gem_set_line(2634);
+#line 2635 "compiler/codegen.gem"
+    gem_set_line(2635);
     GemVal _t14067 = gem_v_ast;
     static GemICacheSlot _ic_2220 = {0};
     GemVal gem_v___for_items_360 = gem_for_items_1(gem_table_get_cached(_t14067, "stmts", &_ic_2220));
-#line 2634 "compiler/codegen.gem"
-    gem_set_line(2634);
+#line 2635 "compiler/codegen.gem"
+    gem_set_line(2635);
     GemVal gem_v___for_i_360 = gem_int(0);
-#line 2634 "compiler/codegen.gem"
-    gem_set_line(2634);
+#line 2635 "compiler/codegen.gem"
+    gem_set_line(2635);
     GemArenaMark _mk359;
     gem_arena_mark(&_mk359);
     while (1) {
@@ -59979,54 +59982,54 @@ static GemVal __anon_194(void *_env, GemVal *args, int argc) {
         }
     GemVal _t14068 = gem_v___for_i_360;
         if (!gem_truthy(gem_lt(_t14068, gem_for_len_1(gem_v___for_items_360)))) break;
-#line 2634 "compiler/codegen.gem"
-        gem_set_line(2634);
-    GemVal _t14069 = gem_v___for_items_360;
-        GemVal gem_v_s = gem_table_get(_t14069, gem_v___for_i_360);
-#line 2634 "compiler/codegen.gem"
-        gem_set_line(2634);
-        gem_v___for_i_360 = gem_add(gem_v___for_i_360, gem_int(1));
 #line 2635 "compiler/codegen.gem"
         gem_set_line(2635);
+    GemVal _t14069 = gem_v___for_items_360;
+        GemVal gem_v_s = gem_table_get(_t14069, gem_v___for_i_360);
+#line 2635 "compiler/codegen.gem"
+        gem_set_line(2635);
+        gem_v___for_i_360 = gem_add(gem_v___for_i_360, gem_int(1));
+#line 2636 "compiler/codegen.gem"
+        gem_set_line(2636);
     GemVal _t14070 = gem_v_s;
     static GemICacheSlot _ic_2221 = {0};
         if (gem_truthy(gem_eq(gem_table_get_cached(_t14070, "tag", &_ic_2221), GEM_STR_LIT("fn_def", 6)))) {
-#line 2636 "compiler/codegen.gem"
-            gem_set_line(2636);
+#line 2637 "compiler/codegen.gem"
+            gem_set_line(2637);
     GemVal _t14071 = gem_v_fn_defs;
     GemVal _t14072[] = {_t14071, gem_v_s};
             (void)(gem_push_fn(NULL, _t14072, 2));
         } else {
-#line 2637 "compiler/codegen.gem"
-            gem_set_line(2637);
+#line 2638 "compiler/codegen.gem"
+            gem_set_line(2638);
     GemVal _t14073 = gem_v_s;
     static GemICacheSlot _ic_2222 = {0};
             if (gem_truthy(gem_eq(gem_table_get_cached(_t14073, "tag", &_ic_2222), GEM_STR_LIT("extern_fn", 9)))) {
-#line 2638 "compiler/codegen.gem"
-                gem_set_line(2638);
+#line 2639 "compiler/codegen.gem"
+                gem_set_line(2639);
     GemVal _t14074 = gem_v_extern_fns_list;
     GemVal _t14075[] = {_t14074, gem_v_s};
                 (void)(gem_push_fn(NULL, _t14075, 2));
             } else {
-#line 2639 "compiler/codegen.gem"
-                gem_set_line(2639);
+#line 2640 "compiler/codegen.gem"
+                gem_set_line(2640);
     GemVal _t14076 = gem_v_s;
     static GemICacheSlot _ic_2223 = {0};
                 if (gem_truthy(gem_eq(gem_table_get_cached(_t14076, "tag", &_ic_2223), GEM_STR_LIT("extern_include", 14)))) {
-#line 2640 "compiler/codegen.gem"
-                    gem_set_line(2640);
+#line 2641 "compiler/codegen.gem"
+                    gem_set_line(2641);
     GemVal _t14077 = gem_v_extern_includes;
     GemVal _t14078[] = {_t14077, gem_v_s};
                     (void)(gem_push_fn(NULL, _t14078, 2));
                 } else {
-#line 2641 "compiler/codegen.gem"
-                    gem_set_line(2641);
+#line 2642 "compiler/codegen.gem"
+                    gem_set_line(2642);
     GemVal _t14079 = gem_v_s;
     static GemICacheSlot _ic_2224 = {0};
                     if (gem_truthy(gem_eq(gem_table_get_cached(_t14079, "tag", &_ic_2224), GEM_STR_LIT("export", 6)))) {
                     } else {
-#line 2644 "compiler/codegen.gem"
-                        gem_set_line(2644);
+#line 2645 "compiler/codegen.gem"
+                        gem_set_line(2645);
     GemVal _t14080 = gem_v_top_stmts;
     GemVal _t14081[] = {_t14080, gem_v_s};
                         (void)(gem_push_fn(NULL, _t14081, 2));
@@ -60036,18 +60039,18 @@ static GemVal __anon_194(void *_env, GemVal *args, int argc) {
         }
     }
 
-#line 2648 "compiler/codegen.gem"
-    gem_set_line(2648);
+#line 2649 "compiler/codegen.gem"
+    gem_set_line(2649);
     GemVal _t14082 = gem_table_new();
     GemVal gem_v_extern_names = _t14082;
-#line 2649 "compiler/codegen.gem"
-    gem_set_line(2649);
+#line 2650 "compiler/codegen.gem"
+    gem_set_line(2650);
     GemVal gem_v___for_items_361 = gem_for_items_1(gem_v_extern_fns_list);
-#line 2649 "compiler/codegen.gem"
-    gem_set_line(2649);
+#line 2650 "compiler/codegen.gem"
+    gem_set_line(2650);
     GemVal gem_v___for_i_361 = gem_int(0);
-#line 2649 "compiler/codegen.gem"
-    gem_set_line(2649);
+#line 2650 "compiler/codegen.gem"
+    gem_set_line(2650);
     GemArenaMark _mk360;
     gem_arena_mark(&_mk360);
     while (1) {
@@ -60058,15 +60061,15 @@ static GemVal __anon_194(void *_env, GemVal *args, int argc) {
         }
     GemVal _t14083 = gem_v___for_i_361;
         if (!gem_truthy(gem_lt(_t14083, gem_for_len_1(gem_v___for_items_361)))) break;
-#line 2649 "compiler/codegen.gem"
-        gem_set_line(2649);
-    GemVal _t14084 = gem_v___for_items_361;
-        GemVal gem_v_ef = gem_table_get(_t14084, gem_v___for_i_361);
-#line 2649 "compiler/codegen.gem"
-        gem_set_line(2649);
-        gem_v___for_i_361 = gem_add(gem_v___for_i_361, gem_int(1));
 #line 2650 "compiler/codegen.gem"
         gem_set_line(2650);
+    GemVal _t14084 = gem_v___for_items_361;
+        GemVal gem_v_ef = gem_table_get(_t14084, gem_v___for_i_361);
+#line 2650 "compiler/codegen.gem"
+        gem_set_line(2650);
+        gem_v___for_i_361 = gem_add(gem_v___for_i_361, gem_int(1));
+#line 2651 "compiler/codegen.gem"
+        gem_set_line(2651);
     GemVal _t14086 = gem_v_extern_names;
     GemVal _t14085 = gem_v_ef;
     static GemICacheSlot _ic_2225 = {0};
@@ -60074,8 +60077,8 @@ static GemVal __anon_194(void *_env, GemVal *args, int argc) {
         (void)(gem_push_fn(NULL, _t14087, 2));
     }
 
-#line 2652 "compiler/codegen.gem"
-    gem_set_line(2652);
+#line 2653 "compiler/codegen.gem"
+    gem_set_line(2653);
     struct _closure___anon_195 *_t14137 = gem_alloc(sizeof(struct _closure___anon_195));
     _t14137->_num_captures = 4;
     _t14137->gem_v_file_of = gem_v_file_of;
@@ -60083,24 +60086,24 @@ static GemVal __anon_194(void *_env, GemVal *args, int argc) {
     _t14137->gem_v_sink = gem_v_sink;
     _t14137->gem_v_source_of = gem_v_source_of;
     GemVal gem_v_report_out_of_scope = gem_make_fn(__anon_195, _t14137);
-#line 2676 "compiler/codegen.gem"
-    gem_set_line(2676);
+#line 2677 "compiler/codegen.gem"
+    gem_set_line(2677);
     GemVal _t14143 = gem_g___mod_codegen_scope_shadowing_lets;
     GemVal _t14141 = gem_v_fn_defs;
     GemVal _t14140 = gem_v_top_stmts;
     GemVal _t14139 = (*gem_v_builtin_fns);
     GemVal _t14138 = gem_v_extern_names;
     GemVal _t14142[] = {_t14141, _t14140, _t14139, _t14138, gem_v_report_out_of_scope};
-    gem_check_callable(_t14143, "compiler/codegen.gem", 2676);
+    gem_check_callable(_t14143, "compiler/codegen.gem", 2677);
     (void)(_t14143.fn(_t14143.env, _t14142, 5));
-#line 2679 "compiler/codegen.gem"
-    gem_set_line(2679);
+#line 2680 "compiler/codegen.gem"
+    gem_set_line(2680);
     GemVal gem_v___for_items_368 = gem_for_items_1(gem_v_fn_defs);
-#line 2679 "compiler/codegen.gem"
-    gem_set_line(2679);
+#line 2680 "compiler/codegen.gem"
+    gem_set_line(2680);
     GemVal gem_v___for_i_368 = gem_int(0);
-#line 2679 "compiler/codegen.gem"
-    gem_set_line(2679);
+#line 2680 "compiler/codegen.gem"
+    gem_set_line(2680);
     GemArenaMark _mk361;
     gem_arena_mark(&_mk361);
     while (1) {
@@ -60111,47 +60114,47 @@ static GemVal __anon_194(void *_env, GemVal *args, int argc) {
         }
     GemVal _t14144 = gem_v___for_i_368;
         if (!gem_truthy(gem_lt(_t14144, gem_for_len_1(gem_v___for_items_368)))) break;
-#line 2679 "compiler/codegen.gem"
-        gem_set_line(2679);
-    GemVal _t14145 = gem_v___for_items_368;
-        GemVal gem_v_fd = gem_table_get(_t14145, gem_v___for_i_368);
-#line 2679 "compiler/codegen.gem"
-        gem_set_line(2679);
-        gem_v___for_i_368 = gem_add(gem_v___for_i_368, gem_int(1));
 #line 2680 "compiler/codegen.gem"
         gem_set_line(2680);
+    GemVal _t14145 = gem_v___for_items_368;
+        GemVal gem_v_fd = gem_table_get(_t14145, gem_v___for_i_368);
+#line 2680 "compiler/codegen.gem"
+        gem_set_line(2680);
+        gem_v___for_i_368 = gem_add(gem_v___for_i_368, gem_int(1));
+#line 2681 "compiler/codegen.gem"
+        gem_set_line(2681);
     GemVal _t14149 = gem_g___mod_codegen_mark_non_escaping_stmts;
     GemVal _t14146 = gem_v_fd;
     static GemICacheSlot _ic_2233 = {0};
     GemVal _t14147 = gem_table_get_cached(_t14146, "body", &_ic_2233);
     GemVal _t14148[] = {_t14147, gem_v_fd};
-    gem_check_callable(_t14149, "compiler/codegen.gem", 2680);
+    gem_check_callable(_t14149, "compiler/codegen.gem", 2681);
         (void)(_t14149.fn(_t14149.env, _t14148, 2));
     }
 
-#line 2682 "compiler/codegen.gem"
-    gem_set_line(2682);
+#line 2683 "compiler/codegen.gem"
+    gem_set_line(2683);
     GemVal _t14152 = gem_g___mod_codegen_mark_non_escaping_stmts;
     GemVal _t14150 = gem_v_top_stmts;
     GemVal _t14151[] = {_t14150, gem_v_top_stmts};
-    gem_check_callable(_t14152, "compiler/codegen.gem", 2682);
+    gem_check_callable(_t14152, "compiler/codegen.gem", 2683);
     (void)(_t14152.fn(_t14152.env, _t14151, 2));
-#line 2684 "compiler/codegen.gem"
-    gem_set_line(2684);
+#line 2685 "compiler/codegen.gem"
+    gem_set_line(2685);
     GemVal _t14156 = (*gem_v_mark_process_tail);
     GemVal _t14154 = gem_v_fn_defs;
     GemVal _t14153 = gem_v_top_stmts;
     GemVal _t14155[] = {_t14154, _t14153, gem_v_extern_names};
-    gem_check_callable(_t14156, "compiler/codegen.gem", 2684);
+    gem_check_callable(_t14156, "compiler/codegen.gem", 2685);
     (void)(_t14156.fn(_t14156.env, _t14155, 3));
-#line 2687 "compiler/codegen.gem"
-    gem_set_line(2687);
+#line 2688 "compiler/codegen.gem"
+    gem_set_line(2688);
     GemVal gem_v___for_items_369 = gem_for_items_1(gem_v_fn_defs);
-#line 2687 "compiler/codegen.gem"
-    gem_set_line(2687);
+#line 2688 "compiler/codegen.gem"
+    gem_set_line(2688);
     GemVal gem_v___for_i_369 = gem_int(0);
-#line 2687 "compiler/codegen.gem"
-    gem_set_line(2687);
+#line 2688 "compiler/codegen.gem"
+    gem_set_line(2688);
     GemArenaMark _mk362;
     gem_arena_mark(&_mk362);
     while (1) {
@@ -60162,35 +60165,35 @@ static GemVal __anon_194(void *_env, GemVal *args, int argc) {
         }
     GemVal _t14157 = gem_v___for_i_369;
         if (!gem_truthy(gem_lt(_t14157, gem_for_len_1(gem_v___for_items_369)))) break;
-#line 2687 "compiler/codegen.gem"
-        gem_set_line(2687);
-    GemVal _t14158 = gem_v___for_items_369;
-        GemVal gem_v_fd = gem_table_get(_t14158, gem_v___for_i_369);
-#line 2687 "compiler/codegen.gem"
-        gem_set_line(2687);
-        gem_v___for_i_369 = gem_add(gem_v___for_i_369, gem_int(1));
 #line 2688 "compiler/codegen.gem"
         gem_set_line(2688);
+    GemVal _t14158 = gem_v___for_items_369;
+        GemVal gem_v_fd = gem_table_get(_t14158, gem_v___for_i_369);
+#line 2688 "compiler/codegen.gem"
+        gem_set_line(2688);
+        gem_v___for_i_369 = gem_add(gem_v___for_i_369, gem_int(1));
+#line 2689 "compiler/codegen.gem"
+        gem_set_line(2689);
     GemVal _t14160 = gem_g___mod_codegen_lift_captured_arm_lets_in_fn;
     GemVal _t14159[] = {gem_v_fd};
-    gem_check_callable(_t14160, "compiler/codegen.gem", 2688);
+    gem_check_callable(_t14160, "compiler/codegen.gem", 2689);
         (void)(_t14160.fn(_t14160.env, _t14159, 1));
     }
 
-#line 2690 "compiler/codegen.gem"
-    gem_set_line(2690);
+#line 2691 "compiler/codegen.gem"
+    gem_set_line(2691);
     GemVal _t14162 = gem_g___mod_codegen_lift_captured_arm_lets_top_stmts;
     GemVal _t14161[] = {gem_v_top_stmts};
-    gem_check_callable(_t14162, "compiler/codegen.gem", 2690);
+    gem_check_callable(_t14162, "compiler/codegen.gem", 2691);
     (void)(_t14162.fn(_t14162.env, _t14161, 1));
-#line 2692 "compiler/codegen.gem"
-    gem_set_line(2692);
+#line 2693 "compiler/codegen.gem"
+    gem_set_line(2693);
     GemVal gem_v___for_items_370 = gem_for_items_1(gem_v_extern_fns_list);
-#line 2692 "compiler/codegen.gem"
-    gem_set_line(2692);
+#line 2693 "compiler/codegen.gem"
+    gem_set_line(2693);
     GemVal gem_v___for_i_370 = gem_int(0);
-#line 2692 "compiler/codegen.gem"
-    gem_set_line(2692);
+#line 2693 "compiler/codegen.gem"
+    gem_set_line(2693);
     GemArenaMark _mk363;
     gem_arena_mark(&_mk363);
     while (1) {
@@ -60201,32 +60204,32 @@ static GemVal __anon_194(void *_env, GemVal *args, int argc) {
         }
     GemVal _t14163 = gem_v___for_i_370;
         if (!gem_truthy(gem_lt(_t14163, gem_for_len_1(gem_v___for_items_370)))) break;
-#line 2692 "compiler/codegen.gem"
-        gem_set_line(2692);
-    GemVal _t14164 = gem_v___for_items_370;
-        GemVal gem_v_ef = gem_table_get(_t14164, gem_v___for_i_370);
-#line 2692 "compiler/codegen.gem"
-        gem_set_line(2692);
-        gem_v___for_i_370 = gem_add(gem_v___for_i_370, gem_int(1));
 #line 2693 "compiler/codegen.gem"
         gem_set_line(2693);
+    GemVal _t14164 = gem_v___for_items_370;
+        GemVal gem_v_ef = gem_table_get(_t14164, gem_v___for_i_370);
+#line 2693 "compiler/codegen.gem"
+        gem_set_line(2693);
+        gem_v___for_i_370 = gem_add(gem_v___for_i_370, gem_int(1));
+#line 2694 "compiler/codegen.gem"
+        gem_set_line(2694);
     GemVal _t14168 = gem_g___mod_codegen_set_add;
     GemVal _t14166 = (*gem_v_defined_fns);
     GemVal _t14165 = gem_v_ef;
     static GemICacheSlot _ic_2234 = {0};
     GemVal _t14167[] = {_t14166, gem_table_get_cached(_t14165, "name", &_ic_2234)};
-    gem_check_callable(_t14168, "compiler/codegen.gem", 2693);
+    gem_check_callable(_t14168, "compiler/codegen.gem", 2694);
         (void)(_t14168.fn(_t14168.env, _t14167, 2));
     }
 
-#line 2696 "compiler/codegen.gem"
-    gem_set_line(2696);
+#line 2697 "compiler/codegen.gem"
+    gem_set_line(2697);
     GemVal gem_v___for_items_371 = gem_for_items_1(gem_v_fn_defs);
-#line 2696 "compiler/codegen.gem"
-    gem_set_line(2696);
+#line 2697 "compiler/codegen.gem"
+    gem_set_line(2697);
     GemVal gem_v___for_i_371 = gem_int(0);
-#line 2696 "compiler/codegen.gem"
-    gem_set_line(2696);
+#line 2697 "compiler/codegen.gem"
+    gem_set_line(2697);
     GemArenaMark _mk364;
     gem_arena_mark(&_mk364);
     while (1) {
@@ -60237,41 +60240,41 @@ static GemVal __anon_194(void *_env, GemVal *args, int argc) {
         }
     GemVal _t14169 = gem_v___for_i_371;
         if (!gem_truthy(gem_lt(_t14169, gem_for_len_1(gem_v___for_items_371)))) break;
-#line 2696 "compiler/codegen.gem"
-        gem_set_line(2696);
-    GemVal _t14170 = gem_v___for_items_371;
-        GemVal gem_v_fd = gem_table_get(_t14170, gem_v___for_i_371);
-#line 2696 "compiler/codegen.gem"
-        gem_set_line(2696);
-        gem_v___for_i_371 = gem_add(gem_v___for_i_371, gem_int(1));
 #line 2697 "compiler/codegen.gem"
         gem_set_line(2697);
+    GemVal _t14170 = gem_v___for_items_371;
+        GemVal gem_v_fd = gem_table_get(_t14170, gem_v___for_i_371);
+#line 2697 "compiler/codegen.gem"
+        gem_set_line(2697);
+        gem_v___for_i_371 = gem_add(gem_v___for_i_371, gem_int(1));
+#line 2698 "compiler/codegen.gem"
+        gem_set_line(2698);
     GemVal _t14174 = gem_g___mod_codegen_set_add;
     GemVal _t14172 = (*gem_v_defined_fns);
     GemVal _t14171 = gem_v_fd;
     static GemICacheSlot _ic_2235 = {0};
     GemVal _t14173[] = {_t14172, gem_table_get_cached(_t14171, "name", &_ic_2235)};
-    gem_check_callable(_t14174, "compiler/codegen.gem", 2697);
+    gem_check_callable(_t14174, "compiler/codegen.gem", 2698);
         (void)(_t14174.fn(_t14174.env, _t14173, 2));
-#line 2698 "compiler/codegen.gem"
-        gem_set_line(2698);
+#line 2699 "compiler/codegen.gem"
+        gem_set_line(2699);
     GemVal _t14175 = gem_v_fd;
     static GemICacheSlot _ic_2236 = {0};
     GemVal _t14176[] = {GEM_STR_LIT("static GemVal gem_fn_", 21), gem_table_get_cached(_t14175, "name", &_ic_2236), GEM_STR_LIT("(void *_env, GemVal *args, int argc);", 37)};
         GemVal gem_v_decl = gem_interp(3, _t14176);
-#line 2699 "compiler/codegen.gem"
-        gem_set_line(2699);
+#line 2700 "compiler/codegen.gem"
+        gem_set_line(2700);
     GemVal _t14177 = (*gem_v_forward_decls);
     GemVal _t14178[] = {_t14177, gem_v_decl};
         (void)(gem_push_fn(NULL, _t14178, 2));
-#line 2700 "compiler/codegen.gem"
-        gem_set_line(2700);
+#line 2701 "compiler/codegen.gem"
+        gem_set_line(2701);
     GemVal _t14180 = (*gem_v_scc_member_to_id);
     GemVal _t14179 = gem_v_fd;
     static GemICacheSlot _ic_2237 = {0};
         if (gem_truthy(gem_neq(gem_table_get(_t14180, gem_table_get_cached(_t14179, "name", &_ic_2237)), GEM_NIL))) {
-#line 2701 "compiler/codegen.gem"
-            gem_set_line(2701);
+#line 2702 "compiler/codegen.gem"
+            gem_set_line(2702);
     GemVal _t14183 = (*gem_v_forward_decls);
     GemVal _t14181 = gem_v_fd;
     static GemICacheSlot _ic_2238 = {0};
@@ -60281,24 +60284,24 @@ static GemVal __anon_194(void *_env, GemVal *args, int argc) {
         }
     }
 
-#line 2705 "compiler/codegen.gem"
-    gem_set_line(2705);
+#line 2706 "compiler/codegen.gem"
+    gem_set_line(2706);
     GemVal _t14187 = gem_g___mod_codegen_collect_top_let_names;
     GemVal _t14185 = gem_v_top_stmts;
     GemVal _t14186[] = {_t14185, (*gem_v_top_level_vars)};
-    gem_check_callable(_t14187, "compiler/codegen.gem", 2705);
+    gem_check_callable(_t14187, "compiler/codegen.gem", 2706);
     (void)(_t14187.fn(_t14187.env, _t14186, 2));
-#line 2707 "compiler/codegen.gem"
-    gem_set_line(2707);
+#line 2708 "compiler/codegen.gem"
+    gem_set_line(2708);
     GemVal _t14189 = gem_g___mod_codegen_top_rescue_placeholders;
     GemVal _t14188[] = {gem_v_top_stmts};
-    gem_check_callable(_t14189, "compiler/codegen.gem", 2707);
+    gem_check_callable(_t14189, "compiler/codegen.gem", 2708);
     GemVal gem_v___for_items_372 = gem_for_items_1(_t14189.fn(_t14189.env, _t14188, 1));
-#line 2707 "compiler/codegen.gem"
-    gem_set_line(2707);
+#line 2708 "compiler/codegen.gem"
+    gem_set_line(2708);
     GemVal gem_v___for_i_372 = gem_int(0);
-#line 2707 "compiler/codegen.gem"
-    gem_set_line(2707);
+#line 2708 "compiler/codegen.gem"
+    gem_set_line(2708);
     GemArenaMark _mk365;
     gem_arena_mark(&_mk365);
     while (1) {
@@ -60309,35 +60312,35 @@ static GemVal __anon_194(void *_env, GemVal *args, int argc) {
         }
     GemVal _t14190 = gem_v___for_i_372;
         if (!gem_truthy(gem_lt(_t14190, gem_for_len_1(gem_v___for_items_372)))) break;
-#line 2707 "compiler/codegen.gem"
-        gem_set_line(2707);
-    GemVal _t14191 = gem_v___for_items_372;
-        GemVal gem_v_n = gem_table_get(_t14191, gem_v___for_i_372);
-#line 2707 "compiler/codegen.gem"
-        gem_set_line(2707);
-        gem_v___for_i_372 = gem_add(gem_v___for_i_372, gem_int(1));
 #line 2708 "compiler/codegen.gem"
         gem_set_line(2708);
+    GemVal _t14191 = gem_v___for_items_372;
+        GemVal gem_v_n = gem_table_get(_t14191, gem_v___for_i_372);
+#line 2708 "compiler/codegen.gem"
+        gem_set_line(2708);
+        gem_v___for_i_372 = gem_add(gem_v___for_i_372, gem_int(1));
+#line 2709 "compiler/codegen.gem"
+        gem_set_line(2709);
     GemVal _t14192 = (*gem_v_top_level_vars);
     GemVal _t14193[] = {_t14192, gem_v_n};
         (void)(gem_delete_fn(NULL, _t14193, 2));
     }
 
-#line 2711 "compiler/codegen.gem"
-    gem_set_line(2711);
+#line 2712 "compiler/codegen.gem"
+    gem_set_line(2712);
     GemVal _t14194 = gem_table_new_braces();
     GemVal gem_v_assigned = _t14194;
-#line 2712 "compiler/codegen.gem"
-    gem_set_line(2712);
+#line 2713 "compiler/codegen.gem"
+    gem_set_line(2713);
     GemVal gem_v___for_tbl_374 = (*gem_v_pt_caller_records);
-#line 2712 "compiler/codegen.gem"
-    gem_set_line(2712);
+#line 2713 "compiler/codegen.gem"
+    gem_set_line(2713);
     GemVal gem_v___for_len_374 = gem_for_len_1(gem_v___for_tbl_374);
-#line 2712 "compiler/codegen.gem"
-    gem_set_line(2712);
+#line 2713 "compiler/codegen.gem"
+    gem_set_line(2713);
     GemVal gem_v___for_i_374 = gem_int(0);
-#line 2712 "compiler/codegen.gem"
-    gem_set_line(2712);
+#line 2713 "compiler/codegen.gem"
+    gem_set_line(2713);
     GemArenaMark _mk366;
     gem_arena_mark(&_mk366);
     while (1) {
@@ -60348,27 +60351,27 @@ static GemVal __anon_194(void *_env, GemVal *args, int argc) {
         }
     GemVal _t14195 = gem_v___for_i_374;
         if (!gem_truthy(gem_lt(_t14195, gem_v___for_len_374))) break;
-#line 2712 "compiler/codegen.gem"
-        gem_set_line(2712);
-    GemVal _t14196 = gem_v___for_tbl_374;
-        GemVal gem_v__ = gem_table_key_at_2(_t14196, gem_v___for_i_374);
-#line 2712 "compiler/codegen.gem"
-        gem_set_line(2712);
-    GemVal _t14197 = gem_v___for_tbl_374;
-        GemVal gem_v_r = gem_table_val_at_2(_t14197, gem_v___for_i_374);
-#line 2712 "compiler/codegen.gem"
-        gem_set_line(2712);
-        gem_v___for_i_374 = gem_add(gem_v___for_i_374, gem_int(1));
 #line 2713 "compiler/codegen.gem"
         gem_set_line(2713);
+    GemVal _t14196 = gem_v___for_tbl_374;
+        GemVal gem_v__ = gem_table_key_at_2(_t14196, gem_v___for_i_374);
+#line 2713 "compiler/codegen.gem"
+        gem_set_line(2713);
+    GemVal _t14197 = gem_v___for_tbl_374;
+        GemVal gem_v_r = gem_table_val_at_2(_t14197, gem_v___for_i_374);
+#line 2713 "compiler/codegen.gem"
+        gem_set_line(2713);
+        gem_v___for_i_374 = gem_add(gem_v___for_i_374, gem_int(1));
+#line 2714 "compiler/codegen.gem"
+        gem_set_line(2714);
     GemVal _t14198 = gem_v_r;
     static GemICacheSlot _ic_2239 = {0};
         GemVal gem_v___for_items_373 = gem_for_items_1(gem_table_get_cached(_t14198, "writes", &_ic_2239));
-#line 2713 "compiler/codegen.gem"
-        gem_set_line(2713);
+#line 2714 "compiler/codegen.gem"
+        gem_set_line(2714);
         GemVal gem_v___for_i_373 = gem_int(0);
-#line 2713 "compiler/codegen.gem"
-        gem_set_line(2713);
+#line 2714 "compiler/codegen.gem"
+        gem_set_line(2714);
         GemArenaMark _mk367;
         gem_arena_mark(&_mk367);
         while (1) {
@@ -60379,54 +60382,54 @@ static GemVal __anon_194(void *_env, GemVal *args, int argc) {
             }
     GemVal _t14199 = gem_v___for_i_373;
             if (!gem_truthy(gem_lt(_t14199, gem_for_len_1(gem_v___for_items_373)))) break;
-#line 2713 "compiler/codegen.gem"
-            gem_set_line(2713);
-    GemVal _t14200 = gem_v___for_items_373;
-            GemVal gem_v_w = gem_table_get(_t14200, gem_v___for_i_373);
-#line 2713 "compiler/codegen.gem"
-            gem_set_line(2713);
-            gem_v___for_i_373 = gem_add(gem_v___for_i_373, gem_int(1));
 #line 2714 "compiler/codegen.gem"
             gem_set_line(2714);
+    GemVal _t14200 = gem_v___for_items_373;
+            GemVal gem_v_w = gem_table_get(_t14200, gem_v___for_i_373);
+#line 2714 "compiler/codegen.gem"
+            gem_set_line(2714);
+            gem_v___for_i_373 = gem_add(gem_v___for_i_373, gem_int(1));
+#line 2715 "compiler/codegen.gem"
+            gem_set_line(2715);
     GemVal _t14203 = gem_g___mod_codegen_is_node;
     GemVal _t14201 = gem_v_w;
     static GemICacheSlot _ic_2240 = {0};
     GemVal _t14202[] = {gem_table_get_cached(_t14201, "node", &_ic_2240), GEM_STR_LIT("assign", 6)};
-    gem_check_callable(_t14203, "compiler/codegen.gem", 2714);
+    gem_check_callable(_t14203, "compiler/codegen.gem", 2715);
             if (gem_truthy(_t14203.fn(_t14203.env, _t14202, 2))) {
-#line 2715 "compiler/codegen.gem"
-                gem_set_line(2715);
+#line 2716 "compiler/codegen.gem"
+                gem_set_line(2716);
     GemVal _t14207 = gem_g___mod_codegen_set_add;
     GemVal _t14205 = gem_v_assigned;
     GemVal _t14204 = gem_v_w;
     static GemICacheSlot _ic_2241 = {0};
     GemVal _t14206[] = {_t14205, gem_table_get_cached(_t14204, "name", &_ic_2241)};
-    gem_check_callable(_t14207, "compiler/codegen.gem", 2715);
+    gem_check_callable(_t14207, "compiler/codegen.gem", 2716);
                 (void)(_t14207.fn(_t14207.env, _t14206, 2));
             }
         }
 
     }
 
-#line 2719 "compiler/codegen.gem"
-    gem_set_line(2719);
+#line 2720 "compiler/codegen.gem"
+    gem_set_line(2720);
     GemVal _t14211 = gem_g___mod_codegen_collect_module_namespaces;
     GemVal _t14209 = gem_v_top_stmts;
     GemVal _t14208 = gem_v_assigned;
     GemVal _t14210[] = {_t14209, _t14208, (*gem_v_module_ns)};
-    gem_check_callable(_t14211, "compiler/codegen.gem", 2719);
+    gem_check_callable(_t14211, "compiler/codegen.gem", 2720);
     (void)(_t14211.fn(_t14211.env, _t14210, 3));
-#line 2720 "compiler/codegen.gem"
-    gem_set_line(2720);
+#line 2721 "compiler/codegen.gem"
+    gem_set_line(2721);
     GemVal gem_v___for_tbl_376 = (*gem_v_module_ns);
-#line 2720 "compiler/codegen.gem"
-    gem_set_line(2720);
+#line 2721 "compiler/codegen.gem"
+    gem_set_line(2721);
     GemVal gem_v___for_len_376 = gem_for_len_1(gem_v___for_tbl_376);
-#line 2720 "compiler/codegen.gem"
-    gem_set_line(2720);
+#line 2721 "compiler/codegen.gem"
+    gem_set_line(2721);
     GemVal gem_v___for_i_376 = gem_int(0);
-#line 2720 "compiler/codegen.gem"
-    gem_set_line(2720);
+#line 2721 "compiler/codegen.gem"
+    gem_set_line(2721);
     GemArenaMark _mk368;
     gem_arena_mark(&_mk368);
     while (1) {
@@ -60437,28 +60440,28 @@ static GemVal __anon_194(void *_env, GemVal *args, int argc) {
         }
     GemVal _t14212 = gem_v___for_i_376;
         if (!gem_truthy(gem_lt(_t14212, gem_v___for_len_376))) break;
-#line 2720 "compiler/codegen.gem"
-        gem_set_line(2720);
+#line 2721 "compiler/codegen.gem"
+        gem_set_line(2721);
     GemVal _t14213 = gem_v___for_tbl_376;
         GemVal gem_v_binding = gem_table_key_at_2(_t14213, gem_v___for_i_376);
-#line 2720 "compiler/codegen.gem"
-        gem_set_line(2720);
+#line 2721 "compiler/codegen.gem"
+        gem_set_line(2721);
     GemVal _t14214 = gem_v___for_tbl_376;
         GemVal gem_v_fields = gem_table_val_at_2(_t14214, gem_v___for_i_376);
-#line 2720 "compiler/codegen.gem"
-        gem_set_line(2720);
+#line 2721 "compiler/codegen.gem"
+        gem_set_line(2721);
         gem_v___for_i_376 = gem_add(gem_v___for_i_376, gem_int(1));
-#line 2721 "compiler/codegen.gem"
-        gem_set_line(2721);
+#line 2722 "compiler/codegen.gem"
+        gem_set_line(2722);
         GemVal gem_v___for_tbl_375 = gem_v_fields;
-#line 2721 "compiler/codegen.gem"
-        gem_set_line(2721);
+#line 2722 "compiler/codegen.gem"
+        gem_set_line(2722);
         GemVal gem_v___for_len_375 = gem_for_len_1(gem_v___for_tbl_375);
-#line 2721 "compiler/codegen.gem"
-        gem_set_line(2721);
+#line 2722 "compiler/codegen.gem"
+        gem_set_line(2722);
         GemVal gem_v___for_i_375 = gem_int(0);
-#line 2721 "compiler/codegen.gem"
-        gem_set_line(2721);
+#line 2722 "compiler/codegen.gem"
+        gem_set_line(2722);
         GemArenaMark _mk369;
         gem_arena_mark(&_mk369);
         while (1) {
@@ -60469,30 +60472,30 @@ static GemVal __anon_194(void *_env, GemVal *args, int argc) {
             }
     GemVal _t14215 = gem_v___for_i_375;
             if (!gem_truthy(gem_lt(_t14215, gem_v___for_len_375))) break;
-#line 2721 "compiler/codegen.gem"
-            gem_set_line(2721);
-    GemVal _t14216 = gem_v___for_tbl_375;
-            GemVal gem_v_field = gem_table_key_at_2(_t14216, gem_v___for_i_375);
-#line 2721 "compiler/codegen.gem"
-            gem_set_line(2721);
-    GemVal _t14217 = gem_v___for_tbl_375;
-            GemVal gem_v_target = gem_table_val_at_2(_t14217, gem_v___for_i_375);
-#line 2721 "compiler/codegen.gem"
-            gem_set_line(2721);
-            gem_v___for_i_375 = gem_add(gem_v___for_i_375, gem_int(1));
 #line 2722 "compiler/codegen.gem"
             gem_set_line(2722);
+    GemVal _t14216 = gem_v___for_tbl_375;
+            GemVal gem_v_field = gem_table_key_at_2(_t14216, gem_v___for_i_375);
+#line 2722 "compiler/codegen.gem"
+            gem_set_line(2722);
+    GemVal _t14217 = gem_v___for_tbl_375;
+            GemVal gem_v_target = gem_table_val_at_2(_t14217, gem_v___for_i_375);
+#line 2722 "compiler/codegen.gem"
+            gem_set_line(2722);
+            gem_v___for_i_375 = gem_add(gem_v___for_i_375, gem_int(1));
+#line 2723 "compiler/codegen.gem"
+            gem_set_line(2723);
     GemVal _t14218 = (*gem_v_ns_targets);
             if (gem_truthy(gem_eq(gem_table_get(_t14218, gem_v_target), GEM_NIL))) {
-#line 2723 "compiler/codegen.gem"
-                gem_set_line(2723);
+#line 2724 "compiler/codegen.gem"
+                gem_set_line(2724);
     GemVal _t14221 = (*gem_v_ns_targets);
     GemVal _t14220 = gem_v_target;
     GemVal _t14219 = gem_table_new();
                 gem_table_set(_t14221, _t14220, _t14219);
             }
-#line 2725 "compiler/codegen.gem"
-            gem_set_line(2725);
+#line 2726 "compiler/codegen.gem"
+            gem_set_line(2726);
     GemVal _t14222 = (*gem_v_ns_targets);
     GemVal _t14224 = gem_table_get(_t14222, gem_v_target);
     GemVal _t14223 = gem_table_new_braces();
@@ -60504,49 +60507,49 @@ static GemVal __anon_194(void *_env, GemVal *args, int argc) {
 
     }
 
-#line 2728 "compiler/codegen.gem"
-    gem_set_line(2728);
-    GemVal _t14226 = (*gem_v_note_spawn_global_writes);
-    gem_check_callable(_t14226, "compiler/codegen.gem", 2728);
-    (void)(_t14226.fn(_t14226.env, NULL, 0));
 #line 2729 "compiler/codegen.gem"
     gem_set_line(2729);
+    GemVal _t14226 = (*gem_v_note_spawn_global_writes);
+    gem_check_callable(_t14226, "compiler/codegen.gem", 2729);
+    (void)(_t14226.fn(_t14226.env, NULL, 0));
+#line 2730 "compiler/codegen.gem"
+    gem_set_line(2730);
     GemVal _t14230 = (*gem_v_check_call_arities);
     GemVal _t14228 = gem_v_fn_defs;
     GemVal _t14227 = gem_v_extern_fns_list;
     GemVal _t14229[] = {_t14228, _t14227, gem_v_top_stmts};
-    gem_check_callable(_t14230, "compiler/codegen.gem", 2729);
+    gem_check_callable(_t14230, "compiler/codegen.gem", 2730);
     (void)(_t14230.fn(_t14230.env, _t14229, 3));
-#line 2730 "compiler/codegen.gem"
-    gem_set_line(2730);
+#line 2731 "compiler/codegen.gem"
+    gem_set_line(2731);
     GemVal _t14234 = gem_g___mod_codegen_find_captured_in_scope;
     GemVal _t14232 = gem_v_top_stmts;
     GemVal _t14231 = gem_table_new_braces();
     GemVal _t14233[] = {_t14232, _t14231, (*gem_v_is_global_name)};
-    gem_check_callable(_t14234, "compiler/codegen.gem", 2730);
+    gem_check_callable(_t14234, "compiler/codegen.gem", 2731);
     GemVal gem_v_top_captured = _t14234.fn(_t14234.env, _t14233, 3);
-#line 2732 "compiler/codegen.gem"
-    gem_set_line(2732);
-    GemVal _t14235 = gem_table_new_braces();
-    GemVal gem_v_main_locals = _t14235;
 #line 2733 "compiler/codegen.gem"
     gem_set_line(2733);
+    GemVal _t14235 = gem_table_new_braces();
+    GemVal gem_v_main_locals = _t14235;
+#line 2734 "compiler/codegen.gem"
+    gem_set_line(2734);
     GemVal _t14238 = gem_g___mod_codegen_collect_shadow_lets_in_fn;
     GemVal _t14236 = gem_v_top_stmts;
     GemVal _t14237[] = {_t14236, gem_v_main_locals};
-    gem_check_callable(_t14238, "compiler/codegen.gem", 2733);
+    gem_check_callable(_t14238, "compiler/codegen.gem", 2734);
     (void)(_t14238.fn(_t14238.env, _t14237, 2));
-#line 2734 "compiler/codegen.gem"
-    gem_set_line(2734);
+#line 2735 "compiler/codegen.gem"
+    gem_set_line(2735);
     GemVal gem_v___for_tbl_377 = (*gem_v_top_level_vars);
-#line 2734 "compiler/codegen.gem"
-    gem_set_line(2734);
+#line 2735 "compiler/codegen.gem"
+    gem_set_line(2735);
     GemVal gem_v___for_len_377 = gem_for_len_1(gem_v___for_tbl_377);
-#line 2734 "compiler/codegen.gem"
-    gem_set_line(2734);
+#line 2735 "compiler/codegen.gem"
+    gem_set_line(2735);
     GemVal gem_v___for_i_377 = gem_int(0);
-#line 2734 "compiler/codegen.gem"
-    gem_set_line(2734);
+#line 2735 "compiler/codegen.gem"
+    gem_set_line(2735);
     GemArenaMark _mk370;
     gem_arena_mark(&_mk370);
     while (1) {
@@ -60557,50 +60560,50 @@ static GemVal __anon_194(void *_env, GemVal *args, int argc) {
         }
     GemVal _t14239 = gem_v___for_i_377;
         if (!gem_truthy(gem_lt(_t14239, gem_v___for_len_377))) break;
-#line 2734 "compiler/codegen.gem"
-        gem_set_line(2734);
-    GemVal _t14240 = gem_v___for_tbl_377;
-        GemVal gem_v_k = gem_table_key_at_2(_t14240, gem_v___for_i_377);
-#line 2734 "compiler/codegen.gem"
-        gem_set_line(2734);
-    GemVal _t14241 = gem_v___for_tbl_377;
-        GemVal gem_v__ = gem_table_val_at_2(_t14241, gem_v___for_i_377);
-#line 2734 "compiler/codegen.gem"
-        gem_set_line(2734);
-        gem_v___for_i_377 = gem_add(gem_v___for_i_377, gem_int(1));
 #line 2735 "compiler/codegen.gem"
         gem_set_line(2735);
+    GemVal _t14240 = gem_v___for_tbl_377;
+        GemVal gem_v_k = gem_table_key_at_2(_t14240, gem_v___for_i_377);
+#line 2735 "compiler/codegen.gem"
+        gem_set_line(2735);
+    GemVal _t14241 = gem_v___for_tbl_377;
+        GemVal gem_v__ = gem_table_val_at_2(_t14241, gem_v___for_i_377);
+#line 2735 "compiler/codegen.gem"
+        gem_set_line(2735);
+        gem_v___for_i_377 = gem_add(gem_v___for_i_377, gem_int(1));
+#line 2736 "compiler/codegen.gem"
+        gem_set_line(2736);
     GemVal _t14242 = gem_v_main_locals;
     GemVal _t14243[] = {_t14242, gem_v_k};
         (void)(gem_delete_fn(NULL, _t14243, 2));
     }
 
-#line 2737 "compiler/codegen.gem"
-    gem_set_line(2737);
+#line 2738 "compiler/codegen.gem"
+    gem_set_line(2738);
     GemVal _t14246 = gem_g___mod_codegen_find_capture_writes_in_scope;
     GemVal _t14244 = gem_v_top_stmts;
     GemVal _t14245[] = {_t14244, gem_v_main_locals};
-    gem_check_callable(_t14246, "compiler/codegen.gem", 2737);
+    gem_check_callable(_t14246, "compiler/codegen.gem", 2738);
     GemVal gem_v_top_writes = _t14246.fn(_t14246.env, _t14245, 2);
-#line 2738 "compiler/codegen.gem"
-    gem_set_line(2738);
+#line 2739 "compiler/codegen.gem"
+    gem_set_line(2739);
     GemVal _t14252 = gem_g___mod_codegen_set_intersect;
     GemVal _t14249 = gem_g___mod_codegen_set_intersect;
     GemVal _t14247 = gem_v_top_captured;
     GemVal _t14248[] = {_t14247, gem_v_top_writes};
-    gem_check_callable(_t14249, "compiler/codegen.gem", 2738);
+    gem_check_callable(_t14249, "compiler/codegen.gem", 2739);
     GemVal _t14250 = _t14249.fn(_t14249.env, _t14248, 2);
     GemVal _t14251[] = {_t14250, gem_v_main_locals};
-    gem_check_callable(_t14252, "compiler/codegen.gem", 2738);
+    gem_check_callable(_t14252, "compiler/codegen.gem", 2739);
     GemVal gem_v_main_boxed = _t14252.fn(_t14252.env, _t14251, 2);
-#line 2740 "compiler/codegen.gem"
-    gem_set_line(2740);
+#line 2741 "compiler/codegen.gem"
+    gem_set_line(2741);
     GemVal gem_v___for_items_378 = gem_for_items_1(gem_v_extern_fns_list);
-#line 2740 "compiler/codegen.gem"
-    gem_set_line(2740);
+#line 2741 "compiler/codegen.gem"
+    gem_set_line(2741);
     GemVal gem_v___for_i_378 = gem_int(0);
-#line 2740 "compiler/codegen.gem"
-    gem_set_line(2740);
+#line 2741 "compiler/codegen.gem"
+    gem_set_line(2741);
     GemArenaMark _mk371;
     gem_arena_mark(&_mk371);
     while (1) {
@@ -60611,31 +60614,31 @@ static GemVal __anon_194(void *_env, GemVal *args, int argc) {
         }
     GemVal _t14253 = gem_v___for_i_378;
         if (!gem_truthy(gem_lt(_t14253, gem_for_len_1(gem_v___for_items_378)))) break;
-#line 2740 "compiler/codegen.gem"
-        gem_set_line(2740);
-    GemVal _t14254 = gem_v___for_items_378;
-        GemVal gem_v_ef = gem_table_get(_t14254, gem_v___for_i_378);
-#line 2740 "compiler/codegen.gem"
-        gem_set_line(2740);
-        gem_v___for_i_378 = gem_add(gem_v___for_i_378, gem_int(1));
 #line 2741 "compiler/codegen.gem"
         gem_set_line(2741);
+    GemVal _t14254 = gem_v___for_items_378;
+        GemVal gem_v_ef = gem_table_get(_t14254, gem_v___for_i_378);
+#line 2741 "compiler/codegen.gem"
+        gem_set_line(2741);
+        gem_v___for_i_378 = gem_add(gem_v___for_i_378, gem_int(1));
+#line 2742 "compiler/codegen.gem"
+        gem_set_line(2742);
     GemVal _t14257 = (*gem_v_functions);
     GemVal _t14256 = (*gem_v_compile_extern_fn);
     GemVal _t14255[] = {gem_v_ef};
-    gem_check_callable(_t14256, "compiler/codegen.gem", 2741);
+    gem_check_callable(_t14256, "compiler/codegen.gem", 2742);
     GemVal _t14258[] = {_t14257, _t14256.fn(_t14256.env, _t14255, 1)};
         (void)(gem_push_fn(NULL, _t14258, 2));
     }
 
-#line 2744 "compiler/codegen.gem"
-    gem_set_line(2744);
+#line 2745 "compiler/codegen.gem"
+    gem_set_line(2745);
     GemVal gem_v___for_items_379 = gem_for_items_1(gem_v_fn_defs);
-#line 2744 "compiler/codegen.gem"
-    gem_set_line(2744);
+#line 2745 "compiler/codegen.gem"
+    gem_set_line(2745);
     GemVal gem_v___for_i_379 = gem_int(0);
-#line 2744 "compiler/codegen.gem"
-    gem_set_line(2744);
+#line 2745 "compiler/codegen.gem"
+    gem_set_line(2745);
     GemArenaMark _mk372;
     gem_arena_mark(&_mk372);
     while (1) {
@@ -60646,51 +60649,51 @@ static GemVal __anon_194(void *_env, GemVal *args, int argc) {
         }
     GemVal _t14259 = gem_v___for_i_379;
         if (!gem_truthy(gem_lt(_t14259, gem_for_len_1(gem_v___for_items_379)))) break;
-#line 2744 "compiler/codegen.gem"
-        gem_set_line(2744);
-    GemVal _t14260 = gem_v___for_items_379;
-        GemVal gem_v_fd = gem_table_get(_t14260, gem_v___for_i_379);
-#line 2744 "compiler/codegen.gem"
-        gem_set_line(2744);
-        gem_v___for_i_379 = gem_add(gem_v___for_i_379, gem_int(1));
 #line 2745 "compiler/codegen.gem"
         gem_set_line(2745);
+    GemVal _t14260 = gem_v___for_items_379;
+        GemVal gem_v_fd = gem_table_get(_t14260, gem_v___for_i_379);
+#line 2745 "compiler/codegen.gem"
+        gem_set_line(2745);
+        gem_v___for_i_379 = gem_add(gem_v___for_i_379, gem_int(1));
+#line 2746 "compiler/codegen.gem"
+        gem_set_line(2746);
     GemVal _t14263 = (*gem_v_functions);
     GemVal _t14262 = (*gem_v_compile_fn);
     GemVal _t14261[] = {gem_v_fd};
-    gem_check_callable(_t14262, "compiler/codegen.gem", 2745);
+    gem_check_callable(_t14262, "compiler/codegen.gem", 2746);
     GemVal _t14264[] = {_t14263, _t14262.fn(_t14262.env, _t14261, 1)};
         (void)(gem_push_fn(NULL, _t14264, 2));
     }
 
-#line 2748 "compiler/codegen.gem"
-    gem_set_line(2748);
-    GemVal _t14265 = (*gem_v_new_fn_state);
-    gem_check_callable(_t14265, "compiler/codegen.gem", 2748);
-    (*gem_v_fs) = _t14265.fn(_t14265.env, NULL, 0);
 #line 2749 "compiler/codegen.gem"
     gem_set_line(2749);
-    GemVal _t14266 = (*gem_v_fs);
-    gem_table_set(_t14266, GEM_STR_LIT("boxed_vars", 10), gem_v_main_boxed);
+    GemVal _t14265 = (*gem_v_new_fn_state);
+    gem_check_callable(_t14265, "compiler/codegen.gem", 2749);
+    (*gem_v_fs) = _t14265.fn(_t14265.env, NULL, 0);
 #line 2750 "compiler/codegen.gem"
     gem_set_line(2750);
-    gem_table_set((*gem_v_fs), GEM_STR_LIT("in_top_level", 12), gem_bool(1));
+    GemVal _t14266 = (*gem_v_fs);
+    gem_table_set(_t14266, GEM_STR_LIT("boxed_vars", 10), gem_v_main_boxed);
 #line 2751 "compiler/codegen.gem"
     gem_set_line(2751);
+    gem_table_set((*gem_v_fs), GEM_STR_LIT("in_top_level", 12), gem_bool(1));
+#line 2752 "compiler/codegen.gem"
+    gem_set_line(2752);
     GemVal _t14268 = (*gem_v_fs);
     GemVal _t14267 = gem_table_new_braces();
     gem_table_set(_t14268, GEM_STR_LIT("local_names", 11), _t14267);
-#line 2752 "compiler/codegen.gem"
-    gem_set_line(2752);
+#line 2753 "compiler/codegen.gem"
+    gem_set_line(2753);
     GemVal gem_v___for_tbl_380 = (*gem_v_top_level_vars);
-#line 2752 "compiler/codegen.gem"
-    gem_set_line(2752);
+#line 2753 "compiler/codegen.gem"
+    gem_set_line(2753);
     GemVal gem_v___for_len_380 = gem_for_len_1(gem_v___for_tbl_380);
-#line 2752 "compiler/codegen.gem"
-    gem_set_line(2752);
+#line 2753 "compiler/codegen.gem"
+    gem_set_line(2753);
     GemVal gem_v___for_i_380 = gem_int(0);
-#line 2752 "compiler/codegen.gem"
-    gem_set_line(2752);
+#line 2753 "compiler/codegen.gem"
+    gem_set_line(2753);
     GemArenaMark _mk373;
     gem_arena_mark(&_mk373);
     while (1) {
@@ -60701,53 +60704,53 @@ static GemVal __anon_194(void *_env, GemVal *args, int argc) {
         }
     GemVal _t14269 = gem_v___for_i_380;
         if (!gem_truthy(gem_lt(_t14269, gem_v___for_len_380))) break;
-#line 2752 "compiler/codegen.gem"
-        gem_set_line(2752);
-    GemVal _t14270 = gem_v___for_tbl_380;
-        GemVal gem_v_k = gem_table_key_at_2(_t14270, gem_v___for_i_380);
-#line 2752 "compiler/codegen.gem"
-        gem_set_line(2752);
-    GemVal _t14271 = gem_v___for_tbl_380;
-        GemVal gem_v__ = gem_table_val_at_2(_t14271, gem_v___for_i_380);
-#line 2752 "compiler/codegen.gem"
-        gem_set_line(2752);
-        gem_v___for_i_380 = gem_add(gem_v___for_i_380, gem_int(1));
 #line 2753 "compiler/codegen.gem"
         gem_set_line(2753);
+    GemVal _t14270 = gem_v___for_tbl_380;
+        GemVal gem_v_k = gem_table_key_at_2(_t14270, gem_v___for_i_380);
+#line 2753 "compiler/codegen.gem"
+        gem_set_line(2753);
+    GemVal _t14271 = gem_v___for_tbl_380;
+        GemVal gem_v__ = gem_table_val_at_2(_t14271, gem_v___for_i_380);
+#line 2753 "compiler/codegen.gem"
+        gem_set_line(2753);
+        gem_v___for_i_380 = gem_add(gem_v___for_i_380, gem_int(1));
+#line 2754 "compiler/codegen.gem"
+        gem_set_line(2754);
     GemVal _t14275 = gem_g___mod_codegen_set_add;
     GemVal _t14272 = (*gem_v_fs);
     static GemICacheSlot _ic_2242 = {0};
     GemVal _t14273 = gem_table_get_cached(_t14272, "local_names", &_ic_2242);
     GemVal _t14274[] = {_t14273, gem_v_k};
-    gem_check_callable(_t14275, "compiler/codegen.gem", 2753);
+    gem_check_callable(_t14275, "compiler/codegen.gem", 2754);
         (void)(_t14275.fn(_t14275.env, _t14274, 2));
     }
 
-#line 2755 "compiler/codegen.gem"
-    gem_set_line(2755);
+#line 2756 "compiler/codegen.gem"
+    gem_set_line(2756);
     GemVal _t14279 = gem_g___mod_codegen_collect_shadow_lets_in_fn;
     GemVal _t14277 = gem_v_top_stmts;
     GemVal _t14276 = (*gem_v_fs);
     static GemICacheSlot _ic_2243 = {0};
     GemVal _t14278[] = {_t14277, gem_table_get_cached(_t14276, "local_names", &_ic_2243)};
-    gem_check_callable(_t14279, "compiler/codegen.gem", 2755);
+    gem_check_callable(_t14279, "compiler/codegen.gem", 2756);
     (void)(_t14279.fn(_t14279.env, _t14278, 2));
-#line 2756 "compiler/codegen.gem"
-    gem_set_line(2756);
+#line 2757 "compiler/codegen.gem"
+    gem_set_line(2757);
     GemVal _t14281 = (*gem_v_fs);
     GemVal _t14280 = gem_table_new_braces();
     gem_table_set(_t14281, GEM_STR_LIT("fn_scope_locals", 15), _t14280);
-#line 2757 "compiler/codegen.gem"
-    gem_set_line(2757);
+#line 2758 "compiler/codegen.gem"
+    gem_set_line(2758);
     GemVal gem_v___for_tbl_381 = (*gem_v_top_level_vars);
-#line 2757 "compiler/codegen.gem"
-    gem_set_line(2757);
+#line 2758 "compiler/codegen.gem"
+    gem_set_line(2758);
     GemVal gem_v___for_len_381 = gem_for_len_1(gem_v___for_tbl_381);
-#line 2757 "compiler/codegen.gem"
-    gem_set_line(2757);
+#line 2758 "compiler/codegen.gem"
+    gem_set_line(2758);
     GemVal gem_v___for_i_381 = gem_int(0);
-#line 2757 "compiler/codegen.gem"
-    gem_set_line(2757);
+#line 2758 "compiler/codegen.gem"
+    gem_set_line(2758);
     GemArenaMark _mk374;
     gem_arena_mark(&_mk374);
     while (1) {
@@ -60758,50 +60761,50 @@ static GemVal __anon_194(void *_env, GemVal *args, int argc) {
         }
     GemVal _t14282 = gem_v___for_i_381;
         if (!gem_truthy(gem_lt(_t14282, gem_v___for_len_381))) break;
-#line 2757 "compiler/codegen.gem"
-        gem_set_line(2757);
-    GemVal _t14283 = gem_v___for_tbl_381;
-        GemVal gem_v_k = gem_table_key_at_2(_t14283, gem_v___for_i_381);
-#line 2757 "compiler/codegen.gem"
-        gem_set_line(2757);
-    GemVal _t14284 = gem_v___for_tbl_381;
-        GemVal gem_v__ = gem_table_val_at_2(_t14284, gem_v___for_i_381);
-#line 2757 "compiler/codegen.gem"
-        gem_set_line(2757);
-        gem_v___for_i_381 = gem_add(gem_v___for_i_381, gem_int(1));
 #line 2758 "compiler/codegen.gem"
         gem_set_line(2758);
+    GemVal _t14283 = gem_v___for_tbl_381;
+        GemVal gem_v_k = gem_table_key_at_2(_t14283, gem_v___for_i_381);
+#line 2758 "compiler/codegen.gem"
+        gem_set_line(2758);
+    GemVal _t14284 = gem_v___for_tbl_381;
+        GemVal gem_v__ = gem_table_val_at_2(_t14284, gem_v___for_i_381);
+#line 2758 "compiler/codegen.gem"
+        gem_set_line(2758);
+        gem_v___for_i_381 = gem_add(gem_v___for_i_381, gem_int(1));
+#line 2759 "compiler/codegen.gem"
+        gem_set_line(2759);
     GemVal _t14288 = gem_g___mod_codegen_set_add;
     GemVal _t14285 = (*gem_v_fs);
     static GemICacheSlot _ic_2244 = {0};
     GemVal _t14286 = gem_table_get_cached(_t14285, "fn_scope_locals", &_ic_2244);
     GemVal _t14287[] = {_t14286, gem_v_k};
-    gem_check_callable(_t14288, "compiler/codegen.gem", 2758);
+    gem_check_callable(_t14288, "compiler/codegen.gem", 2759);
         (void)(_t14288.fn(_t14288.env, _t14287, 2));
     }
 
-#line 2760 "compiler/codegen.gem"
-    gem_set_line(2760);
-    GemVal _t14290 = (*gem_v_compile_stmts);
-    GemVal _t14289[] = {gem_v_top_stmts, gem_int(1)};
-    gem_check_callable(_t14290, "compiler/codegen.gem", 2760);
-    GemVal gem_v_main_body = _t14290.fn(_t14290.env, _t14289, 2);
 #line 2761 "compiler/codegen.gem"
     gem_set_line(2761);
+    GemVal _t14290 = (*gem_v_compile_stmts);
+    GemVal _t14289[] = {gem_v_top_stmts, gem_int(1)};
+    gem_check_callable(_t14290, "compiler/codegen.gem", 2761);
+    GemVal gem_v_main_body = _t14290.fn(_t14290.env, _t14289, 2);
+#line 2762 "compiler/codegen.gem"
+    gem_set_line(2762);
     GemVal _t14291 = (*gem_v_new_fn_state);
-    gem_check_callable(_t14291, "compiler/codegen.gem", 2761);
+    gem_check_callable(_t14291, "compiler/codegen.gem", 2762);
     (*gem_v_fs) = _t14291.fn(_t14291.env, NULL, 0);
-#line 2763 "compiler/codegen.gem"
-    gem_set_line(2763);
+#line 2764 "compiler/codegen.gem"
+    gem_set_line(2764);
     GemVal gem_v_has_main = gem_bool(0);
-#line 2764 "compiler/codegen.gem"
-    gem_set_line(2764);
+#line 2765 "compiler/codegen.gem"
+    gem_set_line(2765);
     GemVal gem_v___for_items_382 = gem_for_items_1(gem_v_fn_defs);
-#line 2764 "compiler/codegen.gem"
-    gem_set_line(2764);
+#line 2765 "compiler/codegen.gem"
+    gem_set_line(2765);
     GemVal gem_v___for_i_382 = gem_int(0);
-#line 2764 "compiler/codegen.gem"
-    gem_set_line(2764);
+#line 2765 "compiler/codegen.gem"
+    gem_set_line(2765);
     GemArenaMark _mk375;
     gem_arena_mark(&_mk375);
     while (1) {
@@ -60812,129 +60815,129 @@ static GemVal __anon_194(void *_env, GemVal *args, int argc) {
         }
     GemVal _t14292 = gem_v___for_i_382;
         if (!gem_truthy(gem_lt(_t14292, gem_for_len_1(gem_v___for_items_382)))) break;
-#line 2764 "compiler/codegen.gem"
-        gem_set_line(2764);
-    GemVal _t14293 = gem_v___for_items_382;
-        GemVal gem_v_fd = gem_table_get(_t14293, gem_v___for_i_382);
-#line 2764 "compiler/codegen.gem"
-        gem_set_line(2764);
-        gem_v___for_i_382 = gem_add(gem_v___for_i_382, gem_int(1));
 #line 2765 "compiler/codegen.gem"
         gem_set_line(2765);
+    GemVal _t14293 = gem_v___for_items_382;
+        GemVal gem_v_fd = gem_table_get(_t14293, gem_v___for_i_382);
+#line 2765 "compiler/codegen.gem"
+        gem_set_line(2765);
+        gem_v___for_i_382 = gem_add(gem_v___for_i_382, gem_int(1));
+#line 2766 "compiler/codegen.gem"
+        gem_set_line(2766);
     GemVal _t14294 = gem_v_fd;
     static GemICacheSlot _ic_2245 = {0};
         if (gem_truthy(gem_eq(gem_table_get_cached(_t14294, "name", &_ic_2245), GEM_STR_LIT("main", 4)))) {
-#line 2766 "compiler/codegen.gem"
-            gem_set_line(2766);
+#line 2767 "compiler/codegen.gem"
+            gem_set_line(2767);
             gem_v_has_main = gem_bool(1);
         }
     }
 
-#line 2770 "compiler/codegen.gem"
-    gem_set_line(2770);
-    GemVal gem_v_mb = gem_buf_new_fn(NULL, NULL, 0);
 #line 2771 "compiler/codegen.gem"
     gem_set_line(2771);
-    GemVal _t14295[] = {gem_v_mb, GEM_STR_LIT("static GemVal gem_user_main(void *_env, GemVal *_args, int _argc) {\n", 68)};
-    (void)(gem_buf_push_fn(NULL, _t14295, 2));
+    GemVal gem_v_mb = gem_buf_new_fn(NULL, NULL, 0);
 #line 2772 "compiler/codegen.gem"
     gem_set_line(2772);
-    GemVal _t14296[] = {gem_v_mb, GEM_STR_LIT("    (void)_env; (void)_args; (void)_argc;\n", 42)};
-    (void)(gem_buf_push_fn(NULL, _t14296, 2));
+    GemVal _t14295[] = {gem_v_mb, GEM_STR_LIT("static GemVal gem_user_main(void *_env, GemVal *_args, int _argc) {\n", 68)};
+    (void)(gem_buf_push_fn(NULL, _t14295, 2));
 #line 2773 "compiler/codegen.gem"
     gem_set_line(2773);
+    GemVal _t14296[] = {gem_v_mb, GEM_STR_LIT("    (void)_env; (void)_args; (void)_argc;\n", 42)};
+    (void)(gem_buf_push_fn(NULL, _t14296, 2));
+#line 2774 "compiler/codegen.gem"
+    gem_set_line(2774);
     GemVal _t14302 = gem_v_mb;
     GemVal _t14300 = gem_g___mod_codegen_escape_c_string;
     GemVal _t14298 = (*gem_v_rel_path);
     GemVal _t14297[] = {(*gem_v_source_name)};
-    gem_check_callable(_t14298, "compiler/codegen.gem", 2773);
+    gem_check_callable(_t14298, "compiler/codegen.gem", 2774);
     GemVal _t14299[] = {_t14298.fn(_t14298.env, _t14297, 1)};
-    gem_check_callable(_t14300, "compiler/codegen.gem", 2773);
+    gem_check_callable(_t14300, "compiler/codegen.gem", 2774);
     GemVal _t14301[] = {GEM_STR_LIT("    gem_push_frame(\"main\", \"", 28), _t14300.fn(_t14300.env, _t14299, 1), GEM_STR_LIT("\", 0);\n", 7)};
     GemVal _t14303[] = {_t14302, gem_interp(3, _t14301)};
     (void)(gem_buf_push_fn(NULL, _t14303, 2));
-#line 2774 "compiler/codegen.gem"
-    gem_set_line(2774);
-    if (gem_truthy(gem_neq(gem_v_main_body, GEM_STR_LIT("", 0)))) {
 #line 2775 "compiler/codegen.gem"
-        gem_set_line(2775);
+    gem_set_line(2775);
+    if (gem_truthy(gem_neq(gem_v_main_body, GEM_STR_LIT("", 0)))) {
+#line 2776 "compiler/codegen.gem"
+        gem_set_line(2776);
     GemVal _t14304 = gem_v_mb;
     GemVal _t14305[] = {_t14304, gem_v_main_body};
         (void)(gem_buf_push_fn(NULL, _t14305, 2));
     }
-#line 2777 "compiler/codegen.gem"
-    gem_set_line(2777);
-    if (gem_truthy(gem_v_has_main)) {
 #line 2778 "compiler/codegen.gem"
-        gem_set_line(2778);
-    GemVal _t14306[] = {gem_v_mb, GEM_STR_LIT("    GemVal _margs[1] = {GEM_NIL};\n", 34)};
-        (void)(gem_buf_push_fn(NULL, _t14306, 2));
+    gem_set_line(2778);
+    if (gem_truthy(gem_v_has_main)) {
 #line 2779 "compiler/codegen.gem"
         gem_set_line(2779);
+    GemVal _t14306[] = {gem_v_mb, GEM_STR_LIT("    GemVal _margs[1] = {GEM_NIL};\n", 34)};
+        (void)(gem_buf_push_fn(NULL, _t14306, 2));
+#line 2780 "compiler/codegen.gem"
+        gem_set_line(2780);
     GemVal _t14307[] = {gem_v_mb, GEM_STR_LIT("    gem_fn_main(NULL, _margs, 0);\n", 34)};
         (void)(gem_buf_push_fn(NULL, _t14307, 2));
     }
-#line 2781 "compiler/codegen.gem"
-    gem_set_line(2781);
-    GemVal _t14308[] = {gem_v_mb, GEM_STR_LIT("    gem_pop_frame();\n    return GEM_NIL;\n}\n\n", 44)};
-    (void)(gem_buf_push_fn(NULL, _t14308, 2));
 #line 2782 "compiler/codegen.gem"
     gem_set_line(2782);
-    GemVal _t14309[] = {gem_v_mb, GEM_STR_LIT("int main(int argc, char **argv) {\n", 34)};
-    (void)(gem_buf_push_fn(NULL, _t14309, 2));
+    GemVal _t14308[] = {gem_v_mb, GEM_STR_LIT("    gem_pop_frame();\n    return GEM_NIL;\n}\n\n", 44)};
+    (void)(gem_buf_push_fn(NULL, _t14308, 2));
 #line 2783 "compiler/codegen.gem"
     gem_set_line(2783);
-    GemVal _t14310[] = {gem_v_mb, GEM_STR_LIT("    gem_init(argc, argv);\n", 26)};
-    (void)(gem_buf_push_fn(NULL, _t14310, 2));
+    GemVal _t14309[] = {gem_v_mb, GEM_STR_LIT("int main(int argc, char **argv) {\n", 34)};
+    (void)(gem_buf_push_fn(NULL, _t14309, 2));
 #line 2784 "compiler/codegen.gem"
     gem_set_line(2784);
+    GemVal _t14310[] = {gem_v_mb, GEM_STR_LIT("    gem_init(argc, argv);\n", 26)};
+    (void)(gem_buf_push_fn(NULL, _t14310, 2));
+#line 2785 "compiler/codegen.gem"
+    gem_set_line(2785);
     GemVal _t14313 = gem_v_mb;
     GemVal _t14311[] = {(*gem_v_top_level_vars)};
     GemVal _t14312[] = {GEM_STR_LIT("    gem_globals_init_lazy(", 26), gem_len_1(gem_keys_fn(NULL, _t14311, 1)), GEM_STR_LIT(");\n", 3)};
     GemVal _t14314[] = {_t14313, gem_interp(3, _t14312)};
     (void)(gem_buf_push_fn(NULL, _t14314, 2));
-#line 2785 "compiler/codegen.gem"
-    gem_set_line(2785);
-    GemVal _t14315[] = {gem_v_mb, GEM_STR_LIT("    gem_scheduler_init();\n", 26)};
-    (void)(gem_buf_push_fn(NULL, _t14315, 2));
 #line 2786 "compiler/codegen.gem"
     gem_set_line(2786);
-    GemVal _t14316[] = {gem_v_mb, GEM_STR_LIT("    gem_run_main(gem_user_main, NULL);\n", 39)};
-    (void)(gem_buf_push_fn(NULL, _t14316, 2));
+    GemVal _t14315[] = {gem_v_mb, GEM_STR_LIT("    gem_scheduler_init();\n", 26)};
+    (void)(gem_buf_push_fn(NULL, _t14315, 2));
 #line 2787 "compiler/codegen.gem"
     gem_set_line(2787);
-    GemVal _t14317[] = {gem_v_mb, GEM_STR_LIT("    return 0;\n}\n", 16)};
-    (void)(gem_buf_push_fn(NULL, _t14317, 2));
+    GemVal _t14316[] = {gem_v_mb, GEM_STR_LIT("    gem_run_main(gem_user_main, NULL);\n", 39)};
+    (void)(gem_buf_push_fn(NULL, _t14316, 2));
 #line 2788 "compiler/codegen.gem"
     gem_set_line(2788);
+    GemVal _t14317[] = {gem_v_mb, GEM_STR_LIT("    return 0;\n}\n", 16)};
+    (void)(gem_buf_push_fn(NULL, _t14317, 2));
+#line 2789 "compiler/codegen.gem"
+    gem_set_line(2789);
     GemVal _t14318[] = {gem_v_mb};
     GemVal gem_v_main_c = gem_to_string_fn(NULL, _t14318, 1);
-#line 2790 "compiler/codegen.gem"
-    gem_set_line(2790);
-    GemVal gem_v_ob = gem_buf_new_fn(NULL, NULL, 0);
 #line 2791 "compiler/codegen.gem"
     gem_set_line(2791);
+    GemVal gem_v_ob = gem_buf_new_fn(NULL, NULL, 0);
+#line 2792 "compiler/codegen.gem"
+    gem_set_line(2792);
     GemVal _t14322 = (*gem_v_emit_extern_includes);
     GemVal _t14320 = gem_v_ob;
     GemVal _t14319 = gem_v_extern_includes;
     GemVal _t14321[] = {_t14320, _t14319, gem_v_c_file};
-    gem_check_callable(_t14322, "compiler/codegen.gem", 2791);
+    gem_check_callable(_t14322, "compiler/codegen.gem", 2792);
     (void)(_t14322.fn(_t14322.env, _t14321, 3));
-#line 2792 "compiler/codegen.gem"
-    gem_set_line(2792);
+#line 2793 "compiler/codegen.gem"
+    gem_set_line(2793);
     GemVal _t14323[] = {gem_v_ob, GEM_STR_LIT("#include \"gem.h\"\n", 17)};
     (void)(gem_buf_push_fn(NULL, _t14323, 2));
-#line 2795 "compiler/codegen.gem"
-    gem_set_line(2795);
+#line 2796 "compiler/codegen.gem"
+    gem_set_line(2796);
     if (gem_truthy(gem_eq(gem_len_1(gem_v_extern_includes), gem_int(0)))) {
-#line 2796 "compiler/codegen.gem"
-        gem_set_line(2796);
+#line 2797 "compiler/codegen.gem"
+        gem_set_line(2797);
         GemVal gem_v___for_items_383 = gem_for_items_1((*gem_v_extern_c_decls));
-#line 2796 "compiler/codegen.gem"
-        gem_set_line(2796);
+#line 2797 "compiler/codegen.gem"
+        gem_set_line(2797);
         GemVal gem_v___for_i_383 = gem_int(0);
-#line 2796 "compiler/codegen.gem"
-        gem_set_line(2796);
+#line 2797 "compiler/codegen.gem"
+        gem_set_line(2797);
         GemArenaMark _mk376;
         gem_arena_mark(&_mk376);
         while (1) {
@@ -60945,18 +60948,18 @@ static GemVal __anon_194(void *_env, GemVal *args, int argc) {
             }
     GemVal _t14324 = gem_v___for_i_383;
             if (!gem_truthy(gem_lt(_t14324, gem_for_len_1(gem_v___for_items_383)))) break;
-#line 2796 "compiler/codegen.gem"
-            gem_set_line(2796);
-    GemVal _t14325 = gem_v___for_items_383;
-            GemVal gem_v_d = gem_table_get(_t14325, gem_v___for_i_383);
-#line 2796 "compiler/codegen.gem"
-            gem_set_line(2796);
-            gem_v___for_i_383 = gem_add(gem_v___for_i_383, gem_int(1));
 #line 2797 "compiler/codegen.gem"
             gem_set_line(2797);
-            if (gem_truthy(gem_neq(gem_v_c_file, GEM_NIL))) {
+    GemVal _t14325 = gem_v___for_items_383;
+            GemVal gem_v_d = gem_table_get(_t14325, gem_v___for_i_383);
+#line 2797 "compiler/codegen.gem"
+            gem_set_line(2797);
+            gem_v___for_i_383 = gem_add(gem_v___for_i_383, gem_int(1));
 #line 2798 "compiler/codegen.gem"
-                gem_set_line(2798);
+            gem_set_line(2798);
+            if (gem_truthy(gem_neq(gem_v_c_file, GEM_NIL))) {
+#line 2799 "compiler/codegen.gem"
+                gem_set_line(2799);
     GemVal _t14337 = gem_v_ob;
     GemVal _t14326 = gem_v_d;
     static GemICacheSlot _ic_2246 = {0};
@@ -60969,30 +60972,30 @@ static GemVal __anon_194(void *_env, GemVal *args, int argc) {
     GemVal _t14328 = gem_v_d;
     static GemICacheSlot _ic_2248 = {0};
     GemVal _t14329[] = {gem_table_get_cached(_t14328, "node", &_ic_2248)};
-    gem_check_callable(_t14330, "compiler/codegen.gem", 2798);
+    gem_check_callable(_t14330, "compiler/codegen.gem", 2799);
     GemVal _t14331[] = {_t14330.fn(_t14330.env, _t14329, 1)};
-    gem_check_callable(_t14332, "compiler/codegen.gem", 2798);
+    gem_check_callable(_t14332, "compiler/codegen.gem", 2799);
     GemVal _t14333[] = {_t14332.fn(_t14332.env, _t14331, 1)};
-    gem_check_callable(_t14334, "compiler/codegen.gem", 2798);
+    gem_check_callable(_t14334, "compiler/codegen.gem", 2799);
     GemVal _t14336[] = {GEM_STR_LIT("#line ", 6), _t14335, GEM_STR_LIT(" \"", 2), _t14334.fn(_t14334.env, _t14333, 1), GEM_STR_LIT("\"\n", 2)};
     GemVal _t14338[] = {_t14337, gem_interp(5, _t14336)};
                 (void)(gem_buf_push_fn(NULL, _t14338, 2));
             }
-#line 2800 "compiler/codegen.gem"
-            gem_set_line(2800);
+#line 2801 "compiler/codegen.gem"
+            gem_set_line(2801);
     GemVal _t14340 = gem_v_ob;
     GemVal _t14339 = gem_v_d;
     static GemICacheSlot _ic_2249 = {0};
     GemVal _t14341[] = {_t14340, gem_table_get_cached(_t14339, "decl", &_ic_2249)};
             (void)(gem_buf_push_fn(NULL, _t14341, 2));
-#line 2801 "compiler/codegen.gem"
-            gem_set_line(2801);
+#line 2802 "compiler/codegen.gem"
+            gem_set_line(2802);
     GemVal _t14342[] = {gem_v_ob, GEM_STR_LIT("\n", 1)};
             (void)(gem_buf_push_fn(NULL, _t14342, 2));
         }
 
-#line 2803 "compiler/codegen.gem"
-        gem_set_line(2803);
+#line 2804 "compiler/codegen.gem"
+        gem_set_line(2804);
     GemVal _t14343 = gem_neq(gem_v_c_file, GEM_NIL);
     GemVal _t14344;
     if (!gem_truthy(_t14343)) {
@@ -61001,35 +61004,35 @@ static GemVal __anon_194(void *_env, GemVal *args, int argc) {
         _t14344 = gem_gt(gem_len_1((*gem_v_extern_c_decls)), gem_int(0));
     }
         if (gem_truthy(_t14344)) {
-#line 2804 "compiler/codegen.gem"
-            gem_set_line(2804);
-    GemVal _t14345[] = {gem_v_ob};
-            GemVal gem_v_so_far = gem_to_string_fn(NULL, _t14345, 1);
 #line 2805 "compiler/codegen.gem"
             gem_set_line(2805);
+    GemVal _t14345[] = {gem_v_ob};
+            GemVal gem_v_so_far = gem_to_string_fn(NULL, _t14345, 1);
+#line 2806 "compiler/codegen.gem"
+            gem_set_line(2806);
     GemVal _t14347 = gem_len_1(gem_v_so_far);
     GemVal _t14346[] = {gem_v_so_far, GEM_STR_LIT("\n", 1), GEM_STR_LIT("", 0)};
             GemVal gem_v_lines = gem_sub(_t14347, gem_len_1(gem_str_replace_fn(NULL, _t14346, 3)));
-#line 2806 "compiler/codegen.gem"
-            gem_set_line(2806);
+#line 2807 "compiler/codegen.gem"
+            gem_set_line(2807);
     GemVal _t14352 = gem_v_ob;
     GemVal _t14350 = gem_add(gem_v_lines, gem_int(2));
     GemVal _t14349 = gem_g___mod_codegen_escape_c_string;
     GemVal _t14348[] = {gem_v_c_file};
-    gem_check_callable(_t14349, "compiler/codegen.gem", 2806);
+    gem_check_callable(_t14349, "compiler/codegen.gem", 2807);
     GemVal _t14351[] = {GEM_STR_LIT("#line ", 6), _t14350, GEM_STR_LIT(" \"", 2), _t14349.fn(_t14349.env, _t14348, 1), GEM_STR_LIT("\"\n", 2)};
     GemVal _t14353[] = {_t14352, gem_interp(5, _t14351)};
             (void)(gem_buf_push_fn(NULL, _t14353, 2));
         }
     }
-#line 2810 "compiler/codegen.gem"
-    gem_set_line(2810);
+#line 2811 "compiler/codegen.gem"
+    gem_set_line(2811);
     GemVal gem_v___for_i_384 = gem_int(0);
-#line 2810 "compiler/codegen.gem"
-    gem_set_line(2810);
+#line 2811 "compiler/codegen.gem"
+    gem_set_line(2811);
     GemVal gem_v___for_limit_384 = gem_len_1((*gem_v_forward_decls));
-#line 2810 "compiler/codegen.gem"
-    gem_set_line(2810);
+#line 2811 "compiler/codegen.gem"
+    gem_set_line(2811);
     GemArenaMark _mk377;
     gem_arena_mark(&_mk377);
     while (1) {
@@ -61040,46 +61043,46 @@ static GemVal __anon_194(void *_env, GemVal *args, int argc) {
         }
     GemVal _t14354 = gem_v___for_i_384;
         if (!gem_truthy(gem_lt(_t14354, gem_v___for_limit_384))) break;
-#line 2810 "compiler/codegen.gem"
-        gem_set_line(2810);
-        GemVal gem_v_i = gem_v___for_i_384;
-#line 2810 "compiler/codegen.gem"
-        gem_set_line(2810);
-        gem_v___for_i_384 = gem_add(gem_v___for_i_384, gem_int(1));
 #line 2811 "compiler/codegen.gem"
         gem_set_line(2811);
+        GemVal gem_v_i = gem_v___for_i_384;
+#line 2811 "compiler/codegen.gem"
+        gem_set_line(2811);
+        gem_v___for_i_384 = gem_add(gem_v___for_i_384, gem_int(1));
+#line 2812 "compiler/codegen.gem"
+        gem_set_line(2812);
     GemVal _t14356 = gem_v_ob;
     GemVal _t14355 = (*gem_v_forward_decls);
     GemVal _t14357[] = {_t14356, gem_table_get(_t14355, gem_v_i)};
         (void)(gem_buf_push_fn(NULL, _t14357, 2));
-#line 2812 "compiler/codegen.gem"
-        gem_set_line(2812);
+#line 2813 "compiler/codegen.gem"
+        gem_set_line(2813);
     GemVal _t14358 = gem_v_i;
         if (gem_truthy(gem_lt(_t14358, gem_sub(gem_len_1((*gem_v_forward_decls)), gem_int(1))))) {
-#line 2813 "compiler/codegen.gem"
-            gem_set_line(2813);
+#line 2814 "compiler/codegen.gem"
+            gem_set_line(2814);
     GemVal _t14359[] = {gem_v_ob, GEM_STR_LIT("\n", 1)};
             (void)(gem_buf_push_fn(NULL, _t14359, 2));
         }
     }
 
-#line 2816 "compiler/codegen.gem"
-    gem_set_line(2816);
+#line 2817 "compiler/codegen.gem"
+    gem_set_line(2817);
     GemVal _t14360[] = {gem_v_ob, GEM_STR_LIT("\n", 1)};
     (void)(gem_buf_push_fn(NULL, _t14360, 2));
-#line 2818 "compiler/codegen.gem"
-    gem_set_line(2818);
+#line 2819 "compiler/codegen.gem"
+    gem_set_line(2819);
     GemVal _t14361[] = {(*gem_v_top_level_vars)};
     GemVal _t14362[] = {gem_keys_fn(NULL, _t14361, 1)};
     GemVal gem_v_tlv_keys = gem_sort_fn(NULL, _t14362, 1);
-#line 2819 "compiler/codegen.gem"
-    gem_set_line(2819);
+#line 2820 "compiler/codegen.gem"
+    gem_set_line(2820);
     GemVal gem_v___for_i_385 = gem_int(0);
-#line 2819 "compiler/codegen.gem"
-    gem_set_line(2819);
+#line 2820 "compiler/codegen.gem"
+    gem_set_line(2820);
     GemVal gem_v___for_limit_385 = gem_len_1(gem_v_tlv_keys);
-#line 2819 "compiler/codegen.gem"
-    gem_set_line(2819);
+#line 2820 "compiler/codegen.gem"
+    gem_set_line(2820);
     GemArenaMark _mk378;
     gem_arena_mark(&_mk378);
     while (1) {
@@ -61090,14 +61093,14 @@ static GemVal __anon_194(void *_env, GemVal *args, int argc) {
         }
     GemVal _t14363 = gem_v___for_i_385;
         if (!gem_truthy(gem_lt(_t14363, gem_v___for_limit_385))) break;
-#line 2819 "compiler/codegen.gem"
-        gem_set_line(2819);
-        GemVal gem_v_i = gem_v___for_i_385;
-#line 2819 "compiler/codegen.gem"
-        gem_set_line(2819);
-        gem_v___for_i_385 = gem_add(gem_v___for_i_385, gem_int(1));
 #line 2820 "compiler/codegen.gem"
         gem_set_line(2820);
+        GemVal gem_v_i = gem_v___for_i_385;
+#line 2820 "compiler/codegen.gem"
+        gem_set_line(2820);
+        gem_v___for_i_385 = gem_add(gem_v___for_i_385, gem_int(1));
+#line 2821 "compiler/codegen.gem"
+        gem_set_line(2821);
     GemVal _t14370 = gem_v_ob;
     GemVal _t14364 = gem_v_tlv_keys;
     GemVal _t14368 = gem_table_get(_t14364, gem_v_i);
@@ -61109,18 +61112,18 @@ static GemVal __anon_194(void *_env, GemVal *args, int argc) {
         (void)(gem_buf_push_fn(NULL, _t14371, 2));
     }
 
-#line 2822 "compiler/codegen.gem"
-    gem_set_line(2822);
+#line 2823 "compiler/codegen.gem"
+    gem_set_line(2823);
     GemVal _t14372[] = {gem_v_ob, GEM_STR_LIT("\n", 1)};
     (void)(gem_buf_push_fn(NULL, _t14372, 2));
-#line 2824 "compiler/codegen.gem"
-    gem_set_line(2824);
+#line 2825 "compiler/codegen.gem"
+    gem_set_line(2825);
     GemVal gem_v___for_i_386 = gem_int(0);
-#line 2824 "compiler/codegen.gem"
-    gem_set_line(2824);
+#line 2825 "compiler/codegen.gem"
+    gem_set_line(2825);
     GemVal gem_v___for_limit_386 = gem_len_1((*gem_v_functions));
-#line 2824 "compiler/codegen.gem"
-    gem_set_line(2824);
+#line 2825 "compiler/codegen.gem"
+    gem_set_line(2825);
     GemArenaMark _mk379;
     gem_arena_mark(&_mk379);
     while (1) {
@@ -61131,40 +61134,40 @@ static GemVal __anon_194(void *_env, GemVal *args, int argc) {
         }
     GemVal _t14373 = gem_v___for_i_386;
         if (!gem_truthy(gem_lt(_t14373, gem_v___for_limit_386))) break;
-#line 2824 "compiler/codegen.gem"
-        gem_set_line(2824);
-        GemVal gem_v_i = gem_v___for_i_386;
-#line 2824 "compiler/codegen.gem"
-        gem_set_line(2824);
-        gem_v___for_i_386 = gem_add(gem_v___for_i_386, gem_int(1));
 #line 2825 "compiler/codegen.gem"
         gem_set_line(2825);
+        GemVal gem_v_i = gem_v___for_i_386;
+#line 2825 "compiler/codegen.gem"
+        gem_set_line(2825);
+        gem_v___for_i_386 = gem_add(gem_v___for_i_386, gem_int(1));
+#line 2826 "compiler/codegen.gem"
+        gem_set_line(2826);
     GemVal _t14375 = gem_v_ob;
     GemVal _t14374 = (*gem_v_functions);
     GemVal _t14376[] = {_t14375, gem_table_get(_t14374, gem_v_i)};
         (void)(gem_buf_push_fn(NULL, _t14376, 2));
-#line 2826 "compiler/codegen.gem"
-        gem_set_line(2826);
+#line 2827 "compiler/codegen.gem"
+        gem_set_line(2827);
     GemVal _t14377 = gem_v_i;
         if (gem_truthy(gem_lt(_t14377, gem_sub(gem_len_1((*gem_v_functions)), gem_int(1))))) {
-#line 2827 "compiler/codegen.gem"
-            gem_set_line(2827);
+#line 2828 "compiler/codegen.gem"
+            gem_set_line(2828);
     GemVal _t14378[] = {gem_v_ob, GEM_STR_LIT("\n\n", 2)};
             (void)(gem_buf_push_fn(NULL, _t14378, 2));
         }
     }
 
-#line 2830 "compiler/codegen.gem"
-    gem_set_line(2830);
+#line 2831 "compiler/codegen.gem"
+    gem_set_line(2831);
     GemVal _t14379[] = {gem_v_ob, GEM_STR_LIT("\n\n", 2)};
     (void)(gem_buf_push_fn(NULL, _t14379, 2));
-#line 2832 "compiler/codegen.gem"
-    gem_set_line(2832);
+#line 2833 "compiler/codegen.gem"
+    gem_set_line(2833);
     GemVal _t14380 = gem_v_ob;
     GemVal _t14381[] = {_t14380, gem_v_main_c};
     (void)(gem_buf_push_fn(NULL, _t14381, 2));
-#line 2833 "compiler/codegen.gem"
-    gem_set_line(2833);
+#line 2834 "compiler/codegen.gem"
+    gem_set_line(2834);
     GemVal _t14382[] = {gem_v_ob};
     GemVal _t14383 = gem_to_string_fn(NULL, _t14382, 1);
     if (gem_ret_reset_due(&_ret_pt)) gem_arena_reset_return(&_ret_pt, &_t14383, 1);
@@ -61429,23 +61432,23 @@ static GemVal gem_fn___mod_codegen_make_codegen(void *_env, GemVal *args, int ar
 #line 127 "compiler/codegen.gem"
     gem_set_line(127);
     GemVal gem_v_new_fn_state = gem_make_fn(__anon_125, NULL);
-#line 161 "compiler/codegen.gem"
-    gem_set_line(161);
+#line 162 "compiler/codegen.gem"
+    gem_set_line(162);
     GemVal _t9302 = gem_v_new_fn_state;
-    gem_check_callable(_t9302, "compiler/codegen.gem", 161);
+    gem_check_callable(_t9302, "compiler/codegen.gem", 162);
     GemVal *gem_v_fs = gem_box_alloc();
     *gem_v_fs = _t9302.fn(_t9302.env, NULL, 0);
-#line 163 "compiler/codegen.gem"
-    gem_set_line(163);
+#line 164 "compiler/codegen.gem"
+    gem_set_line(164);
     struct _closure___anon_126 *_t9305 = gem_alloc(sizeof(struct _closure___anon_126));
     _t9305->_num_captures = 1;
     _t9305->gem_v_tmp_counter = gem_v_tmp_counter;
     GemVal gem_v_tmp = gem_make_fn(__anon_126, _t9305);
-#line 169 "compiler/codegen.gem"
-    gem_set_line(169);
+#line 170 "compiler/codegen.gem"
+    gem_set_line(170);
     GemVal gem_v_is_inert_expr = gem_make_fn(__anon_127, NULL);
-#line 182 "compiler/codegen.gem"
-    gem_set_line(182);
+#line 183 "compiler/codegen.gem"
+    gem_set_line(183);
     struct _closure___anon_128 *_t9337 = gem_alloc(sizeof(struct _closure___anon_128));
     _t9337->_num_captures = 2;
     GemVal *_t9338 = gem_alloc(sizeof(GemVal));
@@ -61455,17 +61458,17 @@ static GemVal gem_fn___mod_codegen_make_codegen(void *_env, GemVal *args, int ar
     *_t9339 = gem_v_tmp;
     _t9337->gem_v_tmp = _t9339;
     GemVal gem_v_pin_operand = gem_make_fn(__anon_128, _t9337);
-#line 190 "compiler/codegen.gem"
-    gem_set_line(190);
+#line 191 "compiler/codegen.gem"
+    gem_set_line(191);
     struct _closure___anon_129 *_t9342 = gem_alloc(sizeof(struct _closure___anon_129));
     _t9342->_num_captures = 1;
     _t9342->gem_v_anon_counter = gem_v_anon_counter;
     GemVal gem_v_anon_name = gem_make_fn(__anon_129, _t9342);
-#line 195 "compiler/codegen.gem"
-    gem_set_line(195);
+#line 196 "compiler/codegen.gem"
+    gem_set_line(196);
     GemVal gem_v_mangle = gem_make_fn(__anon_130, NULL);
-#line 202 "compiler/codegen.gem"
-    gem_set_line(202);
+#line 203 "compiler/codegen.gem"
+    gem_set_line(203);
     struct _closure___anon_131 *_t9362 = gem_alloc(sizeof(struct _closure___anon_131));
     _t9362->_num_captures = 2;
     _t9362->gem_v_fs = gem_v_fs;
@@ -61473,25 +61476,25 @@ static GemVal gem_fn___mod_codegen_make_codegen(void *_env, GemVal *args, int ar
     *_t9363 = gem_v_top_level_vars;
     _t9362->gem_v_top_level_vars = _t9363;
     GemVal gem_v_is_global_ref = gem_make_fn(__anon_131, _t9362);
-#line 212 "compiler/codegen.gem"
-    gem_set_line(212);
+#line 213 "compiler/codegen.gem"
+    gem_set_line(213);
     GemVal gem_v_gmangle = gem_make_fn(__anon_132, NULL);
-#line 216 "compiler/codegen.gem"
-    gem_set_line(216);
+#line 217 "compiler/codegen.gem"
+    gem_set_line(217);
     GemVal gem_v_gindex = gem_make_fn(__anon_133, NULL);
-#line 220 "compiler/codegen.gem"
-    gem_set_line(220);
+#line 221 "compiler/codegen.gem"
+    gem_set_line(221);
     GemVal gem_v_join_c = gem_make_fn(__anon_134, NULL);
-#line 231 "compiler/codegen.gem"
-    gem_set_line(231);
+#line 232 "compiler/codegen.gem"
+    gem_set_line(232);
     struct _closure___anon_135 *_t9401 = gem_alloc(sizeof(struct _closure___anon_135));
     _t9401->_num_captures = 1;
     GemVal *_t9402 = gem_alloc(sizeof(GemVal));
     *_t9402 = gem_v_join_c;
     _t9401->gem_v_join_c = _t9402;
     GemVal gem_v_emit_region_reset = gem_make_fn(__anon_135, _t9401);
-#line 250 "compiler/codegen.gem"
-    gem_set_line(250);
+#line 251 "compiler/codegen.gem"
+    gem_set_line(251);
     struct _closure___anon_136 *_t9430 = gem_alloc(sizeof(struct _closure___anon_136));
     _t9430->_num_captures = 4;
     GemVal *_t9431 = gem_alloc(sizeof(GemVal));
@@ -61507,8 +61510,8 @@ static GemVal gem_fn___mod_codegen_make_codegen(void *_env, GemVal *args, int ar
     *_t9434 = gem_v_top_level_vars;
     _t9430->gem_v_top_level_vars = _t9434;
     GemVal gem_v_ns_refresh = gem_make_fn(__anon_136, _t9430);
-#line 263 "compiler/codegen.gem"
-    gem_set_line(263);
+#line 264 "compiler/codegen.gem"
+    gem_set_line(264);
     struct _closure___anon_137 *_t9452 = gem_alloc(sizeof(struct _closure___anon_137));
     _t9452->_num_captures = 4;
     _t9452->gem_v_fs = gem_v_fs;
@@ -61522,8 +61525,8 @@ static GemVal gem_fn___mod_codegen_make_codegen(void *_env, GemVal *args, int ar
     *_t9455 = gem_v_mangle;
     _t9452->gem_v_mangle = _t9455;
     GemVal gem_v_var_lvalue = gem_make_fn(__anon_137, _t9452);
-#line 273 "compiler/codegen.gem"
-    gem_set_line(273);
+#line 274 "compiler/codegen.gem"
+    gem_set_line(274);
     struct _closure___anon_138 *_t9468 = gem_alloc(sizeof(struct _closure___anon_138));
     _t9468->_num_captures = 3;
     GemVal *_t9469 = gem_alloc(sizeof(GemVal));
@@ -61536,14 +61539,14 @@ static GemVal gem_fn___mod_codegen_make_codegen(void *_env, GemVal *args, int ar
     *_t9471 = gem_v_var_lvalue;
     _t9468->gem_v_var_lvalue = _t9471;
     GemVal gem_v_var_store = gem_make_fn(__anon_138, _t9468);
-#line 281 "compiler/codegen.gem"
-    gem_set_line(281);
+#line 282 "compiler/codegen.gem"
+    gem_set_line(282);
     struct _closure___anon_139 *_t9477 = gem_alloc(sizeof(struct _closure___anon_139));
     _t9477->_num_captures = 1;
     _t9477->gem_v_fs = gem_v_fs;
     GemVal gem_v_pop_str = gem_make_fn(__anon_139, _t9477);
-#line 290 "compiler/codegen.gem"
-    gem_set_line(290);
+#line 291 "compiler/codegen.gem"
+    gem_set_line(291);
     struct _closure___anon_140 *_t9492 = gem_alloc(sizeof(struct _closure___anon_140));
     _t9492->_num_captures = 2;
     _t9492->gem_v_fs = gem_v_fs;
@@ -61551,8 +61554,8 @@ static GemVal gem_fn___mod_codegen_make_codegen(void *_env, GemVal *args, int ar
     *_t9493 = gem_v_pop_str;
     _t9492->gem_v_pop_str = _t9493;
     GemVal gem_v_return_str = gem_make_fn(__anon_140, _t9492);
-#line 298 "compiler/codegen.gem"
-    gem_set_line(298);
+#line 299 "compiler/codegen.gem"
+    gem_set_line(299);
     struct _closure___anon_141 *_t9506 = gem_alloc(sizeof(struct _closure___anon_141));
     _t9506->_num_captures = 2;
     _t9506->gem_v_fs = gem_v_fs;
@@ -61560,17 +61563,17 @@ static GemVal gem_fn___mod_codegen_make_codegen(void *_env, GemVal *args, int ar
     *_t9507 = gem_v_pop_str;
     _t9506->gem_v_pop_str = _t9507;
     GemVal gem_v_return_nil_str = gem_make_fn(__anon_141, _t9506);
-#line 306 "compiler/codegen.gem"
-    gem_set_line(306);
+#line 307 "compiler/codegen.gem"
+    gem_set_line(307);
     struct _closure___anon_142 *_t9515 = gem_alloc(sizeof(struct _closure___anon_142));
     _t9515->_num_captures = 1;
     _t9515->gem_v_fs = gem_v_fs;
     GemVal gem_v_setline_str = gem_make_fn(__anon_142, _t9515);
-#line 314 "compiler/codegen.gem"
-    gem_set_line(314);
+#line 315 "compiler/codegen.gem"
+    gem_set_line(315);
     GemVal gem_v_leaf_entry_str = gem_make_fn(__anon_143, NULL);
-#line 325 "compiler/codegen.gem"
-    gem_set_line(325);
+#line 326 "compiler/codegen.gem"
+    gem_set_line(326);
     struct _closure___anon_144 *_t9548 = gem_alloc(sizeof(struct _closure___anon_144));
     _t9548->_num_captures = 3;
     GemVal *_t9549 = gem_alloc(sizeof(GemVal));
@@ -61581,12 +61584,12 @@ static GemVal gem_fn___mod_codegen_make_codegen(void *_env, GemVal *args, int ar
     _t9548->gem_v_defined_fns = _t9550;
     _t9548->gem_v_fs = gem_v_fs;
     GemVal gem_v_is_global_name = gem_make_fn(__anon_144, _t9548);
-#line 329 "compiler/codegen.gem"
-    gem_set_line(329);
+#line 330 "compiler/codegen.gem"
+    gem_set_line(330);
     GemVal *gem_v_compile_expr = gem_box_alloc();
     *gem_v_compile_expr = GEM_NIL;
-#line 332 "compiler/codegen.gem"
-    gem_set_line(332);
+#line 333 "compiler/codegen.gem"
+    gem_set_line(333);
     struct _closure___anon_145 *_t9568 = gem_alloc(sizeof(struct _closure___anon_145));
     _t9568->_num_captures = 3;
     _t9568->gem_v_compile_expr = gem_v_compile_expr;
@@ -61597,8 +61600,8 @@ static GemVal gem_fn___mod_codegen_make_codegen(void *_env, GemVal *args, int ar
     *_t9570 = gem_v_pin_operand;
     _t9568->gem_v_pin_operand = _t9570;
     GemVal gem_v_operands = gem_make_fn(__anon_145, _t9568);
-#line 341 "compiler/codegen.gem"
-    gem_set_line(341);
+#line 342 "compiler/codegen.gem"
+    gem_set_line(342);
     struct _closure___anon_146 *_t9594 = gem_alloc(sizeof(struct _closure___anon_146));
     _t9594->_num_captures = 2;
     GemVal *_t9595 = gem_alloc(sizeof(GemVal));
@@ -61608,102 +61611,102 @@ static GemVal gem_fn___mod_codegen_make_codegen(void *_env, GemVal *args, int ar
     *_t9596 = gem_v_pin_operand;
     _t9594->gem_v_pin_operand = _t9596;
     GemVal gem_v_left_to_right = gem_make_fn(__anon_146, _t9594);
-#line 363 "compiler/codegen.gem"
-    gem_set_line(363);
-    GemVal *gem_v_compile_stmt = gem_box_alloc();
-    *gem_v_compile_stmt = GEM_NIL;
 #line 364 "compiler/codegen.gem"
     gem_set_line(364);
-    GemVal *gem_v_compile_stmt_return = gem_box_alloc();
-    *gem_v_compile_stmt_return = GEM_NIL;
+    GemVal *gem_v_compile_stmt = gem_box_alloc();
+    *gem_v_compile_stmt = GEM_NIL;
 #line 365 "compiler/codegen.gem"
     gem_set_line(365);
-    GemVal *gem_v_tail_call_jump = gem_box_alloc();
-    *gem_v_tail_call_jump = GEM_NIL;
+    GemVal *gem_v_compile_stmt_return = gem_box_alloc();
+    *gem_v_compile_stmt_return = GEM_NIL;
 #line 366 "compiler/codegen.gem"
     gem_set_line(366);
-    GemVal *gem_v_compile_stmts = gem_box_alloc();
-    *gem_v_compile_stmts = GEM_NIL;
+    GemVal *gem_v_tail_call_jump = gem_box_alloc();
+    *gem_v_tail_call_jump = GEM_NIL;
 #line 367 "compiler/codegen.gem"
     gem_set_line(367);
-    GemVal *gem_v_compile_stmts_tail = gem_box_alloc();
-    *gem_v_compile_stmts_tail = GEM_NIL;
+    GemVal *gem_v_compile_stmts = gem_box_alloc();
+    *gem_v_compile_stmts = GEM_NIL;
 #line 368 "compiler/codegen.gem"
     gem_set_line(368);
-    GemVal *gem_v_compile_if = gem_box_alloc();
-    *gem_v_compile_if = GEM_NIL;
+    GemVal *gem_v_compile_stmts_tail = gem_box_alloc();
+    *gem_v_compile_stmts_tail = GEM_NIL;
 #line 369 "compiler/codegen.gem"
     gem_set_line(369);
-    GemVal *gem_v_compile_while = gem_box_alloc();
-    *gem_v_compile_while = GEM_NIL;
+    GemVal *gem_v_compile_if = gem_box_alloc();
+    *gem_v_compile_if = GEM_NIL;
 #line 370 "compiler/codegen.gem"
     gem_set_line(370);
-    GemVal *gem_v_compile_match = gem_box_alloc();
-    *gem_v_compile_match = GEM_NIL;
+    GemVal *gem_v_compile_while = gem_box_alloc();
+    *gem_v_compile_while = GEM_NIL;
 #line 371 "compiler/codegen.gem"
     gem_set_line(371);
-    GemVal *gem_v_compile_receive_match = gem_box_alloc();
-    *gem_v_compile_receive_match = GEM_NIL;
+    GemVal *gem_v_compile_match = gem_box_alloc();
+    *gem_v_compile_match = GEM_NIL;
 #line 372 "compiler/codegen.gem"
     gem_set_line(372);
-    GemVal *gem_v_compile_call = gem_box_alloc();
-    *gem_v_compile_call = GEM_NIL;
+    GemVal *gem_v_compile_receive_match = gem_box_alloc();
+    *gem_v_compile_receive_match = GEM_NIL;
 #line 373 "compiler/codegen.gem"
     gem_set_line(373);
-    GemVal *gem_v_compile_binop = gem_box_alloc();
-    *gem_v_compile_binop = GEM_NIL;
+    GemVal *gem_v_compile_call = gem_box_alloc();
+    *gem_v_compile_call = GEM_NIL;
 #line 374 "compiler/codegen.gem"
     gem_set_line(374);
-    GemVal *gem_v_compile_anon_fn = gem_box_alloc();
-    *gem_v_compile_anon_fn = GEM_NIL;
+    GemVal *gem_v_compile_binop = gem_box_alloc();
+    *gem_v_compile_binop = GEM_NIL;
 #line 375 "compiler/codegen.gem"
     gem_set_line(375);
-    GemVal *gem_v_compile_closure_fn = gem_box_alloc();
-    *gem_v_compile_closure_fn = GEM_NIL;
+    GemVal *gem_v_compile_anon_fn = gem_box_alloc();
+    *gem_v_compile_anon_fn = GEM_NIL;
 #line 376 "compiler/codegen.gem"
     gem_set_line(376);
-    GemVal *gem_v_compile_table = gem_box_alloc();
-    *gem_v_compile_table = GEM_NIL;
+    GemVal *gem_v_compile_closure_fn = gem_box_alloc();
+    *gem_v_compile_closure_fn = GEM_NIL;
 #line 377 "compiler/codegen.gem"
     gem_set_line(377);
-    GemVal *gem_v_compile_array = gem_box_alloc();
-    *gem_v_compile_array = GEM_NIL;
+    GemVal *gem_v_compile_table = gem_box_alloc();
+    *gem_v_compile_table = GEM_NIL;
 #line 378 "compiler/codegen.gem"
     gem_set_line(378);
-    GemVal *gem_v_compile_extern_fn = gem_box_alloc();
-    *gem_v_compile_extern_fn = GEM_NIL;
+    GemVal *gem_v_compile_array = gem_box_alloc();
+    *gem_v_compile_array = GEM_NIL;
 #line 379 "compiler/codegen.gem"
     gem_set_line(379);
-    GemVal *gem_v_compile_blocking_extern_fn = gem_box_alloc();
-    *gem_v_compile_blocking_extern_fn = GEM_NIL;
+    GemVal *gem_v_compile_extern_fn = gem_box_alloc();
+    *gem_v_compile_extern_fn = GEM_NIL;
 #line 380 "compiler/codegen.gem"
     gem_set_line(380);
-    GemVal *gem_v_compile_fn = gem_box_alloc();
-    *gem_v_compile_fn = GEM_NIL;
+    GemVal *gem_v_compile_blocking_extern_fn = gem_box_alloc();
+    *gem_v_compile_blocking_extern_fn = GEM_NIL;
 #line 381 "compiler/codegen.gem"
     gem_set_line(381);
-    GemVal *gem_v_emit_tco_continue = gem_box_alloc();
-    *gem_v_emit_tco_continue = GEM_NIL;
+    GemVal *gem_v_compile_fn = gem_box_alloc();
+    *gem_v_compile_fn = GEM_NIL;
 #line 382 "compiler/codegen.gem"
     gem_set_line(382);
-    GemVal *gem_v_emit_scc_tail_call = gem_box_alloc();
-    *gem_v_emit_scc_tail_call = GEM_NIL;
+    GemVal *gem_v_emit_tco_continue = gem_box_alloc();
+    *gem_v_emit_tco_continue = GEM_NIL;
 #line 383 "compiler/codegen.gem"
     gem_set_line(383);
+    GemVal *gem_v_emit_scc_tail_call = gem_box_alloc();
+    *gem_v_emit_scc_tail_call = GEM_NIL;
+#line 384 "compiler/codegen.gem"
+    gem_set_line(384);
     GemVal *gem_v_scc_wrapper_for = gem_box_alloc();
     *gem_v_scc_wrapper_for = GEM_NIL;
-#line 389 "compiler/codegen.gem"
-    gem_set_line(389);
+#line 390 "compiler/codegen.gem"
+    gem_set_line(390);
     struct _closure___anon_147 *_t9611 = gem_alloc(sizeof(struct _closure___anon_147));
     _t9611->_num_captures = 1;
     _t9611->gem_v_fs = gem_v_fs;
     GemVal gem_v_leaf_safe_call = gem_make_fn(__anon_147, _t9611);
-#line 396 "compiler/codegen.gem"
-    gem_set_line(396);
-    GemVal *gem_v_node_has_calls = gem_box_alloc();
-    *gem_v_node_has_calls = GEM_NIL;
 #line 397 "compiler/codegen.gem"
     gem_set_line(397);
+    GemVal *gem_v_node_has_calls = gem_box_alloc();
+    *gem_v_node_has_calls = GEM_NIL;
+#line 398 "compiler/codegen.gem"
+    gem_set_line(398);
     struct _closure___anon_148 *_t9633 = gem_alloc(sizeof(struct _closure___anon_148));
     _t9633->_num_captures = 2;
     GemVal *_t9634 = gem_alloc(sizeof(GemVal));
@@ -61711,14 +61714,14 @@ static GemVal gem_fn___mod_codegen_make_codegen(void *_env, GemVal *args, int ar
     _t9633->gem_v_leaf_safe_call = _t9634;
     _t9633->gem_v_node_has_calls = gem_v_node_has_calls;
     (*gem_v_node_has_calls) = gem_make_fn(__anon_148, _t9633);
-#line 425 "compiler/codegen.gem"
-    gem_set_line(425);
+#line 426 "compiler/codegen.gem"
+    gem_set_line(426);
     struct _closure___anon_149 *_t9650 = gem_alloc(sizeof(struct _closure___anon_149));
     _t9650->_num_captures = 1;
     _t9650->gem_v_node_has_calls = gem_v_node_has_calls;
     GemVal gem_v_fn_is_leaf = gem_make_fn(__anon_149, _t9650);
-#line 442 "compiler/codegen.gem"
-    gem_set_line(442);
+#line 443 "compiler/codegen.gem"
+    gem_set_line(443);
     GemVal _t9651 = gem_table_new_braces();
     gem_table_set(_t9651, GEM_STR_LIT("pcall", 5), gem_bool(1));
     gem_table_set(_t9651, GEM_STR_LIT("sort", 4), gem_bool(1));
@@ -61727,12 +61730,12 @@ static GemVal gem_fn___mod_codegen_make_codegen(void *_env, GemVal *args, int ar
     gem_table_set(_t9651, GEM_STR_LIT("spawn_link", 10), gem_bool(1));
     gem_table_set(_t9651, GEM_STR_LIT("spawn_monitor", 13), gem_bool(1));
     GemVal gem_v_slot_reader_builtins = _t9651;
-#line 443 "compiler/codegen.gem"
-    gem_set_line(443);
-    GemVal *gem_v_node_may_read_slots = gem_box_alloc();
-    *gem_v_node_may_read_slots = GEM_NIL;
 #line 444 "compiler/codegen.gem"
     gem_set_line(444);
+    GemVal *gem_v_node_may_read_slots = gem_box_alloc();
+    *gem_v_node_may_read_slots = GEM_NIL;
+#line 445 "compiler/codegen.gem"
+    gem_set_line(445);
     struct _closure___anon_150 *_t9682 = gem_alloc(sizeof(struct _closure___anon_150));
     _t9682->_num_captures = 4;
     GemVal *_t9683 = gem_alloc(sizeof(GemVal));
@@ -61744,8 +61747,8 @@ static GemVal gem_fn___mod_codegen_make_codegen(void *_env, GemVal *args, int ar
     *_t9684 = gem_v_slot_reader_builtins;
     _t9682->gem_v_slot_reader_builtins = _t9684;
     (*gem_v_node_may_read_slots) = gem_make_fn(__anon_150, _t9682);
-#line 462 "compiler/codegen.gem"
-    gem_set_line(462);
+#line 463 "compiler/codegen.gem"
+    gem_set_line(463);
     struct _closure___anon_151 *_t9721 = gem_alloc(sizeof(struct _closure___anon_151));
     _t9721->_num_captures = 8;
     GemVal *_t9722 = gem_alloc(sizeof(GemVal));
@@ -61761,8 +61764,8 @@ static GemVal gem_fn___mod_codegen_make_codegen(void *_env, GemVal *args, int ar
     *_t9723 = gem_v_source_name;
     _t9721->gem_v_source_name = _t9723;
     GemVal gem_v_mark_process_tail = gem_make_fn(__anon_151, _t9721);
-#line 495 "compiler/codegen.gem"
-    gem_set_line(495);
+#line 496 "compiler/codegen.gem"
+    gem_set_line(496);
     struct _closure___anon_152 *_t9913 = gem_alloc(sizeof(struct _closure___anon_152));
     _t9913->_num_captures = 10;
     GemVal *_t9914 = gem_alloc(sizeof(GemVal));
@@ -61788,8 +61791,8 @@ static GemVal gem_fn___mod_codegen_make_codegen(void *_env, GemVal *args, int ar
     *_t9919 = gem_v_user_var_name;
     _t9913->gem_v_user_var_name = _t9919;
     GemVal gem_v_note_spawn_global_writes = gem_make_fn(__anon_152, _t9913);
-#line 606 "compiler/codegen.gem"
-    gem_set_line(606);
+#line 607 "compiler/codegen.gem"
+    gem_set_line(607);
     struct _closure___anon_154 *_t10313 = gem_alloc(sizeof(struct _closure___anon_154));
     _t10313->_num_captures = 9;
     GemVal *_t10314 = gem_alloc(sizeof(GemVal));
@@ -61818,8 +61821,8 @@ static GemVal gem_fn___mod_codegen_make_codegen(void *_env, GemVal *args, int ar
     *_t10321 = gem_v_user_var_name;
     _t10313->gem_v_user_var_name = _t10321;
     GemVal gem_v_check_call_arities = gem_make_fn(__anon_154, _t10313);
-#line 752 "compiler/codegen.gem"
-    gem_set_line(752);
+#line 753 "compiler/codegen.gem"
+    gem_set_line(753);
     struct _closure___anon_159 *_t10415 = gem_alloc(sizeof(struct _closure___anon_159));
     _t10415->_num_captures = 5;
     _t10415->gem_v_compile_expr = gem_v_compile_expr;
@@ -61834,8 +61837,8 @@ static GemVal gem_fn___mod_codegen_make_codegen(void *_env, GemVal *args, int ar
     *_t10418 = gem_v_tmp;
     _t10415->gem_v_tmp = _t10418;
     (*gem_v_emit_tco_continue) = gem_make_fn(__anon_159, _t10415);
-#line 809 "compiler/codegen.gem"
-    gem_set_line(809);
+#line 810 "compiler/codegen.gem"
+    gem_set_line(810);
     struct _closure___anon_160 *_t10466 = gem_alloc(sizeof(struct _closure___anon_160));
     _t10466->_num_captures = 3;
     _t10466->gem_v_compile_expr = gem_v_compile_expr;
@@ -61846,22 +61849,22 @@ static GemVal gem_fn___mod_codegen_make_codegen(void *_env, GemVal *args, int ar
     *_t10468 = gem_v_tmp;
     _t10466->gem_v_tmp = _t10468;
     (*gem_v_emit_scc_tail_call) = gem_make_fn(__anon_160, _t10466);
-#line 833 "compiler/codegen.gem"
-    gem_set_line(833);
+#line 834 "compiler/codegen.gem"
+    gem_set_line(834);
     struct _closure___anon_161 *_t10512 = gem_alloc(sizeof(struct _closure___anon_161));
     _t10512->_num_captures = 1;
     _t10512->gem_v_scc_id_max_params = gem_v_scc_id_max_params;
     (*gem_v_scc_wrapper_for) = gem_make_fn(__anon_161, _t10512);
-#line 874 "compiler/codegen.gem"
-    gem_set_line(874);
+#line 875 "compiler/codegen.gem"
+    gem_set_line(875);
     struct _closure___anon_162 *_t10520 = gem_alloc(sizeof(struct _closure___anon_162));
     _t10520->_num_captures = 1;
     GemVal *_t10521 = gem_alloc(sizeof(GemVal));
     *_t10521 = gem_v_loc_of;
     _t10520->gem_v_loc_of = _t10521;
     GemVal gem_v_codegen_error = gem_make_fn(__anon_162, _t10520);
-#line 879 "compiler/codegen.gem"
-    gem_set_line(879);
+#line 880 "compiler/codegen.gem"
+    gem_set_line(880);
     struct _closure___anon_163 *_t10544 = gem_alloc(sizeof(struct _closure___anon_163));
     _t10544->_num_captures = 4;
     GemVal *_t10545 = gem_alloc(sizeof(GemVal));
@@ -61875,8 +61878,8 @@ static GemVal gem_fn___mod_codegen_make_codegen(void *_env, GemVal *args, int ar
     *_t10547 = gem_v_top_level_vars;
     _t10544->gem_v_top_level_vars = _t10547;
     GemVal gem_v_suggest_name = gem_make_fn(__anon_163, _t10544);
-#line 893 "compiler/codegen.gem"
-    gem_set_line(893);
+#line 894 "compiler/codegen.gem"
+    gem_set_line(894);
     struct _closure___anon_164 *_t10610 = gem_alloc(sizeof(struct _closure___anon_164));
     _t10610->_num_captures = 9;
     GemVal *_t10611 = gem_alloc(sizeof(GemVal));
@@ -61903,8 +61906,8 @@ static GemVal gem_fn___mod_codegen_make_codegen(void *_env, GemVal *args, int ar
     *_t10617 = gem_v_top_level_vars;
     _t10610->gem_v_top_level_vars = _t10617;
     GemVal gem_v_check_assign_target = gem_make_fn(__anon_164, _t10610);
-#line 907 "compiler/codegen.gem"
-    gem_set_line(907);
+#line 908 "compiler/codegen.gem"
+    gem_set_line(908);
     struct _closure___anon_165 *_t10947 = gem_alloc(sizeof(struct _closure___anon_165));
     _t10947->_num_captures = 26;
     GemVal *_t10948 = gem_alloc(sizeof(GemVal));
@@ -61966,8 +61969,8 @@ static GemVal gem_fn___mod_codegen_make_codegen(void *_env, GemVal *args, int ar
     *_t10963 = gem_v_var_lvalue;
     _t10947->gem_v_var_lvalue = _t10963;
     (*gem_v_compile_expr) = gem_make_fn(__anon_165, _t10947);
-#line 1019 "compiler/codegen.gem"
-    gem_set_line(1019);
+#line 1020 "compiler/codegen.gem"
+    gem_set_line(1020);
     struct _closure___anon_166 *_t11005 = gem_alloc(sizeof(struct _closure___anon_166));
     _t11005->_num_captures = 2;
     _t11005->gem_v_compile_expr = gem_v_compile_expr;
@@ -61975,8 +61978,8 @@ static GemVal gem_fn___mod_codegen_make_codegen(void *_env, GemVal *args, int ar
     *_t11006 = gem_v_tmp;
     _t11005->gem_v_tmp = _t11006;
     (*gem_v_compile_table) = gem_make_fn(__anon_166, _t11005);
-#line 1040 "compiler/codegen.gem"
-    gem_set_line(1040);
+#line 1041 "compiler/codegen.gem"
+    gem_set_line(1041);
     struct _closure___anon_167 *_t11028 = gem_alloc(sizeof(struct _closure___anon_167));
     _t11028->_num_captures = 2;
     _t11028->gem_v_compile_expr = gem_v_compile_expr;
@@ -61984,8 +61987,8 @@ static GemVal gem_fn___mod_codegen_make_codegen(void *_env, GemVal *args, int ar
     *_t11029 = gem_v_tmp;
     _t11028->gem_v_tmp = _t11029;
     (*gem_v_compile_array) = gem_make_fn(__anon_167, _t11028);
-#line 1053 "compiler/codegen.gem"
-    gem_set_line(1053);
+#line 1054 "compiler/codegen.gem"
+    gem_set_line(1054);
     struct _closure___anon_168 *_t11138 = gem_alloc(sizeof(struct _closure___anon_168));
     _t11138->_num_captures = 6;
     _t11138->gem_v_compile_closure_fn = gem_v_compile_closure_fn;
@@ -62003,8 +62006,8 @@ static GemVal gem_fn___mod_codegen_make_codegen(void *_env, GemVal *args, int ar
     *_t11142 = gem_v_tmp;
     _t11138->gem_v_tmp = _t11142;
     (*gem_v_compile_anon_fn) = gem_make_fn(__anon_168, _t11138);
-#line 1108 "compiler/codegen.gem"
-    gem_set_line(1108);
+#line 1109 "compiler/codegen.gem"
+    gem_set_line(1109);
     struct _closure___anon_169 *_t11166 = gem_alloc(sizeof(struct _closure___anon_169));
     _t11166->_num_captures = 3;
     _t11166->gem_v_compile_expr = gem_v_compile_expr;
@@ -62015,11 +62018,11 @@ static GemVal gem_fn___mod_codegen_make_codegen(void *_env, GemVal *args, int ar
     *_t11168 = gem_v_tmp;
     _t11166->gem_v_tmp = _t11168;
     GemVal gem_v_compile_args = gem_make_fn(__anon_169, _t11166);
-#line 1127 "compiler/codegen.gem"
-    gem_set_line(1127);
+#line 1128 "compiler/codegen.gem"
+    gem_set_line(1128);
     GemVal gem_v_emit_direct_call = gem_make_fn(__anon_170, NULL);
-#line 1134 "compiler/codegen.gem"
-    gem_set_line(1134);
+#line 1135 "compiler/codegen.gem"
+    gem_set_line(1135);
     struct _closure___anon_171 *_t11328 = gem_alloc(sizeof(struct _closure___anon_171));
     _t11328->_num_captures = 11;
     GemVal *_t11329 = gem_alloc(sizeof(GemVal));
@@ -62052,8 +62055,8 @@ static GemVal gem_fn___mod_codegen_make_codegen(void *_env, GemVal *args, int ar
     *_t11337 = gem_v_tmp;
     _t11328->gem_v_tmp = _t11337;
     (*gem_v_compile_call) = gem_make_fn(__anon_171, _t11328);
-#line 1195 "compiler/codegen.gem"
-    gem_set_line(1195);
+#line 1196 "compiler/codegen.gem"
+    gem_set_line(1196);
     struct _closure___anon_172 *_t11551 = gem_alloc(sizeof(struct _closure___anon_172));
     _t11551->_num_captures = 5;
     GemVal *_t11552 = gem_alloc(sizeof(GemVal));
@@ -62070,14 +62073,14 @@ static GemVal gem_fn___mod_codegen_make_codegen(void *_env, GemVal *args, int ar
     *_t11555 = gem_v_tmp;
     _t11551->gem_v_tmp = _t11555;
     (*gem_v_compile_binop) = gem_make_fn(__anon_172, _t11551);
-#line 1281 "compiler/codegen.gem"
-    gem_set_line(1281);
+#line 1282 "compiler/codegen.gem"
+    gem_set_line(1282);
     struct _closure___anon_173 *_t11566 = gem_alloc(sizeof(struct _closure___anon_173));
     _t11566->_num_captures = 1;
     _t11566->gem_v_compile_stmt = gem_v_compile_stmt;
     (*gem_v_compile_stmts) = gem_make_fn(__anon_173, _t11566);
-#line 1290 "compiler/codegen.gem"
-    gem_set_line(1290);
+#line 1291 "compiler/codegen.gem"
+    gem_set_line(1291);
     struct _closure___anon_174 *_t11594 = gem_alloc(sizeof(struct _closure___anon_174));
     _t11594->_num_captures = 4;
     _t11594->gem_v_compile_stmt = gem_v_compile_stmt;
@@ -62087,8 +62090,8 @@ static GemVal gem_fn___mod_codegen_make_codegen(void *_env, GemVal *args, int ar
     *_t11595 = gem_v_return_nil_str;
     _t11594->gem_v_return_nil_str = _t11595;
     (*gem_v_compile_stmts_tail) = gem_make_fn(__anon_174, _t11594);
-#line 1309 "compiler/codegen.gem"
-    gem_set_line(1309);
+#line 1310 "compiler/codegen.gem"
+    gem_set_line(1310);
     struct _closure___anon_175 *_t11931 = gem_alloc(sizeof(struct _closure___anon_175));
     _t11931->_num_captures = 23;
     GemVal *_t11932 = gem_alloc(sizeof(GemVal));
@@ -62143,8 +62146,8 @@ static GemVal gem_fn___mod_codegen_make_codegen(void *_env, GemVal *args, int ar
     *_t11945 = gem_v_var_store;
     _t11931->gem_v_var_store = _t11945;
     (*gem_v_compile_stmt) = gem_make_fn(__anon_175, _t11931);
-#line 1408 "compiler/codegen.gem"
-    gem_set_line(1408);
+#line 1409 "compiler/codegen.gem"
+    gem_set_line(1409);
     struct _closure___anon_176 *_t11983 = gem_alloc(sizeof(struct _closure___anon_176));
     _t11983->_num_captures = 4;
     _t11983->gem_v_emit_scc_tail_call = gem_v_emit_scc_tail_call;
@@ -62152,8 +62155,8 @@ static GemVal gem_fn___mod_codegen_make_codegen(void *_env, GemVal *args, int ar
     _t11983->gem_v_fs = gem_v_fs;
     _t11983->gem_v_scc_member_to_id = gem_v_scc_member_to_id;
     (*gem_v_tail_call_jump) = gem_make_fn(__anon_176, _t11983);
-#line 1423 "compiler/codegen.gem"
-    gem_set_line(1423);
+#line 1424 "compiler/codegen.gem"
+    gem_set_line(1424);
     struct _closure___anon_177 *_t12284 = gem_alloc(sizeof(struct _closure___anon_177));
     _t12284->_num_captures = 21;
     GemVal *_t12285 = gem_alloc(sizeof(GemVal));
@@ -62202,16 +62205,16 @@ static GemVal gem_fn___mod_codegen_make_codegen(void *_env, GemVal *args, int ar
     *_t12296 = gem_v_var_store;
     _t12284->gem_v_var_store = _t12296;
     (*gem_v_compile_stmt_return) = gem_make_fn(__anon_177, _t12284);
-#line 1503 "compiler/codegen.gem"
-    gem_set_line(1503);
+#line 1504 "compiler/codegen.gem"
+    gem_set_line(1504);
     struct _closure___anon_178 *_t12353 = gem_alloc(sizeof(struct _closure___anon_178));
     _t12353->_num_captures = 3;
     _t12353->gem_v_compile_expr = gem_v_compile_expr;
     _t12353->gem_v_compile_stmts_tail = gem_v_compile_stmts_tail;
     _t12353->gem_v_fs = gem_v_fs;
     (*gem_v_compile_if) = gem_make_fn(__anon_178, _t12353);
-#line 1528 "compiler/codegen.gem"
-    gem_set_line(1528);
+#line 1529 "compiler/codegen.gem"
+    gem_set_line(1529);
     struct _closure___anon_179 *_t12401 = gem_alloc(sizeof(struct _closure___anon_179));
     _t12401->_num_captures = 5;
     GemVal *_t12402 = gem_alloc(sizeof(GemVal));
@@ -62228,8 +62231,8 @@ static GemVal gem_fn___mod_codegen_make_codegen(void *_env, GemVal *args, int ar
     *_t12405 = gem_v_mangle;
     _t12401->gem_v_mangle = _t12405;
     GemVal gem_v_filter_live_for_rescue = gem_make_fn(__anon_179, _t12401);
-#line 1556 "compiler/codegen.gem"
-    gem_set_line(1556);
+#line 1557 "compiler/codegen.gem"
+    gem_set_line(1557);
     struct _closure___anon_180 *_t12447 = gem_alloc(sizeof(struct _closure___anon_180));
     _t12447->_num_captures = 4;
     GemVal *_t12448 = gem_alloc(sizeof(GemVal));
@@ -62243,8 +62246,8 @@ static GemVal gem_fn___mod_codegen_make_codegen(void *_env, GemVal *args, int ar
     *_t12450 = gem_v_rel_path;
     _t12447->gem_v_rel_path = _t12450;
     GemVal gem_v_build_rescue_roots = gem_make_fn(__anon_180, _t12447);
-#line 1587 "compiler/codegen.gem"
-    gem_set_line(1587);
+#line 1588 "compiler/codegen.gem"
+    gem_set_line(1588);
     struct _closure___anon_181 *_t12594 = gem_alloc(sizeof(struct _closure___anon_181));
     _t12594->_num_captures = 11;
     GemVal *_t12595 = gem_alloc(sizeof(GemVal));
@@ -62271,8 +62274,8 @@ static GemVal gem_fn___mod_codegen_make_codegen(void *_env, GemVal *args, int ar
     *_t12600 = gem_v_var_lvalue;
     _t12594->gem_v_var_lvalue = _t12600;
     (*gem_v_compile_while) = gem_make_fn(__anon_181, _t12594);
-#line 1670 "compiler/codegen.gem"
-    gem_set_line(1670);
+#line 1671 "compiler/codegen.gem"
+    gem_set_line(1671);
     struct _closure___anon_182 *_t12724 = gem_alloc(sizeof(struct _closure___anon_182));
     _t12724->_num_captures = 7;
     _t12724->gem_v_compile_expr = gem_v_compile_expr;
@@ -62289,8 +62292,8 @@ static GemVal gem_fn___mod_codegen_make_codegen(void *_env, GemVal *args, int ar
     *_t12727 = gem_v_tmp;
     _t12724->gem_v_tmp = _t12727;
     (*gem_v_compile_match) = gem_make_fn(__anon_182, _t12724);
-#line 1723 "compiler/codegen.gem"
-    gem_set_line(1723);
+#line 1724 "compiler/codegen.gem"
+    gem_set_line(1724);
     struct _closure___anon_183 *_t12976 = gem_alloc(sizeof(struct _closure___anon_183));
     _t12976->_num_captures = 6;
     _t12976->gem_v_compile_expr = gem_v_compile_expr;
@@ -62304,19 +62307,19 @@ static GemVal gem_fn___mod_codegen_make_codegen(void *_env, GemVal *args, int ar
     *_t12978 = gem_v_tmp;
     _t12976->gem_v_tmp = _t12978;
     (*gem_v_compile_receive_match) = gem_make_fn(__anon_183, _t12976);
-#line 1848 "compiler/codegen.gem"
-    gem_set_line(1848);
+#line 1849 "compiler/codegen.gem"
+    gem_set_line(1849);
     struct _closure___anon_184 *_t12989 = gem_alloc(sizeof(struct _closure___anon_184));
     _t12989->_num_captures = 1;
     GemVal *_t12990 = gem_alloc(sizeof(GemVal));
     *_t12990 = gem_v_extern_c_decls;
     _t12989->gem_v_extern_c_decls = _t12990;
     GemVal gem_v_emit_extern_c_decl = gem_make_fn(__anon_184, _t12989);
-#line 1904 "compiler/codegen.gem"
-    gem_set_line(1904);
+#line 1905 "compiler/codegen.gem"
+    gem_set_line(1905);
     GemVal gem_v_emit_extern_validation = gem_make_fn(__anon_185, NULL);
-#line 1931 "compiler/codegen.gem"
-    gem_set_line(1931);
+#line 1932 "compiler/codegen.gem"
+    gem_set_line(1932);
     struct _closure___anon_186 *_t13144 = gem_alloc(sizeof(struct _closure___anon_186));
     _t13144->_num_captures = 4;
     _t13144->gem_v_compile_blocking_extern_fn = gem_v_compile_blocking_extern_fn;
@@ -62330,8 +62333,8 @@ static GemVal gem_fn___mod_codegen_make_codegen(void *_env, GemVal *args, int ar
     *_t13147 = gem_v_forward_decls;
     _t13144->gem_v_forward_decls = _t13147;
     (*gem_v_compile_extern_fn) = gem_make_fn(__anon_186, _t13144);
-#line 2028 "compiler/codegen.gem"
-    gem_set_line(2028);
+#line 2029 "compiler/codegen.gem"
+    gem_set_line(2029);
     struct _closure___anon_187 *_t13404 = gem_alloc(sizeof(struct _closure___anon_187));
     _t13404->_num_captures = 3;
     GemVal *_t13405 = gem_alloc(sizeof(GemVal));
@@ -62344,8 +62347,8 @@ static GemVal gem_fn___mod_codegen_make_codegen(void *_env, GemVal *args, int ar
     *_t13407 = gem_v_forward_decls;
     _t13404->gem_v_forward_decls = _t13407;
     (*gem_v_compile_blocking_extern_fn) = gem_make_fn(__anon_187, _t13404);
-#line 2256 "compiler/codegen.gem"
-    gem_set_line(2256);
+#line 2257 "compiler/codegen.gem"
+    gem_set_line(2257);
     struct _closure___anon_188 *_t13535 = gem_alloc(sizeof(struct _closure___anon_188));
     _t13535->_num_captures = 4;
     _t13535->gem_v_compile_expr = gem_v_compile_expr;
@@ -62357,16 +62360,16 @@ static GemVal gem_fn___mod_codegen_make_codegen(void *_env, GemVal *args, int ar
     *_t13537 = gem_v_setline_str;
     _t13535->gem_v_setline_str = _t13537;
     GemVal gem_v_emit_param_bindings_impl = gem_make_fn(__anon_188, _t13535);
-#line 2327 "compiler/codegen.gem"
-    gem_set_line(2327);
+#line 2328 "compiler/codegen.gem"
+    gem_set_line(2328);
     struct _closure___anon_189 *_t13543 = gem_alloc(sizeof(struct _closure___anon_189));
     _t13543->_num_captures = 1;
     GemVal *_t13544 = gem_alloc(sizeof(GemVal));
     *_t13544 = gem_v_emit_param_bindings_impl;
     _t13543->gem_v_emit_param_bindings_impl = _t13544;
     GemVal gem_v_emit_param_bindings = gem_make_fn(__anon_189, _t13543);
-#line 2331 "compiler/codegen.gem"
-    gem_set_line(2331);
+#line 2332 "compiler/codegen.gem"
+    gem_set_line(2332);
     struct _closure___anon_190 *_t13563 = gem_alloc(sizeof(struct _closure___anon_190));
     _t13563->_num_captures = 3;
     _t13563->gem_v_compile_stmt = gem_v_compile_stmt;
@@ -62375,8 +62378,8 @@ static GemVal gem_fn___mod_codegen_make_codegen(void *_env, GemVal *args, int ar
     *_t13564 = gem_v_return_nil_str;
     _t13563->gem_v_return_nil_str = _t13564;
     GemVal gem_v_emit_fn_body = gem_make_fn(__anon_190, _t13563);
-#line 2346 "compiler/codegen.gem"
-    gem_set_line(2346);
+#line 2347 "compiler/codegen.gem"
+    gem_set_line(2347);
     struct _closure___anon_191 *_t13772 = gem_alloc(sizeof(struct _closure___anon_191));
     _t13772->_num_captures = 16;
     _t13772->gem_v_compile_stmt = gem_v_compile_stmt;
@@ -62418,8 +62421,8 @@ static GemVal gem_fn___mod_codegen_make_codegen(void *_env, GemVal *args, int ar
     _t13772->gem_v_scc_member_to_id = gem_v_scc_member_to_id;
     _t13772->gem_v_scc_wrapper_for = gem_v_scc_wrapper_for;
     (*gem_v_compile_fn) = gem_make_fn(__anon_191, _t13772);
-#line 2493 "compiler/codegen.gem"
-    gem_set_line(2493);
+#line 2494 "compiler/codegen.gem"
+    gem_set_line(2494);
     struct _closure___anon_192 *_t13942 = gem_alloc(sizeof(struct _closure___anon_192));
     _t13942->_num_captures = 12;
     GemVal *_t13943 = gem_alloc(sizeof(GemVal));
@@ -62457,8 +62460,8 @@ static GemVal gem_fn___mod_codegen_make_codegen(void *_env, GemVal *args, int ar
     *_t13953 = gem_v_rel_path;
     _t13942->gem_v_rel_path = _t13953;
     (*gem_v_compile_closure_fn) = gem_make_fn(__anon_192, _t13942);
-#line 2583 "compiler/codegen.gem"
-    gem_set_line(2583);
+#line 2584 "compiler/codegen.gem"
+    gem_set_line(2584);
     struct _closure___anon_193 *_t14059 = gem_alloc(sizeof(struct _closure___anon_193));
     _t14059->_num_captures = 4;
     GemVal *_t14060 = gem_alloc(sizeof(GemVal));
@@ -62472,8 +62475,8 @@ static GemVal gem_fn___mod_codegen_make_codegen(void *_env, GemVal *args, int ar
     *_t14062 = gem_v_source_of;
     _t14059->gem_v_source_of = _t14062;
     GemVal gem_v_emit_extern_includes = gem_make_fn(__anon_193, _t14059);
-#line 2628 "compiler/codegen.gem"
-    gem_set_line(2628);
+#line 2629 "compiler/codegen.gem"
+    gem_set_line(2629);
     struct _closure___anon_194 *_t14384 = gem_alloc(sizeof(struct _closure___anon_194));
     _t14384->_num_captures = 25;
     GemVal *_t14385 = gem_alloc(sizeof(GemVal));
@@ -62538,8 +62541,8 @@ static GemVal gem_fn___mod_codegen_make_codegen(void *_env, GemVal *args, int ar
     *_t14402 = gem_v_top_level_vars;
     _t14384->gem_v_top_level_vars = _t14402;
     GemVal gem_v_compile = gem_make_fn(__anon_194, _t14384);
-#line 2836 "compiler/codegen.gem"
-    gem_set_line(2836);
+#line 2837 "compiler/codegen.gem"
+    gem_set_line(2837);
     GemVal _t14403 = gem_table_new_braces();
     gem_table_set(_t14403, GEM_STR_LIT("compile", 7), gem_v_compile);
     GemVal _t14404 = _t14403;
@@ -93902,15 +93905,15 @@ static GemVal gem_user_main(void *_env, GemVal *_args, int _argc) {
 #line 4 "compiler/main.gem"
     gem_set_line(4);
     gem_global_set(gem_gi___mod_captures_walk_scoped_fn, gem_make_fn(gem_fn___mod_cgutil_walk_scoped_fn, NULL));
-#line 79 "compiler/captures.gem"
-    gem_set_line(79);
+#line 81 "compiler/captures.gem"
+    gem_set_line(81);
     GemVal _t21375 = gem_table_new_braces();
     gem_global_set(gem_gi___mod_captures_non_escape_callees, _t21375);
-#line 80 "compiler/captures.gem"
-    gem_set_line(80);
+#line 82 "compiler/captures.gem"
+    gem_set_line(82);
     GemVal _t21377 = gem_g___mod_captures_set_add;
     GemVal _t21376[] = {gem_g___mod_captures_non_escape_callees, GEM_STR_LIT("pcall", 5)};
-    gem_check_callable(_t21377, "compiler/captures.gem", 80);
+    gem_check_callable(_t21377, "compiler/captures.gem", 82);
     (void)(_t21377.fn(_t21377.env, _t21376, 2));
 #line 8 "compiler/main.gem"
     gem_set_line(8);

@@ -16,8 +16,8 @@ on the debug runtime), and run as
 All runs must print the same and exit with the same status. A seed that
 doesn't, or whose program fails to compile, is reported and its program
 kept in --keep (default build/fuzz_failures/) for a repro. Exit status 1
-when any seed failed. GEM= names the compiler (default build/gem); a copy
-has to live in build/ to find std/ and the runtime.
+when any seed failed. GEM= names the compiler (default build/gem); it finds std/
+and the runtime two directories above itself, so keep a copy in build/.
 """
 
 import argparse

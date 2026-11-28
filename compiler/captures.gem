@@ -23,7 +23,8 @@ fn closure_free_vars(node, defined, is_global)
   free
 end
 
-# scope_vars a closure in `stmts` captures; a closure passed straight to pcall (non_escaping) doesn't count
+# names a closure in `stmts` reads or assigns that are bound where it sits (scope_vars, or a let, arm binding or
+# param before it); a closure passed straight to pcall (non_escaping) doesn't count
 fn find_captured_in_scope(stmts, scope_vars, is_global)
   let captured = {}
   walk_scoped(stmts, scope_vars, {read: ignore, write: ignore, closure: fn(node, bound)
@@ -39,8 +40,9 @@ fn find_captured_in_scope(stmts, scope_vars, is_global)
   captured
 end
 
-# Which scope_vars get reassigned (`name = value`) where a closure can see it. Those need a pinned box
-# shared by creator and closure, the rest get a write-once copy; `x.f = ` and `x[k] = ` don't count.
+# Which scope_vars get reassigned (`name = value`) where a closure can see it. Those a closure captures need a
+# pinned box shared by creator and closure, the rest get a write-once copy (a non_escaping closure's env points
+# at the creator's C locals instead); `x.f = ` and `x[k] = ` don't count.
 # Outside closures every assign counts; inside, a name the closure binds itself doesn't.
 
 fn closure_writes_visitor(scope_vars, writes)

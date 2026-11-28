@@ -1,6 +1,6 @@
 # Liveness for `while` loops: what's live at the back-edge is the root set for the reset there.
 # A missed live var silently corrupts memory, so when in doubt it's live.
-# Anything a closure in the body captures is live across the back-edge, except closures passed straight to
+# Anything a closure in the body captures from outside the body is live across the back-edge, except closures passed straight to
 # spawn: spawn copies their captures into the child, so they only need to live until the call.
 
 load "./cgutil" (is_node, set_union, each_child, any_child, arm_stmts, walk_scoped, walk_scoped_fn, walk_scoped_node)

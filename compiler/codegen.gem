@@ -122,14 +122,15 @@ fn make_codegen(source_name, module_bindings = nil, show_path = nil, sources_by_
   let scc_member_to_id = {}
   let scc_id_max_params = {}
 
-  # State of the body being compiled (a named fn, a closure or the top level): each starts from a fresh one
-  # and puts the enclosing one back when it ends.
+  # State of the body being compiled: a named fn or closure starts from a fresh one and puts the enclosing one
+  # back when it ends; the top level gets a fresh one too.
   let new_fn_state = fn()
     {
       boxed_vars: {},
       in_top_level: false,
       local_names: {},
-      # locals with a C variable in scope here; an arm's lets drop out when its C block closes (filter_live_for_rescue)
+      # names in scope here (locals with a C variable; at the top level also the module slots); an arm's lets
+      # drop out when its C block closes (filter_live_for_rescue)
       fn_scope_locals: {},
       # captures of the closure body being compiled: `_cls->gem_v_<name>`, a `GemVal *` to the storage (the reset root)
       closure_captures: {},

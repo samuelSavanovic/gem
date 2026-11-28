@@ -7,19 +7,21 @@ The programs are deterministic (no time, pids, refs, table identity or
 random()), always terminate (loops have small constant bounds, recursion
 takes a depth that only goes down), and print what they compute, so two
 builds of one program must print the same: default against
-GEM_RESET_STRESS=1, -O2 against -O0. They lean on what region resets have
-to get right: values kept across loop iterations, tables created before a
-loop and filled inside it, module state written in loops, closures that
-assign their captures (also from table literals, parameter defaults
-and match arms whose bindings they capture), break, continue and return
-inside loops, self tail calls, a mutual tail-call chain of up
-to 50,000 calls, non-tail recursion (up to 5 levels), pcall, string
-building, and messages between processes.
+GEM_RESET_STRESS=1, -O2 against -O0. They lean on what region resets
+have to get right: values kept across loop iterations, tables created
+before a loop and filled inside it, module state written in loops,
+closures that assign their captures (also from table literals, and from
+match arms whose bindings they capture), fn literals with loops as
+parameter defaults, break, continue and return inside loops, self tail
+calls, a mutual tail-call chain of up to 50,000 calls, non-tail
+recursion (up to 5 levels), pcall, string building, and messages between
+processes.
 
-Sums, products and differences are reduced mod MOD (a prime; MOD is added
-before a difference is reduced), and every other int is a small literal,
-a counter, a length or a stored copy of such a result, so no int comes
-near int64's range and the only divisor is MOD; no floats are used, so fused
+Sums, products and differences are reduced mod MOD (a prime; MOD is
+added before a difference is reduced), and every other int is a small
+literal, a counter, a length or a stored copy of such a result, so no
+int comes near int64's range; the divisors are MOD, small constants and
+lengths checked to be nonzero; no floats are used, so fused
 multiply-adds can't make -O2 differ from -O0.
 """
 
@@ -338,7 +340,7 @@ class Gen:
             if self.work <= 20:
                 self.emit(ind, "print(\"built\", len({}), substr({}, 0, 12))".format(v, v))
 
-    # keeps the iterations of all enclosing loops (and the fns they call, which may loop) under ~20,000
+    # a bound that keeps the iterations of all enclosing loops under ~20,000 when one fits, else the smallest
     def bound(self, choices):
         ok = [n for n in choices if self.work * n <= 20000]
         return self.r.choice(ok or [min(choices)])
@@ -386,8 +388,8 @@ class Gen:
         params = ["x{}".format(i) for i in range(nargs)]
         sc = {"int": ["d"] + params, "str": [], "arr": [], "rec": []}
         shape = r.choice(["tail", "nontail", "plain", "plain"])
-        # a fn body's loops get a smaller budget since callers may loop around it, and fns call no fns
-        # (main does), so calls can't nest into exponential work
+        # a fn body's loops get a smaller budget since callers may loop around it, and fns call no other
+        # user fns (main does), so calls can't nest into exponential work
         self.work = 100
         self.ret_ok = True
         saved_fns, self.fns = self.fns, []
