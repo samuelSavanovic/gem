@@ -29,6 +29,7 @@ import random
 import sys
 
 MOD = 10007
+WORK = 20000  # most iterations of nested loops around any generated statement
 
 
 class Gen:
@@ -159,7 +160,10 @@ class Gen:
         if depth < 3:
             opts += ["if", "for", "while", "let_arr", "let_rec"]
             if depth < 2:
-                opts += ["closure", "pcall", "build", "forin"]
+                opts += ["closure", "pcall", "build"]
+                # arrays stay under 64 elements
+                if self.work * 64 <= WORK:
+                    opts.append("forin")
         if sc["arr"]:
             opts += ["push", "push"]
         if sc["rec"]:
@@ -340,10 +344,10 @@ class Gen:
             if self.work <= 20:
                 self.emit(ind, "print(\"built\", len({}), substr({}, 0, 12))".format(v, v))
 
-    # a bound that keeps the iterations of all enclosing loops under ~20,000 when one fits, else the smallest
+    # a loop count that keeps the iterations of all enclosing loops within WORK
     def bound(self, choices):
-        ok = [n for n in choices if self.work * n <= 20000]
-        return self.r.choice(ok or [min(choices)])
+        ok = [n for n in choices if self.work * n <= WORK]
+        return self.r.choice(ok) if ok else max(1, WORK // self.work)
 
     def in_loop(self, n, body):
         saved = self.work
