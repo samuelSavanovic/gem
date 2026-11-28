@@ -35,9 +35,12 @@ let stuck = task.async(fn() sleep(10000) end)
 let r4 = pcall task.await(stuck, 30)
 print("test4: ok={r4.ok} error={r4.error} task_alive={alive(stuck.pid)}")
 
+# a task killed from outside kills its owner unless the owner traps exits
+process_flag("trap_exit", true)
 let victim = task.async(fn() sleep(10000) end)
 kill(victim.pid, "external")
 let r5 = pcall task.await(victim)
+process_flag("trap_exit", false)
 print("test5: ok={r5.ok} error={r5.error}")
 
 let once = task.async(fn() 1 end)

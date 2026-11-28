@@ -1,0 +1,60 @@
+# a task is linked to its owner; await cleans up after it either way
+
+load "std/task"
+
+fn down_reason(pid)
+  receive
+  when {tag: "DOWN", pid: ^pid, reason: r} then r
+  after 1000 then "still running"
+  end
+end
+
+# a task dies with its owner
+fn owner_with_task(parent)
+  let t = task.async do
+    sleep(5000)
+  end
+  send(parent, {tag: "task", pid: t.pid})
+  task.await(t)
+end
+
+let main = self()
+let owner = spawn do
+  owner_with_task(main)
+end
+let tpid = receive
+when {tag: "task", pid: p} then p
+end
+monitor(tpid)
+kill(owner, "shutdown")
+print(down_reason(tpid))
+
+# killing a task takes down an owner that doesn't trap exits
+let owner2 = spawn do
+  owner_with_task(main)
+end
+monitor(owner2)
+let tpid2 = receive
+when {tag: "task", pid: p} then p
+end
+kill(tpid2, "boom")
+print(down_reason(owner2))
+
+# await's own timeout kill leaves the owner running
+let slow = task.async do
+  sleep(5000)
+end
+print((pcall task.await(slow, 5)).error)
+
+# an owner that traps exits gets no EXIT left behind
+process_flag("trap_exit", true)
+print(task.await(task.async(fn() 1 end)))
+print((pcall task.await(task.async do sleep(5000) end, 5)).error)
+print((pcall task.await_all([task.async(fn() error("first") end), task.async do sleep(5000) end])).error)
+let k = task.async do
+  sleep(5000)
+end
+kill(k.pid, "boom")
+print((pcall task.await(k)).error)
+sleep(10)
+print(process_info(self()).mailbox_len)

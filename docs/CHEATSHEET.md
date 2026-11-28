@@ -143,6 +143,7 @@ let t = task.async do
   fetch(url)
 end
 let body = task.await(t)               # value, or re-raises the task's error
+let r = pcall task.await(t, 1000)      # {ok, value} or {ok: false, error}
 let [x, y] = task.await_all([t1, t2], 5000)
 
 # Error handling
@@ -217,7 +218,7 @@ end
 #   start returns once every child's start has; one that raises makes it raise
 # std/dynamic_supervisor  start, start_child, terminate_child, which_children, stop
 #   child template {start, restart, shutdown}, as a supervisor child spec
-# std/task       async, await, await_all
+# std/task       async, await, await_all   (a task is linked to its owner)
 # std/gen_server start(module, {name}), call, cast, reply, stop   (name: registered before init)
 #   start returns once init has; an init that raises makes it raise
 #   callbacks return {state} ({reply, state} or {noreply} from handle_call), or {stop: reason} to end it

@@ -1,5 +1,6 @@
 ## task: run a fn in its own process and wait for its result.
 ## Only the process that called `async` can await a task, and only once.
+## A task is linked to its owner: it dies when the owner crashes or is stopped, and killing it kills the owner.
 
 ## Spawns a process that runs `f()` and returns a task to `await`.
 fn async(f)
@@ -8,7 +9,7 @@ fn async(f)
   end
   let owner = self()
   let ref = make_ref()
-  let pid = spawn(fn()
+  let pid = spawn_link(fn()
     send(owner, {tag: "_task_result", ref: ref, result: pcall f()})
   end)
   monitor(pid)
@@ -32,10 +33,31 @@ fn flush_down(pid, wait)
   end
 end
 
+fn traps_exits()
+  # process_flag only reads by setting; nothing else runs between the two calls
+  let was = process_flag("trap_exit", true)
+  process_flag("trap_exit", was)
+  was
+end
+
+# the EXIT an owner that traps exits gets from its task's exit
+fn flush_exit(pid)
+  if traps_exits()
+    receive
+    when {tag: "EXIT", pid: ^pid}
+      nil
+    after 0
+      nil
+    end
+  end
+end
+
 # an exited task only gets its DOWN dropped (a pid never names a later process); one trapping exits survives
 fn stop(pid, reason)
+  unlink(pid)
   kill(pid, reason)
   flush_down(pid, false)
+  flush_exit(pid)
 end
 
 fn exited_without_result(reason, caller)
@@ -105,6 +127,7 @@ fn collect(t, timeout_ms, caller)
     # it exits right after sending, so its DOWN follows
     flush_down(pid, true)
   end
+  flush_exit(pid)
   res
 end
 

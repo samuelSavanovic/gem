@@ -1,0 +1,8 @@
+shutdown
+boom
+task.await: timeout
+1
+task.await: timeout
+first
+task.await: task exited: boom
+0
